@@ -15,7 +15,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "anims:build": "node scripts/build-mixamo-anims.mjs assets-src/mixamo/operator public/anims/operator.anim.json",
+    "anims:lab": "vite --open /anim-lab.html"
   },
   "dependencies": {
     "@pixiv/three-vrm": "3.4.4",

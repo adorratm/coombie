@@ -6,6 +6,13 @@ import { allAvatarUrls, ZOMBIE_AVATAR_URLS } from './roster';
 import { sampleZombieGait } from './zombieGait';
 import { toZombieAvatarKind, type ZombieKind } from './zombieKinds';
 import type { ZombieVrmLod } from './vrmLod';
+import {
+  loadAnimLibrary,
+  OperativeAnimator,
+  OPERATOR_ANIM_URL,
+  retargetLibrary,
+  type OperativeAnimInput,
+} from './animLibrary';
 
 export type AvatarGender = 'male' | 'female';
 
@@ -20,6 +27,8 @@ export interface VrmPoseOpts {
   meleeSwing?: number;
   /** Recoil kick 0–1 for arm/shoulder punch */
   fireKick?: number;
+  /** Clip-driven operatives: locomotion + one-shot triggers */
+  anim?: OperativeAnimInput;
 }
 
 export interface ZombiePoseOpts {
@@ -35,6 +44,8 @@ export interface VrmAvatarHandle {
   rightHand: THREE.Object3D | null;
   leftHand: THREE.Object3D | null;
   weaponMount: THREE.Object3D | null;
+  /** Mixamo clip animator (operatives) — null → procedural pose fallback */
+  animator: OperativeAnimator | null;
   update: (
     dt: number,
     moving: boolean,
@@ -631,8 +642,22 @@ export async function createVrmAvatar(opts: {
 }): Promise<VrmAvatarHandle> {
   const style = opts.style ?? 'operative';
   const gender = opts.gender ?? 'male';
-  const vrm = await loadVrmFresh(opts.url);
+  const [vrm, animLib] = await Promise.all([
+    loadVrmFresh(opts.url),
+    style === 'operative' ? loadAnimLibrary(OPERATOR_ANIM_URL) : Promise.resolve(null),
+  ]);
   tintVrmScene(vrm.scene, opts.accentColor, style);
+
+  // Retarget in unscaled model space (hips track is in the VRM's local units).
+  let animator: OperativeAnimator | null = null;
+  if (animLib) {
+    try {
+      const clips = retargetLibrary(vrm, animLib, opts.url);
+      if (OperativeAnimator.supports(clips)) animator = new OperativeAnimator(vrm.scene, clips);
+    } catch (err) {
+      console.warn('[avatars] clip retarget failed — procedural pose', opts.url, err);
+    }
+  }
 
   const root = new THREE.Group();
   root.name = `vrm-${style}-${gender}`;
@@ -670,7 +695,18 @@ export async function createVrmAvatar(opts: {
   const weaponMount = rightHand;
 
   // Break T-pose: Z hangs arms, Y brings them forward (XYZ order)
-  if (style === 'operative') {
+  if (animator) {
+    animator.update(0, {
+      localVelX: 0,
+      localVelZ: 0,
+      shotSerial: 0,
+      hitSerial: 0,
+      abilitySerial: 0,
+      reloading: false,
+      reloadTime: 1,
+      alive: true,
+    });
+  } else if (style === 'operative') {
     snapBone(vrm, VRMHumanBoneName.RightUpperArm, 0.2, -0.62, -1.26);
     snapBone(vrm, VRMHumanBoneName.RightLowerArm, -1.15, 0.08, -0.02);
     snapBone(vrm, VRMHumanBoneName.LeftUpperArm, 0.18, 0.68, 1.24);
@@ -707,6 +743,15 @@ export async function createVrmAvatar(opts: {
     poseOpts?: VrmPoseOpts,
     zombieOpts?: ZombiePoseOpts,
   ) => {
+    if (animator && poseOpts?.anim) {
+      animator.update(dt, poseOpts.anim);
+      // Clip set is rifle-based: melee weapons still swing procedurally on top.
+      if (poseOpts.grip === 'melee' && (poseOpts.meleeSwing ?? 0) > 0) {
+        applyMeleeHoldPose(vrm, dt, poseOpts.meleeSwing ?? 0, moving ? 1 : 0, 0);
+      }
+      vrm.update(dt);
+      return;
+    }
     const m = moving ? 1 : 0;
     const attacking = (zombieOpts?.attackAnim ?? 0) > 0.01;
     const stride = style === 'zombie' ? 0.78 : 0.52;
@@ -807,8 +852,10 @@ export async function createVrmAvatar(opts: {
     rightHand,
     leftHand,
     weaponMount,
+    animator,
     update,
     dispose: () => {
+      animator?.dispose();
       root.removeFromParent();
       VRMUtils.deepDispose(vrm.scene);
     },
@@ -1034,6 +1081,51 @@ export function updateZombieVrm(
   avatar.vrm.humanoid?.update();
 }
 
+export type OperativeAnimEvent = 'shot' | 'hit' | 'ability';
+
+/** Gameplay → animation one-shot trigger (fire, take damage, cast ability). */
+export function bumpOperativeAnim(op: OperativeVisual, kind: OperativeAnimEvent): void {
+  const key = `anim_${kind}`;
+  op.root.userData[key] = ((op.root.userData[key] as number) ?? 0) + 1;
+}
+
+const _velW = new THREE.Vector3();
+const _axisX = new THREE.Vector3();
+const _axisZ = new THREE.Vector3();
+
+function operativeAnimInput(op: OperativeVisual, dt: number): OperativeAnimInput {
+  const ud = op.root.userData as {
+    animPrev?: THREE.Vector3;
+    animVel?: THREE.Vector3;
+    anim_shot?: number;
+    anim_hit?: number;
+    anim_ability?: number;
+  };
+  const pos = op.root.position;
+  if (!ud.animPrev) ud.animPrev = pos.clone();
+  if (!ud.animVel) ud.animVel = new THREE.Vector3();
+  _velW.copy(pos).sub(ud.animPrev).divideScalar(Math.max(1 / 240, dt));
+  _velW.y = 0;
+  ud.animPrev.copy(pos);
+  // Knockback / teleports produce huge one-frame spikes — clamp, then smooth.
+  if (_velW.lengthSq() > 14 * 14) _velW.setLength(op.moveSpeed);
+  ud.animVel.lerp(_velW, 1 - Math.exp(-14 * dt));
+
+  _axisZ.set(0, 0, 1).applyQuaternion(op.root.quaternion);
+  _axisX.set(1, 0, 0).applyQuaternion(op.root.quaternion);
+  return {
+    // Three/Mixamo: facing +Z, the character's left is local +X
+    localVelX: ud.animVel.dot(_axisX),
+    localVelZ: ud.animVel.dot(_axisZ),
+    shotSerial: ud.anim_shot ?? 0,
+    hitSerial: ud.anim_hit ?? 0,
+    abilitySerial: ud.anim_ability ?? 0,
+    reloading: op.reloading,
+    reloadTime: op.weapon.reloadTime,
+    alive: op.alive,
+  };
+}
+
 export function updateOperativeVrm(
   op: OperativeVisual,
   dt: number,
@@ -1055,6 +1147,7 @@ export function updateOperativeVrm(
     grip: op.weapon.grip,
     meleeSwing: op.meleeSwing,
     fireKick: Math.min(1, op.recoil * 2.2),
+    anim: avatar.animator ? operativeAnimInput(op, dt) : undefined,
   });
   alignGunToAim(op, op.recoil, reloading ? reloadProgress : -1);
   // Second pass lets VRM humanoid push normalized pose → raw skeleton after gun align

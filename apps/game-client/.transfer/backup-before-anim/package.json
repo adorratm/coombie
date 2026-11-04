@@ -1,0 +1,32 @@
+{
+  "name": "@protocol-z/game-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json",
+    "build:desktop": "vite build --config vite.desktop.config.ts",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "3.4.4",
+    "@protocol-z/shared": "workspace:*",
+    "socket.io-client": "4.8.4",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.187.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vitest": "3.2.4"
+  }
+}

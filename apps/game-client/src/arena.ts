@@ -3,6 +3,7 @@ import { castAbility, createAbilityRuntime } from './abilities';
 import {
   alignGunToAim,
   attachVrmToOperative,
+  bumpOperativeAnim,
   beginZombieVrmAttachBudget,
   disposeZombieVrm,
   requestZombieVrm,
@@ -623,6 +624,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
     }
     op.hp -= reduced;
     op.invuln = 0.7;
+    bumpOperativeAnim(op, 'hit');
     const maxHp = Math.max(1, op.maxHp);
     op.healthBar.setRatio(Math.max(0, op.hp) / maxHp);
     op.healthBar.setVisible(true);
@@ -765,6 +767,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
     if (weapon.melee) {
       op.meleeSwing = 0.01;
       op.recoil = weapon.recoil;
+      bumpOperativeAnim(op, 'shot');
       alignGunToAim(op, op.recoil);
       op.gun.updateWorldMatrix(true, true);
       op.muzzlePoint.getWorldPosition(muzzleWorld);
@@ -808,6 +811,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
 
     op.ammo -= 1;
     op.recoil = weapon.recoil;
+    bumpOperativeAnim(op, 'shot');
     alignGunToAim(op, op.recoil);
     op.gun.updateWorldMatrix(true, true);
     op.muzzlePoint.getWorldPosition(muzzleWorld);
@@ -869,6 +873,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
     if (progress.abilityCooldown > 0) return;
     const ability = startAbilityCooldown(progress, simTime);
     audio.playAbility();
+    bumpOperativeAnim(player, 'ability');
     castAbility({
       scene,
       fx,
