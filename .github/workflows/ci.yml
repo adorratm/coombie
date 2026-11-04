@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: typecheck + unit smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26.13.0'
+
+      - name: Enable Corepack (Yarn 4)
+        run: corepack enable
+
+      - name: Install
+        run: yarn install --immutable
+
+      - name: Build shared (workspace types)
+        run: yarn workspace @protocol-z/shared build
+
+      - name: Typecheck
+        run: yarn typecheck
+
+      - name: Unit smoke (game-client)
+        run: yarn test

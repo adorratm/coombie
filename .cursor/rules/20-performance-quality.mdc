@@ -1,0 +1,14 @@
+---
+description: Apply when changing rendering, simulation, spawning, physics, animation, VFX, or high-entity-count systems.
+alwaysApply: false
+---
+# Performance quality standards
+
+- Establish a baseline before optimization: target hardware assumptions, scene, entity count, frame time, memory, and reproduction steps.
+- Profile the actual bottleneck before choosing an optimization.
+- Distinguish CPU, GPU, memory, I/O, physics, animation, and draw-call costs.
+- Consider worst-case combat density, not only an empty test scene.
+- Prefer existing pooling, batching, spatial partitioning, LOD, culling, and data-oriented patterns where available.
+- Do not introduce pooling or caching without defining ownership, reset behavior, capacity, and overflow behavior.
+- Verify visual and gameplay correctness after optimization.
+- Report measured before/after results or explicitly state when measurement was unavailable.

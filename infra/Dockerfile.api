@@ -1,0 +1,24 @@
+FROM node:26.13.0-bookworm-slim AS build
+WORKDIR /app
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+COPY package.json yarn.lock .yarnrc.yml tsconfig.base.json ./
+COPY .yarn/releases .yarn/releases
+COPY packages ./packages
+COPY apps/api ./apps/api
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/game-client/package.json ./apps/game-client/package.json
+COPY apps/desktop/package.json ./apps/desktop/package.json
+# Linux image: classic node-modules linker resolves workspace packages cleanly for tsc/nest
+RUN printf '%s\n' 'nodeLinker: node-modules' 'yarnPath: .yarn/releases/yarn-4.18.1.cjs' 'tsEnableAutoTypes: false' > .yarnrc.yml \
+ && node .yarn/releases/yarn-4.18.1.cjs install \
+ && ./node_modules/typescript/bin/tsc -p packages/shared/tsconfig.json \
+ && ls -la packages/shared/dist \
+ && ./node_modules/typescript/bin/tsc -p packages/game-engine/tsconfig.json \
+ && cd apps/api && node ../../node_modules/@nestjs/cli/bin/nest.js build
+
+FROM node:26.13.0-bookworm-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app /app
+EXPOSE 3001
+CMD ["node", "apps/api/dist/main.js"]

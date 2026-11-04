@@ -1,0 +1,61 @@
+---
+alwaysApply: true
+---
+
+You have multiple specialized rules organized into **Skills** (comprehensive guides with references) and **Rules** (concise best practices).
+
+## Skills
+
+### Game (PROTOCOL-Z)
+
+Full agent system: [`AI/AGENTS.md`](../../AI/AGENTS.md). Prompts: `AI/prompts/`.
+
+- [Game Design](../skills/game-design/SKILL.mdc) - Survivor-like loop, retention, roadmap (no proprietary clones)
+- [Gameplay Programming](../skills/gameplay-programming/SKILL.mdc) - Combat, weapons, arena systems in TypeScript/Three.js
+- [Combat Design](../skills/combat-design/SKILL.mdc) - Weapon fantasy, telegraphs, hit feel
+- [Roguelike Progression](../skills/roguelike-progression/SKILL.mdc) - XP cards, evolutions, synergies, meta
+- [Enemy AI](../skills/enemy-ai/SKILL.mdc) - Zombie kinds, attack anims, boss skills, spawns
+- [UI/UX Game](../skills/ui-ux-design/SKILL.mdc) - HUD, upgrade draft, Turkish player copy
+- [Game Balancing](../skills/game-balancing/SKILL.mdc) - TTK, card weights, fairness
+- [Performance](../skills/performance-optimization/SKILL.mdc) - Pooling, horde scale, allocations
+
+### MengTo game skills (Three.js) — github.com/mengto/skills
+
+- [optimize-threejs-games](../skills/optimize-threejs-games/SKILL.md) - FPS drops, draw calls, adaptive quality, horde budgets
+- [build-rigged-game-assets](../skills/build-rigged-game-assets/SKILL.md) - Rigged characters/monsters, animation clip library, sockets, LODs
+- [build-game-monster-system](../skills/build-game-monster-system/SKILL.md) - One shared rig/state/LOD contract for every zombie
+- [build-threejs-enemy-systems](../skills/build-threejs-enemy-systems/SKILL.md) - Data-driven enemy archetypes and movesets
+- [tune-enemy-ai](../skills/tune-enemy-ai/SKILL.md) - Aggro, spacing, telegraphs, boss behavior
+- [game-dev-combat-animation](../skills/game-dev-combat-animation/SKILL.md) - Attack/shoot/cast animation standard and per-frame tests
+- [game-dev-combat-skill-polish](../skills/game-dev-combat-skill-polish/SKILL.md) - Score and polish operative abilities
+- [create-game-vfx](../skills/create-game-vfx/SKILL.md) - Readable, performance-safe hit/ability VFX (+ fire/ice/lightning/water VFX skills)
+- [build-hybrid-game-assets](../skills/build-hybrid-game-assets/SKILL.md) - Imported vs procedural vs generated asset pipeline
+- [build-game-camera-controls](../skills/build-game-camera-controls/SKILL.md), [design-game-encounters](../skills/design-game-encounters/SKILL.md), [design-action-combat](../skills/design-action-combat/SKILL.md), [build-game-audio-feedback](../skills/build-game-audio-feedback/SKILL.md)
+- [build-mobile-threejs-games](../skills/build-mobile-threejs-games/SKILL.md), [test-playable-web-games](../skills/test-playable-web-games/SKILL.md), [ship-web-games](../skills/ship-web-games/SKILL.md)
+- Full index: [MENGTO_GAME_DEV_README.md](../skills/MENGTO_GAME_DEV_README.md)
+
+### Platform / general
+
+- [Aesthetic](../skills/aesthetic/SKILL.mdc) - Visual design principles, storytelling, and micro-interactions for distinctive interfaces
+- [Backend Development](../skills/backend-development/SKILL.mdc) - API design, architecture, authentication, security, and DevOps patterns
+- [Frontend Design](../skills/frontend-design/SKILL.mdc) - Create distinctive, production-grade interfaces with bold aesthetics (avoid generic AI slop)
+- [Frontend Development](../skills/frontend-development/SKILL.mdc) - React/TypeScript patterns: Suspense, lazy loading, TanStack Query/Router, MUI v7, file organization
+- [UI Styling](../skills/ui-styling/SKILL.mdc) - shadcn/ui components, Tailwind CSS utilities, theming, accessibility, and canvas-based visual design
+- [Sequential Thinking](../skills/sequential-thinking/SKILL.mdc) - Structured problem-solving with revision, branching, and hypothesis verification
+- [Problem Solving](../skills/problem-solving/SKILL.mdc) - Techniques for complexity spirals, innovation blocks, meta-patterns, and scale testing
+- [Research](../skills/research/SKILL.mdc) - Systematic research methodology for technical solutions with report generation
+
+## Rules
+
+- [Git](./git.mdc) - Git commit and branching conventions
+- [Coding Style](./coding-style.mdc) - Coding style and best practices
+
+## Routing Guidelines
+
+1. For each user request, first infer which domains are relevant.
+2. Select 0–3 rules/skills that best match the request, prefer the SINGLE most specific one when possible.
+3. Game combat / zombies / weapons → `enemy-ai` or `gameplay-programming` or `combat-design`.
+4. Progression / upgrades → `roguelike-progression` then `game-balancing`.
+5. If both security and performance apply, prioritize `security.mdc` first, then `performance-optimization`.
+6. Visuals / characters / zombie models / animation → `build-rigged-game-assets` + `build-game-monster-system`; FPS / horde scale → `optimize-threejs-games` first.
+7. If no rule clearly matches, ignore all rules and answer normally.

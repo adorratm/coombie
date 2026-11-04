@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,700;0,800;0,900;1,800&family=Geist:wght@400;500;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@100..900&family=Geist:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"secondary-fixed":"#ffdbd1","outline-variant":"#3b4b3d","on-surface-variant":"#b9cbb9","on-secondary-fixed-variant":"#862200","on-tertiary-fixed":"#2a1700","surface-container-highest":"#313539","error":"#ffb4ab","surface-tint":"#00e478","primary":"#f1ffef","secondary-fixed-dim":"#ffb5a0","tertiary-fixed":"#ffddb8","tertiary":"#fffaf8","surface-container-high":"#262a2e","primary-fixed":"#60ff98","surface-bright":"#363a3d","on-background":"#e0e3e7","inverse-surface":"#e0e3e7","tertiary-fixed-dim":"#ffb95f","on-error-container":"#ffdad6","surface-dim":"#101417","on-tertiary-fixed-variant":"#653e00","surface-container-low":"#181c1f","on-secondary-fixed":"#3b0900","surface-container":"#1c2023","secondary":"#ffb5a0","inverse-primary":"#006d36","on-surface":"#e0e3e7","on-primary-fixed-variant":"#005227","error-container":"#93000a","surface-variant":"#313539","outline":"#849585","primary-container":"#00ff87","secondary-container":"#d73b00","background":"#101417","on-tertiary":"#472a00","on-tertiary-container":"#8a5700","on-primary-fixed":"#00210c","surface-container-lowest":"#0b0f12","on-secondary-container":"#fffbff","tertiary-container":"#ffd8ad","on-primary":"#003919","inverse-on-surface":"#2d3134","on-secondary":"#5f1500","primary-fixed-dim":"#00e478","on-error":"#690005","on-primary-container":"#007138","surface":"#101417"},borderRadius:{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},spacing:{"space-lg":"1.5rem","space-md":"1rem","space-sm":"0.5rem","space-xl":"2.5rem","gutter-desktop":"1.5rem","margin":"1rem","space-xs":"0.25rem","gutter":"1rem","margin-desktop":"2rem"},fontFamily:{"metric-readout-sm":["Geist"],"display-command":["Chivo"],"body-telemetry":["Geist"],"body-telemetry-condensed":["Geist"],"headline-tactical":["Chivo"],"metric-readout-lg":["Chivo"],"display-command-mobile":["Chivo"],"headline-tactical-mobile":["Chivo"],"subheader-sector":["Chivo"],"label-monospaced-caps":["Geist"]},fontSize:{"metric-readout-sm":["1rem",{"lineHeight":"1rem","letterSpacing":"0.05em","fontWeight":"700"}],"display-command":["3rem",{"lineHeight":"3rem","letterSpacing":"0.05em","fontWeight":"900"}],"body-telemetry":["0.9375rem",{"lineHeight":"1.375rem","letterSpacing":"0em","fontWeight":"400"}],"body-telemetry-condensed":["0.8125rem",{"lineHeight":"1.125rem","letterSpacing":"0.01em","fontWeight":"500"}],"headline-tactical":["1.75rem",{"lineHeight":"2rem","letterSpacing":"0.03em","fontWeight":"800"}],"metric-readout-lg":["2.25rem",{"lineHeight":"2.25rem","letterSpacing":"-0.02em","fontWeight":"900"}],"display-command-mobile":["2rem",{"lineHeight":"2.25rem","letterSpacing":"0.04em","fontWeight":"900"}],"headline-tactical-mobile":["1.375rem",{"lineHeight":"1.625rem","letterSpacing":"0.03em","fontWeight":"800"}],"subheader-sector":["1.125rem",{"lineHeight":"1.375rem","letterSpacing":"0.04em","fontWeight":"700"}],"label-monospaced-caps":["0.6875rem",{"lineHeight":"0.875rem","letterSpacing":"0.12em","fontWeight":"700"}]}}}}</script></head><body class="bg-surface font-body-telemetry text-on-surface min-h-screen selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md"><div class="h-20 w-full px-gutter-desktop flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-sm"><img alt="Protocol-Z Biohazard Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1UFymdaB5CyIs8wmhIriDV-B_gH9RyqFbu9OKp35unjyVmIEQGQFm3U5HWv6MH3totnkX3FNgSMbm7frIWG_d19D71QoaF59UjkHYBHXEYOYmrlLeT8HHjxIfjp8hMPwNuR0GgmvSPLtShJ905UM1FlMtInKSn71JOlxVU07ge3URGhZFlPVXS1jvD0yEi33fevJUrXFxm6CXQQjpYuytbsjnqds8VSpkZDOziUIWLjkQ"/><div class="flex flex-col"><span class="font-headline-tactical text-headline-tactical uppercase tracking-wider text-primary leading-none">PROTOCOL-Z</span><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant tracking-widest uppercase">OUTBREAK DEFENSE // TAC-OS</span></div></div><div class="hidden xl:flex items-center gap-space-sm bg-surface-container-low px-space-sm py-space-xs rounded"><span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">SOCKET.IO: CONNECTED | EU-CENTRAL (24ms) | V1.0.4-PROD</span></div></div><nav class="hidden lg:flex items-center gap-space-xs bg-surface-container p-space-xs rounded" data-active-classes="bg-primary-container text-on-primary-container font-headline-tactical font-bold shadow-[0_0_10px_rgba(0,255,135,0.45)]"><a class="font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-md py-space-sm rounded transition-colors text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" data-path="lobi-&-karakter-secimi" href="#">Lobi & Karakter Seçimi</a><a class="font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-md py-space-sm rounded transition-colors text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" data-path="savas-alani-&-hud" href="#">Savaş Alanı & HUD</a><a class="font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-md py-space-sm rounded transition-colors text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" data-path="seviye-atlama-&-power-up" href="#">Seviye Atlama & Power-Up</a><a class="font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-md py-space-sm rounded transition-colors text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" data-path="zombi-ansiklopedisi-&-dalga-istihbarati" href="#">Zombi Ansiklopedisi & Dalga İstihbaratı</a></nav><div class="flex items-center gap-space-md"><div class="hidden md:flex items-center gap-space-xs bg-surface-container-low px-space-sm py-space-xs rounded"><span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">TEAM: 4/4 COMBAT READY</span></div><div class="flex items-center gap-space-sm bg-surface-container-high px-space-sm py-space-xs rounded"><div class="flex flex-col text-right hidden sm:flex"><span class="font-subheader-sector text-subheader-sector text-primary leading-tight uppercase">CMD. VANCE</span><span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">LVL 42 // SURVIVOR TIER 4</span></div><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjOE_hcwZId6BU8nUguEfsdpCBt0YGSlKXw013V_ETd6fMG1NWgyZOUeUYiWkG-g3WHhdons2nj9ZqevmnYjwSDZxrZ8ub6994vSGzRv-HsQrYE8zw9KGZyWLOk49V7J-MJZeBPoXfNvFSfDzlAqM3aO9YPmkRHdTmkTamKfCrsvj0fMcgw4BAqGHRYzPKxsrg1Ewg-DP5PNWkG2rTxScLP4rH-RcRNc4IfhR9nLMF"/></div></div></div></header><main class="w-full pt-20 bg-surface min-h-[calc(100vh-5rem)]"><div class="flex flex-col w-full">
+<!-- TOP INTEL BANNER / CLASSIFICATION BAR -->
+<div class="w-full bg-surface-container-lowest px-gutter-desktop py-space-md">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md">
+<div class="w-3 h-10 bg-secondary flex-shrink-0 animate-pulse"></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-sm flex-wrap">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase tracking-widest bg-secondary-container/20 px-space-xs py-0.5 rounded">INTEL-DB // SEC-CLR: OMEGA</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">DEŞİFRE: GÜNCEL KOD 849-B</span>
+</div>
+<h1 class="font-headline-tactical text-headline-tactical text-primary uppercase tracking-tight">BİYOLOJİK TEHDİT VERİTABANI // PROTOKOL-Z İSTİHBARAT MASASI</h1>
+</div>
+</div>
+<div class="flex items-center gap-space-md bg-surface-container-low p-space-sm rounded">
+<div class="flex flex-col text-right">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KÜRESEL TEHDİT SEVİYESİ</span>
+<span class="font-metric-readout-sm text-metric-readout-sm text-secondary uppercase font-bold tracking-wider">KRİTİK - SEVİYE 5 KONTAMİNASYON</span>
+</div>
+<div class="flex items-center gap-1 bg-surface-container-lowest p-2 rounded">
+<span class="w-2.5 h-6 bg-secondary"></span>
+<span class="w-2.5 h-6 bg-secondary"></span>
+<span class="w-2.5 h-6 bg-secondary"></span>
+<span class="w-2.5 h-6 bg-secondary"></span>
+<span class="w-2.5 h-6 bg-secondary animate-pulse"></span>
+</div>
+</div>
+</div>
+</div>
+<div class="w-full px-gutter-desktop py-space-xl max-w-7xl mx-auto flex flex-col gap-space-xl">
+<!-- DALGA MEKANİĞİ KURAL TABLOSU (WAVE PROTOCOLS & CYCLES) -->
+<div class="flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary-container text-xl" style="font-variation-settings: 'FILL' 1;">sync_problem</span>
+<h2 class="font-subheader-sector text-subheader-sector text-primary uppercase tracking-wider">DALGA MEKANİĞİ KURAL PROTOKOLÜ // SAVAŞ ALANI REJİMİ</h2>
+</div>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">[SYS.04 // DÖNGÜ ÖNGÖRÜSÜ]</span>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-space-md">
+<!-- HER 5 SEVİYEDE BİR -->
+<div class="bg-surface-container p-space-lg rounded relative overflow-hidden flex flex-col justify-between group hover:bg-surface-container-high transition-colors">
+<div class="flex items-start justify-between gap-space-md">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 bg-primary-container rounded-none"></span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase">HER 5 SEVİYEDE BİR (WAVE 5, 10, 15...)</span>
+</div>
+<h3 class="font-headline-tactical text-headline-tactical text-primary uppercase">SÜPER MUTANT BOSS DÖNGÜSÜ</h3>
+<p class="font-body-telemetry text-body-telemetry text-on-surface-variant">Özel mutasyon yetenekli elit alfa önder zombi hücumu. Zırh katmanları kalkan jeneratörlerini aşırı yükler. Taktiksel odaklanma ve mühimmat sinerjisi şarttır.</p>
+</div>
+<div class="bg-surface-container-lowest p-space-sm rounded text-primary-container text-right flex-shrink-0">
+<span class="font-display-command text-display-command leading-none">05</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps block text-on-surface-variant uppercase">INTERVAL</span>
+</div>
+</div>
+<div class="mt-space-md pt-space-sm bg-surface-container-lowest/60 p-space-sm rounded flex items-center justify-between">
+<div class="flex items-center gap-space-sm text-secondary">
+<span class="material-symbols-outlined text-sm">warning</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps uppercase font-bold">ÖNCELİK: YÜKSEK HEDEF TESPİTİ</span>
+</div>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">DÜŞÜŞ: SARI SEVİYE SİLAH PARÇALARI</span>
+</div>
+</div>
+<!-- HER 10 SEVİYEDE BİR -->
+<div class="bg-surface-container p-space-lg rounded relative overflow-hidden flex flex-col justify-between group hover:bg-surface-container-high transition-colors">
+<div class="flex items-start justify-between gap-space-md">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 bg-secondary rounded-none"></span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">HER 10 SEVİYEDE BİR (WAVE 10, 20, 30...)</span>
+</div>
+<h3 class="font-headline-tactical text-headline-tactical text-secondary uppercase">KIYAMET SÜRÜSÜ (HORDE ATTACK)</h3>
+<p class="font-body-telemetry text-body-telemetry text-on-surface-variant">Sektörün 4 ana girişinden ve havalandırma tünellerinden eş zamanlı 500+ zombi dalgası. 2 dakika boyunca kesintisiz hat savunması gerektirir.</p>
+</div>
+<div class="bg-surface-container-lowest p-space-sm rounded text-secondary text-right flex-shrink-0">
+<span class="font-display-command text-display-command leading-none">10</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps block text-on-surface-variant uppercase">HORDE INT</span>
+</div>
+</div>
+<div class="mt-space-md pt-space-sm bg-surface-container-lowest/60 p-space-sm rounded flex items-center justify-between">
+<div class="flex items-center gap-space-sm text-secondary">
+<span class="material-symbols-outlined text-sm animate-pulse">timer</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps uppercase font-bold">SÜRE: 120 SANİYE KESİNTİSİZ DEFANS</span>
+</div>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase">ÖDÜL: AİR-DROP İKMAL KUTUSU</span>
+</div>
+</div>
+</div>
+</div>
+<!-- ZOMBİ TÜRLERİ KATALOĞU (CREATURE DOSSIERS) -->
+<div class="flex flex-col gap-space-md">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-secondary text-xl">biotech</span>
+<h2 class="font-headline-tactical text-headline-tactical text-primary uppercase">KORUMA ALANI TEHDİT DOSYALARI (BESTIARY)</h2>
+</div>
+<div class="flex items-center gap-space-xs font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span>4 ONAYLANMIŞ GENETİK ANOMALİ LİSTELENDİ</span>
+</div>
+</div>
+<!-- GRID OF 4 MUTANTS -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-lg">
+<!-- 1. CHARGE RUNNER -->
+<div class="bg-surface-container rounded p-space-lg flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase tracking-wider">[MUT-01 // AGILITY CLASS]</span>
+<h3 class="font-headline-tactical text-headline-tactical text-primary uppercase">CHARGE RUNNER</h3>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant uppercase">KOŞUCU / YARMA SALDIRISI</span>
+</div>
+<span class="bg-surface-container-high px-space-sm py-1 rounded font-label-monospaced-caps text-label-monospaced-caps text-secondary font-bold uppercase">TEHLİKE: SEVİYE 3</span>
+</div>
+<!-- MUTANT IMAGE PLACEHOLDER -->
+<div class="w-full h-48 rounded overflow-hidden relative bg-surface-container-lowest">
+<img class="w-full h-full object-cover" data-alt="A biomechanically altered rapid infected human subject, sprint posture, glowing hyper-extended muscular leg tendons, aggressive kinetic motion blur in a dark concrete quarantine tunnel with emergency red lighting and biohazard fog, highly detailed industrial combat aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAABVwX3J1ZX0UO1Lsdgacwo8gtdz6RQBP6Q8E5VYe6AaorflikbkWVevXGmBGGcWB6uKZMFQPjTBbYs96XqkHxDA3i5E3Vy4Xi36J3AcHqbs8TUrxaGoGQo6kp_3LowRuVqWZLuY96I0Zw9QWc5xilF4iTbRBQwdJsEFYLPAK_y4yepXmAppj9KU7xNHKcOJskKSqBAl0YXr7DBvytntRGxHuOT8qJqROb8F5UYISM"/>
+<div class="absolute bottom-2 left-2 bg-surface-container-lowest/80 px-2 py-1 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">KİNETİK HIZ: 40 KM/S</div>
+</div>
+<!-- STAT BARS -->
+<div class="grid grid-cols-2 gap-space-sm bg-surface-container-low p-space-sm rounded">
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HP (DAYANIKLILIK)</span>
+<span class="text-primary font-bold">420</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[45%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HIZ (SURAT)</span>
+<span class="text-primary-container font-bold">95/100</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[95%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HASAR (ÇARPMA)</span>
+<span class="text-secondary font-bold">65 HP</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-secondary h-full w-[65%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>TEHDİT KATSAYISI</span>
+<span class="text-secondary font-bold">B-PLUS</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-secondary h-full w-[70%]"></div>
+</div>
+</div>
+</div>
+<!-- ABILITIES & WEAKNESS -->
+<div class="flex flex-col gap-space-xs mt-1">
+<div class="bg-surface-container-low p-space-sm rounded flex flex-col gap-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">flash_on</span> ÖZEL YETENEK // YARMA HÜCUMU
+                </span>
+<p class="font-body-telemetry text-body-telemetry text-on-surface">Düz bir hatta 40km/s hızla hücum eder, çarptığı oyuncuyu anında yere sererek 2 saniye tam sersemletme (Stun) uygular.</p>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded flex flex-col gap-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">track_changes</span> ZAYIF NOKTA // ANATOMİK DEFOLAR
+                </span>
+<p class="font-body-telemetry text-body-telemetry text-on-surface-variant">Bacak tendonları ve hücum ivmesi sırasında yan açılardan açılan ateş; mutantın devrilip 3 saniye savunmasız kalmasına yol açar.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- 2. ACID SPITTER -->
+<div class="bg-surface-container rounded p-space-lg flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase tracking-wider">[MUT-02 // CHEMICAL RANGED]</span>
+<h3 class="font-headline-tactical text-headline-tactical text-primary uppercase">ACID SPITTER</h3>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant uppercase">ZEHİRLİ OKSİT KUSUCU</span>
+</div>
+<span class="bg-surface-container-high px-space-sm py-1 rounded font-label-monospaced-caps text-label-monospaced-caps text-secondary font-bold uppercase">TEHLİKE: SEVİYE 4</span>
+</div>
+<!-- MUTANT IMAGE PLACEHOLDER -->
+<div class="w-full h-48 rounded overflow-hidden relative bg-surface-container-lowest">
+<img class="w-full h-full object-cover" data-alt="A mutated grotesque zombie with an engorged, pulsating neon toxic green acid gland on its throat, chemical corrosion burns around jaw, spitting virulent bile in a ruined containment facility, high-contrast dark sci-fi military tactical style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDCU7t3MGcgFaKR0o3oPwYpmbZOr3vVyrvB-C5297tRxKUzznZ9P6QT1Wo21hh7NtabEIhvQ8tOIi1kAthkRcufWuXIj6s8nz7LgyqncjEk72FPRku3ftwR9VHUQO3QWLwnJbP-vqtAklF7fNrnQ2sxngvZhJg3eLJex5qh3fW9-1gjJ3e4-Lhr4bTbn7GNnEHHVazfQvqAyeYmhteSVJeO0PgtZDCVzkpkdFJ2wnn2"/>
+<div class="absolute bottom-2 left-2 bg-surface-container-lowest/80 px-2 py-1 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">MENZİL: 25 METRE</div>
+</div>
+<!-- STAT BARS -->
+<div class="grid grid-cols-2 gap-space-sm bg-surface-container-low p-space-sm rounded">
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HP (DAYANIKLILIK)</span>
+<span class="text-primary font-bold">310</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[35%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HIZ (SURAT)</span>
+<span class="text-primary-container font-bold">50/100</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[50%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HASAR (ALAN ETKİSİ)</span>
+<span class="text-secondary font-bold">60 DPS</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-secondary h-full w-[80%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>TEHDİT KATSAYISI</span>
+<span class="text-secondary font-bold">A-RANK</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-secondary h-full w-[85%]"></div>
+</div>
+</div>
+</div>
+<!-- ABILITIES & WEAKNESS -->
+<div class="flex flex-col gap-space-xs mt-1">
+<div class="bg-surface-container-low p-space-sm rounded flex flex-col gap-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">science</span> ÖZEL YETENEK // KİMYASAL OKSİT BOMBASI
+                </span>
+<p class="font-body-telemetry text-body-telemetry text-on-surface">25 metre mesafeden fırlatılan asit küresi zeminde 15 saniye kalan zehirli oksit alanı oluşturur (saniyede 60 asit hasarı + zırh eritme).</p>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded flex flex-col gap-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">emergency</span> ZAYIF NOKTA // ASİT KESESİ İNFİLAKI
+                </span>
+<p class="font-body-telemetry text-body-telemetry text-on-surface-variant">Boyundaki parlayan yeşil asit kesesi patlatıldığında mutant ölür ve etrafındaki tüm diğer zombilere 250 alan kimyasal hasarı verir.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- 3. BEHEMOTH TANK -->
+<div class="bg-surface-container rounded p-space-lg flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase tracking-wider">[MUT-03 // HEAVY SIEGE]</span>
+<h3 class="font-headline-tactical text-headline-tactical text-primary uppercase">BEHEMOTH TANK</h3>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant uppercase">ZIRHLI EZİCİ</span>
+</div>
+<span class="bg-surface-container-high px-space-sm py-1 rounded font-label-monospaced-caps text-label-monospaced-caps text-secondary font-bold uppercase">TEHLİKE: SEVİYE 5 [BOSS]</span>
+</div>
+<!-- MUTANT IMAGE PLACEHOLDER -->
+<div class="w-full h-48 rounded overflow-hidden relative bg-surface-container-lowest">
+<img class="w-full h-full object-cover" data-alt="A gargantuan armored mutant monster fused with industrial steel plating and cybernetic rebar, massive concrete-smashing fists, glowing spinal vents releasing boiling steam, ruined laboratory setting, dark brutalist tactical concept." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBqeC6opJ1uPYHxD6gD3jjvc499pFhZUEzAdSkidREnmDksFVvpJIXru3emDdQ4B9zPEClHWTaCaBSkens0kNekM5e_umDOJk8QMyvYOMsGi7SFsWFY4Bk1_xxELOXfUr3pOHv7kOMGblXmTKY3CfXx_3I7Ovc6nh-e_apVbnC27TcRmbAO_pwtbaVvA8ROTWLT0T9FCP_Psb7tDfGAFtdC-PVIQwN5JHPAt9q2n8vF"/>
+<div class="absolute bottom-2 left-2 bg-surface-container-lowest/80 px-2 py-1 rounded font-label-monospaced-caps text-label-monospaced-caps text-secondary">ZIRH KALINLIĞI: 120MM</div>
+</div>
+<!-- STAT BARS -->
+<div class="grid grid-cols-2 gap-space-sm bg-surface-container-low p-space-sm rounded">
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HP (DAYANIKLILIK)</span>
+<span class="text-primary font-bold">2400</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[100%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HIZ (SURAT)</span>
+<span class="text-primary-container font-bold">25/100</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[25%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HASAR (ALAN EZMESİ)</span>
+<span class="text-secondary font-bold">140 HP</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-secondary h-full w-[95%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>TEHDİT KATSAYISI</span>
+<span class="text-secondary font-bold">S-CLASS</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-secondary h-full w-[100%]"></div>
+</div>
+</div>
+</div>
+<!-- ABILITIES & WEAKNESS -->
+<div class="flex flex-col gap-space-xs mt-1">
+<div class="bg-surface-container-low p-space-sm rounded flex flex-col gap-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">earthquake</span> ÖZEL YETENEK // ZEMİN KIRAN & STUN WAVE
+                </span>
+<p class="font-body-telemetry text-body-telemetry text-on-surface">Kurşun geçirmez çelik zırh plakaları. Yere çift yumruk vurarak 10 metre yarıçapında zemin sarsıntısı ve alan sersemletmesi (Stun wave) yaratır.</p>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded flex flex-col gap-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">local_fire_department</span> ZAYIF NOKTA // SOĞUTMA VENTİLLERİ
+                </span>
+<p class="font-body-telemetry text-body-telemetry text-on-surface-variant">Sırttaki omurga soğutma ventilleri korumasızdır. Ağır delici mühimmat veya arkadan yapılan roket atışları 3x kritik hasar verir.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- 4. NEURO-SCREAMER -->
+<div class="bg-surface-container rounded p-space-lg flex flex-col justify-between gap-space-md relative overflow-hidden">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase tracking-wider">[MUT-04 // NEURO-DISRUPTOR]</span>
+<h3 class="font-headline-tactical text-headline-tactical text-primary uppercase">NEURO-SCREAMER</h3>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant uppercase">YAVAŞLATICI ÇIĞLIK</span>
+</div>
+<span class="bg-surface-container-high px-space-sm py-1 rounded font-label-monospaced-caps text-label-monospaced-caps text-secondary font-bold uppercase">TEHLİKE: SEVİYE 4</span>
+</div>
+<!-- MUTANT IMAGE PLACEHOLDER -->
+<div class="w-full h-48 rounded overflow-hidden relative bg-surface-container-lowest">
+<img class="w-full h-full object-cover" data-alt="An emaciated horrifying zombie with an unnaturally dislocated, distended jaw emitting sonic shockwaves, cybernetic auditory implants failing, eerie fluorescent green acoustics rippling in a foggy dark bunker, hyper-realistic military combat." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYeWpSfrzEoendF9AHnolyd8EZZaGWaNBanIfm77NXI7OpB5km6Bo8VbpslFRaUahCIsN1bOKnmJgJBaR-1RD-13vLnL0cjHjSKvetd1JPFU-jXvwbh8bY4AESvQMY4k2NsS42nLym_7_0MYNic7yZOHlBnYYlGWR5naM0Mm5g3pncmmgalXK79vt9VFn08zWcvED6p6O_YpSbqzQswBytNqhjuSRuJUInKajYyCqS"/>
+<div class="absolute bottom-2 left-2 bg-surface-container-lowest/80 px-2 py-1 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">FREKANS: 140 DB DEBUFF</div>
+</div>
+<!-- STAT BARS -->
+<div class="grid grid-cols-2 gap-space-sm bg-surface-container-low p-space-sm rounded">
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HP (DAYANIKLILIK)</span>
+<span class="text-primary font-bold">280</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[28%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HIZ (SURAT)</span>
+<span class="text-primary-container font-bold">75/100</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[75%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>HASAR (DEBUFF ETKİSİ)</span>
+<span class="text-secondary font-bold">%50 SLOW</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-secondary h-full w-[50%]"></div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">
+<span>TEHDİT KATSAYISI</span>
+<span class="text-secondary font-bold">A-MINUS</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded overflow-hidden">
+<div class="bg-secondary h-full w-[78%]"></div>
+</div>
+</div>
+</div>
+<!-- ABILITIES & WEAKNESS -->
+<div class="flex flex-col gap-space-xs mt-1">
+<div class="bg-surface-container-low p-space-sm rounded flex flex-col gap-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">graphic_eq</span> ÖZEL YETENEK // SONİK YAVAŞLATICI ÇIĞLIK
+                </span>
+<p class="font-body-telemetry text-body-telemetry text-on-surface">Sonik çığlık patlamasıyla 15m çapındaki tüm oyuncuların ekran görüşünü bulanıklaştırır ve operatif koşu hızını %50 yavaşlatır.</p>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded flex flex-col gap-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">visibility</span> ZAYIF NOKTA // STATİK KİLİTLENME
+                </span>
+<p class="font-body-telemetry text-body-telemetry text-on-surface-variant">Çığlık attığı 3.5 saniye boyunca tamamen hareketsiz kalır; kafasına nişan alınan keskin nişancı atışları çığlığı keser ve tek atışta indirir.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- ALT TAKTİKSEL TAVSİYELER & CO-OP EKİP SİNERJİ REHBERİ (TACTICAL COUNTER MATRIX) -->
+<div class="flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary-container text-xl">groups</span>
+<h2 class="font-headline-tactical text-headline-tactical text-primary uppercase">CO-OP EKİP SİNERJİ & KONTRA MATRİSİ</h2>
+</div>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">[DEFENSE PROTOCOL MATRIX 4x4]</span>
+</div>
+<!-- COUNTER MATRIX TABLE/CARDS -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<!-- TACTIC 1: ASSAULT vs RUNNER -->
+<div class="bg-surface-container p-space-md rounded flex flex-col justify-between gap-space-md hover:bg-surface-container-high transition-colors">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold">KONTRA 01</span>
+<span class="material-symbols-outlined text-primary-container text-sm">verified</span>
+</div>
+<h4 class="font-subheader-sector text-subheader-sector text-primary uppercase">GÖZETMEN / KESKİN NİŞANCI → RUNNER</h4>
+<p class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant">Runner düz hatta depar atarken yan açıdan bacak tendonlarına dondurucu mermi veya EMP tuzakları bırakılmalıdır.</p>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold block">TAVSİYE EDİLEN EKİPMAN</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface">Cryo-Trap Mayını + Barikat</span>
+</div>
+</div>
+<!-- TACTIC 2: PYRO / DEMO vs ACID SPITTER -->
+<div class="bg-surface-container p-space-md rounded flex flex-col justify-between gap-space-md hover:bg-surface-container-high transition-colors">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold">KONTRA 02</span>
+<span class="material-symbols-outlined text-primary-container text-sm">verified</span>
+</div>
+<h4 class="font-subheader-sector text-subheader-sector text-primary uppercase">TAARRUZ / TÜFEKÇİ → SPITTER</h4>
+<p class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant">Asit havuzundan kaçınmak için yüksek platformlara konuşlanın. Asit kesesini patlatıp çevredeki sürüleri zincirleme imha edin.</p>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold block">TAVSİYE EDİLEN EKİPMAN</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface">Menzilli Tüfek + Termit Bombası</span>
+</div>
+</div>
+<!-- TACTIC 3: HEAVY WEAPONS vs BEHEMOTH TANK -->
+<div class="bg-surface-container p-space-md rounded flex flex-col justify-between gap-space-md hover:bg-surface-container-high transition-colors">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase font-bold">KONTRA 03 [KRİTİK]</span>
+<span class="material-symbols-outlined text-secondary text-sm">dangerous</span>
+</div>
+<h4 class="font-subheader-sector text-subheader-sector text-primary uppercase">AĞIR TAHKİMATÇI → BEHEMOTH</h4>
+<p class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant">Ön zırha ateş ederek cephane israf etmeyin. Bir oyuncu dikkati çekerken diğer iki operatif arkadaki soğutma ızgaralarına roket indirmelidir.</p>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase font-bold block">TAVSİYE EDİLEN EKİPMAN</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface">RPG-7 Delici Başlık + C4 Patlayıcı</span>
+</div>
+</div>
+<!-- TACTIC 4: TACTICAL RECON vs NEURO-SCREAMER -->
+<div class="bg-surface-container p-space-md rounded flex flex-col justify-between gap-space-md hover:bg-surface-container-high transition-colors">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold">KONTRA 04</span>
+<span class="material-symbols-outlined text-primary-container text-sm">verified</span>
+</div>
+<h4 class="font-subheader-sector text-subheader-sector text-primary uppercase">DESTEK / MEDİK → SCREAMER</h4>
+<p class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant">Screamer çığlık pozisyonuna geçtiğinde Susturucu Darbe Bombası atın ya da sersemletme atışı yaparak debuff dalgasını doğmadan iptal edin.</p>
+</div>
+<div class="bg-surface-container-low p-space-sm rounded">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase font-bold block">TAVSİYE EDİLEN EKİPMAN</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface">Şok Bombası + Adrenalin İğnesi</span>
+</div>
+</div>
+</div>
+<!-- IN-DEPTH OPERATIVE PROTOCOL ADVICE -->
+<div class="bg-surface-container-low p-space-lg rounded flex flex-col md:flex-row items-center justify-between gap-space-lg">
+<div class="flex items-start gap-space-md">
+<span class="material-symbols-outlined text-primary-container text-3xl flex-shrink-0">shield</span>
+<div class="flex flex-col gap-space-xs">
+<h4 class="font-subheader-sector text-subheader-sector text-primary uppercase">SAVAŞ HATTI SAHA UYARISI // DALGA RAPORU</h4>
+<p class="font-body-telemetry text-body-telemetry text-on-surface-variant">Kıyamet Sürüsü (Horde) başlangıcından 10 saniye önce siren çalar. Tüm tim üyeleri derhal kapalı koridor barikatlarına çekilmeli ve Neuro-Screamer'ları birinci öncelikli hedef olarak işaretlemelidir.</p>
+</div>
+</div>
+<button class="bg-primary-container text-on-primary-container font-headline-tactical text-metric-readout-sm uppercase px-space-lg py-space-md rounded font-black tracking-wider flex items-center gap-space-sm flex-shrink-0 hover:bg-primary transition-colors">
+<span class="material-symbols-outlined text-xl">download</span> SAVAŞ BRİFİNGİNİ İNDİR
+        </button>
+</div>
+</div>
+</div>
+</div></main><footer class="w-full bg-surface-container-lowest py-space-md"><div class="w-full px-gutter-desktop flex flex-col sm:flex-row items-center justify-between gap-space-sm"><div class="flex items-center gap-space-sm"><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">© 2025 PROTOCOL-Z MILITARY OPERATIONAL SYSTEMS // LEVEL-4 BIO-HAZARD CLEARANCE ONLY</span></div><div class="flex items-center gap-space-md"><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">ENCRYPTION: 4096-BIT TACTICAL QUANTUM</span><span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">DEFCON-1 STATUS ACTIVE</span></div></div></footer></body></html>

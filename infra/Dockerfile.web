@@ -1,0 +1,27 @@
+FROM node:26.13.0-bookworm-slim AS build
+WORKDIR /app
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY package.json yarn.lock .yarnrc.yml tsconfig.base.json ./
+COPY .yarn/releases .yarn/releases
+COPY packages ./packages
+COPY apps/game-client ./apps/game-client
+COPY apps/web ./apps/web
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/desktop/package.json ./apps/desktop/package.json
+RUN printf '%s\n' 'nodeLinker: node-modules' 'yarnPath: .yarn/releases/yarn-4.18.1.cjs' 'tsEnableAutoTypes: false' > .yarnrc.yml \
+ && node .yarn/releases/yarn-4.18.1.cjs install \
+ && ./node_modules/typescript/bin/tsc -p packages/shared/tsconfig.json \
+ && ./node_modules/typescript/bin/tsc -p apps/game-client/tsconfig.json \
+ && cd apps/web \
+ && printf '%s\n' 'declare module "*.css";' > src/types/css.d.ts \
+ && node ../../node_modules/next/dist/bin/next build
+
+FROM node:26.13.0-bookworm-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=build /app /app
+WORKDIR /app/apps/web
+EXPOSE 3000
+CMD ["node", "../../node_modules/next/dist/bin/next", "start", "--port", "3000"]

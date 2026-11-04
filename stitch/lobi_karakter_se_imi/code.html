@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,700;0,800;0,900;1,800&family=Geist:wght@400;500;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@100..900&family=Geist:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"secondary-fixed":"#ffdbd1","outline-variant":"#3b4b3d","on-surface-variant":"#b9cbb9","on-secondary-fixed-variant":"#862200","on-tertiary-fixed":"#2a1700","surface-container-highest":"#313539","error":"#ffb4ab","surface-tint":"#00e478","primary":"#f1ffef","secondary-fixed-dim":"#ffb5a0","tertiary-fixed":"#ffddb8","tertiary":"#fffaf8","surface-container-high":"#262a2e","primary-fixed":"#60ff98","surface-bright":"#363a3d","on-background":"#e0e3e7","inverse-surface":"#e0e3e7","tertiary-fixed-dim":"#ffb95f","on-error-container":"#ffdad6","surface-dim":"#101417","on-tertiary-fixed-variant":"#653e00","surface-container-low":"#181c1f","on-secondary-fixed":"#3b0900","surface-container":"#1c2023","secondary":"#ffb5a0","inverse-primary":"#006d36","on-surface":"#e0e3e7","on-primary-fixed-variant":"#005227","error-container":"#93000a","surface-variant":"#313539","outline":"#849585","primary-container":"#00ff87","secondary-container":"#d73b00","background":"#101417","on-tertiary":"#472a00","on-tertiary-container":"#8a5700","on-primary-fixed":"#00210c","surface-container-lowest":"#0b0f12","on-secondary-container":"#fffbff","tertiary-container":"#ffd8ad","on-primary":"#003919","inverse-on-surface":"#2d3134","on-secondary":"#5f1500","primary-fixed-dim":"#00e478","on-error":"#690005","on-primary-container":"#007138","surface":"#101417"},borderRadius:{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},spacing:{"space-lg":"1.5rem","space-md":"1rem","space-sm":"0.5rem","space-xl":"2.5rem","gutter-desktop":"1.5rem","margin":"1rem","space-xs":"0.25rem","gutter":"1rem","margin-desktop":"2rem"},fontFamily:{"metric-readout-sm":["Geist"],"display-command":["Chivo"],"body-telemetry":["Geist"],"body-telemetry-condensed":["Geist"],"headline-tactical":["Chivo"],"metric-readout-lg":["Chivo"],"display-command-mobile":["Chivo"],"headline-tactical-mobile":["Chivo"],"subheader-sector":["Chivo"],"label-monospaced-caps":["Geist"]},fontSize:{"metric-readout-sm":["1rem",{"lineHeight":"1rem","letterSpacing":"0.05em","fontWeight":"700"}],"display-command":["3rem",{"lineHeight":"3rem","letterSpacing":"0.05em","fontWeight":"900"}],"body-telemetry":["0.9375rem",{"lineHeight":"1.375rem","letterSpacing":"0em","fontWeight":"400"}],"body-telemetry-condensed":["0.8125rem",{"lineHeight":"1.125rem","letterSpacing":"0.01em","fontWeight":"500"}],"headline-tactical":["1.75rem",{"lineHeight":"2rem","letterSpacing":"0.03em","fontWeight":"800"}],"metric-readout-lg":["2.25rem",{"lineHeight":"2.25rem","letterSpacing":"-0.02em","fontWeight":"900"}],"display-command-mobile":["2rem",{"lineHeight":"2.25rem","letterSpacing":"0.04em","fontWeight":"900"}],"headline-tactical-mobile":["1.375rem",{"lineHeight":"1.625rem","letterSpacing":"0.03em","fontWeight":"800"}],"subheader-sector":["1.125rem",{"lineHeight":"1.375rem","letterSpacing":"0.04em","fontWeight":"700"}],"label-monospaced-caps":["0.6875rem",{"lineHeight":"0.875rem","letterSpacing":"0.12em","fontWeight":"700"}]}}}}</script></head><body class="bg-surface font-body-telemetry text-on-surface min-h-screen selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md"><div class="h-20 w-full px-gutter-desktop flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-sm"><img alt="Protocol-Z Biohazard Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1UFymdaB5CyIs8wmhIriDV-B_gH9RyqFbu9OKp35unjyVmIEQGQFm3U5HWv6MH3totnkX3FNgSMbm7frIWG_d19D71QoaF59UjkHYBHXEYOYmrlLeT8HHjxIfjp8hMPwNuR0GgmvSPLtShJ905UM1FlMtInKSn71JOlxVU07ge3URGhZFlPVXS1jvD0yEi33fevJUrXFxm6CXQQjpYuytbsjnqds8VSpkZDOziUIWLjkQ"/><div class="flex flex-col"><span class="font-headline-tactical text-headline-tactical uppercase tracking-wider text-primary leading-none">PROTOCOL-Z</span><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant tracking-widest uppercase">OUTBREAK DEFENSE // TAC-OS</span></div></div><div class="hidden xl:flex items-center gap-space-sm bg-surface-container-low px-space-sm py-space-xs rounded"><span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">SOCKET.IO: CONNECTED | EU-CENTRAL (24ms) | V1.0.4-PROD</span></div></div><nav class="hidden lg:flex items-center gap-space-xs bg-surface-container p-space-xs rounded" data-active-classes="bg-primary-container text-on-primary-container font-headline-tactical font-bold shadow-[0_0_10px_rgba(0,255,135,0.45)]"><a class="font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-md py-space-sm rounded transition-colors text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" data-path="lobi-&-karakter-secimi" href="#">Lobi & Karakter Seçimi</a><a class="font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-md py-space-sm rounded transition-colors text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" data-path="savas-alani-&-hud" href="#">Savaş Alanı & HUD</a><a class="font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-md py-space-sm rounded transition-colors text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" data-path="seviye-atlama-&-power-up" href="#">Seviye Atlama & Power-Up</a><a class="font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-md py-space-sm rounded transition-colors text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" data-path="zombi-ansiklopedisi-&-dalga-istihbarati" href="#">Zombi Ansiklopedisi & Dalga İstihbaratı</a></nav><div class="flex items-center gap-space-md"><div class="hidden md:flex items-center gap-space-xs bg-surface-container-low px-space-sm py-space-xs rounded"><span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">TEAM: 4/4 COMBAT READY</span></div><div class="flex items-center gap-space-sm bg-surface-container-high px-space-sm py-space-xs rounded"><div class="flex flex-col text-right hidden sm:flex"><span class="font-subheader-sector text-subheader-sector text-primary leading-tight uppercase">CMD. VANCE</span><span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">LVL 42 // SURVIVOR TIER 4</span></div><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjOE_hcwZId6BU8nUguEfsdpCBt0YGSlKXw013V_ETd6fMG1NWgyZOUeUYiWkG-g3WHhdons2nj9ZqevmnYjwSDZxrZ8ub6994vSGzRv-HsQrYE8zw9KGZyWLOk49V7J-MJZeBPoXfNvFSfDzlAqM3aO9YPmkRHdTmkTamKfCrsvj0fMcgw4BAqGHRYzPKxsrg1Ewg-DP5PNWkG2rTxScLP4rH-RcRNc4IfhR9nLMF"/></div></div></div></header><main class="w-full pt-20 bg-surface min-h-[calc(100vh-5rem)]"><div class="flex flex-col w-full">
+<!-- TOP TELEMETRY & LOBBY CONTROLS BAR -->
+<div class="w-full bg-surface-container-lowest px-gutter-desktop py-space-md">
+<div class="w-full flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-space-md">
+<!-- Left: Mode Toggle & Tactical Room Classification -->
+<div class="flex flex-wrap items-center gap-space-md">
+<!-- Room Access Code Badge -->
+<div class="flex items-center bg-surface-container-high px-space-md py-space-sm rounded">
+<div class="flex flex-col mr-space-md">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">ODA KODU // ACCESS KEY</span>
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-tactical text-headline-tactical text-primary-container tracking-wider" id="room-code-display">ALPHA-9481</span>
+<button class="text-on-surface-variant hover:text-primary-container transition-colors ml-space-xs p-1" id="copy-btn" onclick="navigator.clipboard.writeText('ALPHA-9481'); document.getElementById('copy-feedback').innerText='KOPYALANDI'; setTimeout(()=>document.getElementById('copy-feedback').innerText='KOPYALA', 2000)">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</div>
+<span class="font-label-monospaced-caps text-label-monospaced-caps bg-surface-container text-primary-container px-space-xs py-0.5 rounded uppercase" id="copy-feedback">KOPYALA</span>
+</div>
+<!-- Mode Toggle Segment -->
+<div class="flex items-center bg-surface-container p-space-xs rounded gap-space-xs">
+<button class="mode-btn px-space-md py-space-sm rounded font-label-monospaced-caps text-label-monospaced-caps uppercase transition-all text-on-surface-variant hover:text-on-surface" id="mode-solo-btn" onclick="switchMode('solo')">
+            TEK KİŞİLİK (SOLO)
+          </button>
+<button class="mode-btn px-space-md py-space-sm rounded font-label-monospaced-caps text-label-monospaced-caps uppercase transition-all bg-primary-container text-on-primary-container font-bold shadow-[0_0_12px_rgba(0,255,135,0.4)]" id="mode-coop-btn" onclick="switchMode('coop')">
+            2-4 KİŞİLİK CO-OP
+          </button>
+</div>
+<!-- Tactical Threat Level Meter -->
+<div class="hidden sm:flex items-center gap-space-sm bg-surface-container-low px-space-md py-space-sm rounded">
+<span class="material-symbols-outlined text-secondary-container">crisis_alert</span>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">TEHDİT SEVİYESİ</span>
+<span class="font-metric-readout-sm text-metric-readout-sm text-secondary uppercase">BIO-HAZARD V // CEHENNEM</span>
+</div>
+</div>
+</div>
+<!-- Right: Realtime Network Diagnostics & Telemetry -->
+<div class="flex flex-wrap items-center gap-space-sm sm:gap-space-md">
+<div class="flex items-center gap-space-xs bg-surface-container px-space-sm py-space-xs rounded">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-ping"></span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">SOCKET.IO:</span>
+<span class="font-metric-readout-sm text-metric-readout-sm text-primary-container">18 ms</span>
+</div>
+<div class="flex items-center gap-space-xs bg-surface-container px-space-sm py-space-xs rounded">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">REDIS STATE:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container font-bold uppercase">SYNCED</span>
+</div>
+<div class="flex items-center gap-space-xs bg-surface-container px-space-sm py-space-xs rounded">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">SUNUCU:</span>
+<span class="font-metric-readout-sm text-metric-readout-sm text-on-surface">FRANKFURT-09</span>
+</div>
+</div>
+</div>
+</div>
+<!-- MAIN OPERATIONAL MATRIX: 12-COLUMN ASYMMETRIC GRID -->
+<div class="w-full px-gutter-desktop py-space-lg grid grid-cols-1 xl:grid-cols-12 gap-space-lg">
+<!-- LEFT & CENTER REGION: ROSTER SELECTION (8 OPERATIVES) (Col 1-8) -->
+<div class="xl:col-span-8 flex flex-col gap-space-md">
+<!-- Section Superheader -->
+<div class="flex items-center justify-between bg-surface-container-low px-space-md py-space-sm rounded">
+<div class="flex items-center gap-space-sm">
+<span class="w-2.5 h-2.5 bg-primary-container"></span>
+<span class="font-headline-tactical text-headline-tactical text-primary uppercase tracking-wide">OPERATÖR LİSTESİ</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase ml-space-sm">[AKTİF PERSONEL: 8/8 SEÇİME HAZIR]</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KİMLİK: TACTICAL BIOMETRICS</span>
+<span class="material-symbols-outlined text-primary-container text-sm">fingerprint</span>
+</div>
+</div>
+<!-- 8 Operative Interactive Cards Grid (2 cols x 4 rows desktop / 1 col mobile) -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-md" id="roster-container">
+<!-- 1. Marcus 'Ironclad' Vance -->
+<div class="op-card cursor-pointer group bg-surface-container-high hover:bg-surface-bright transition-all p-space-md rounded flex flex-col justify-between relative shadow-md" data-op-idx="0" onclick="selectOperative(0)">
+<div class="absolute top-2 right-2 bg-surface-container-lowest px-space-xs py-0.5 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">
+            [SYS.01 // MALE]
+          </div>
+<div class="flex items-start gap-space-md">
+<div class="w-20 h-24 bg-surface-container-lowest overflow-hidden rounded relative shrink-0">
+<img class="w-full h-full object-cover" data-alt="A hyper-detailed digital portrait of Marcus Vance, a battle-hardened male combat operative with ballistic armor, futuristic tactical HUD eyepieces, heavy tactical blast collar, cold steel and intense toxic green ambient phosphor lighting, cybernetic military aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGrkdAv9cvaBgRSBglsM3NOSn_q09J0Dq1Fo9bhiAePclDrESBipz4PN4uoiFpeoNZIuEo9PNMbtPPreZzeuqdd3YPNouNGPjy4HGtodfZjqK8OUEBSfuhWmSigqOIHTyJDHYQ7M24MiKreHmwy_J2UWWrNa2eOGO4R1XPsAuJnALzovCXU0n07z2MWaFNAJZVPl7Rb9IFTUtfn9TO8lGFXcEmR4_nziVaSHp2iXcT"/>
+<span class="absolute bottom-0 inset-x-0 bg-surface-container-lowest/80 text-center font-label-monospaced-caps text-label-monospaced-caps text-secondary-fixed-dim">TANK</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KOD ADI: IRONCLAD</span>
+<h3 class="font-subheader-sector text-subheader-sector text-primary uppercase truncate group-hover:text-primary-container transition-colors">Marcus Vance</h3>
+<div class="mt-space-xs flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">AKTİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Aegis Riot Barrier</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">PASİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">+40% Zırh Koruması</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest px-space-sm py-1 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">SİLAH:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary uppercase">MAG-PULSE SHOTGUN</span>
+</div>
+<span class="op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase">SEÇİLDİ (P1)</span>
+</div>
+</div>
+<!-- 2. Elena 'Valkyrie' Rostova -->
+<div class="op-card cursor-pointer group bg-surface-container hover:bg-surface-bright transition-all p-space-md rounded flex flex-col justify-between relative shadow-md" data-op-idx="1" onclick="selectOperative(1)">
+<div class="absolute top-2 right-2 bg-surface-container-lowest px-space-xs py-0.5 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">
+            [SYS.02 // FEMALE]
+          </div>
+<div class="flex items-start gap-space-md">
+<div class="w-20 h-24 bg-surface-container-lowest overflow-hidden rounded relative shrink-0">
+<img class="w-full h-full object-cover" data-alt="A tactical portrait of Elena Rostova, female bio-medic combat officer with high-tech tactical visor, injector gauntlets, sleek reinforced white and olive carbon armor, emergency clinical lighting, cyberpunk tactical atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCugos22RzKdM2-Cmj1Ha_aYu3vB35TWCpqs_gC0ZnVKbbMXwwNKQBX8Bhmi8InjGlqVhgnBeNPIdhnqMY6dJL7hicDBtcXsCfrn_TO1pLHMm9WPDiHx1DOmUEYQ_dp5UxlTpE61xIp9B0kc_FykeP6gAs9_wqxc6LtfjIti243jVkeP4bcWHqdQABvBKtHMzrpHYMzZz4BORjSzz3ZtvCKJscn5fQWaPFwL_Tmsexi"/>
+<span class="absolute bottom-0 inset-x-0 bg-surface-container-lowest/80 text-center font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim">MEDIC</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KOD ADI: VALKYRIE</span>
+<h3 class="font-subheader-sector text-subheader-sector text-primary uppercase truncate group-hover:text-primary-container transition-colors">Elena Rostova</h3>
+<div class="mt-space-xs flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">AKTİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Biotic Healing Mist</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">PASİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">+25% Canlandırma Hızı</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest px-space-sm py-1 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">SİLAH:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary uppercase">MK-4 SURGICAL SMG</span>
+</div>
+<span class="op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">HAZIRDA BEKLİYOR</span>
+</div>
+</div>
+<!-- 3. Jax 'Breaker' Thorne -->
+<div class="op-card cursor-pointer group bg-surface-container hover:bg-surface-bright transition-all p-space-md rounded flex flex-col justify-between relative shadow-md" data-op-idx="2" onclick="selectOperative(2)">
+<div class="absolute top-2 right-2 bg-surface-container-lowest px-space-xs py-0.5 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">
+            [SYS.03 // MALE]
+          </div>
+<div class="flex items-start gap-space-md">
+<div class="w-20 h-24 bg-surface-container-lowest overflow-hidden rounded relative shrink-0">
+<img class="w-full h-full object-cover" data-alt="A portrait of Jax Thorne, muscular male heavy gunner with cybernetic ammo harness, massive ballistic exoskeleton frame, scarred jaw, smoking ammo canisters, dark grit tactical battle background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdQdzBz8qeoGCdnPuzy-x706kMWrkV6NFyNQnRTNLnzWVaUKCydqkDi5sYZ3I_fmwMEIETuD-Qg6GFweh5ef5YwS20IEsKEXj83ZwnGbLuyt39tpl0no5uvQd3oR4MgomwKw2BsUIKMo8YPJzDIwFu7moZw9OsAxBH5BhFBU5pjaffrAasZ6w21qovE6-Q1VA_2kSxG1g4NoEcQCpljCwfzsiZ_VEIalyALzHYETak"/>
+<span class="absolute bottom-0 inset-x-0 bg-surface-container-lowest/80 text-center font-label-monospaced-caps text-label-monospaced-caps text-secondary-container">GUNNER</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KOD ADI: BREAKER</span>
+<h3 class="font-subheader-sector text-subheader-sector text-primary uppercase truncate group-hover:text-primary-container transition-colors">Jax Thorne</h3>
+<div class="mt-space-xs flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">AKTİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Overdrive Minigun</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">PASİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">+30% Şarjör Kapasitesi</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest px-space-sm py-1 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">SİLAH:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary uppercase">TITAN ROTARY CANNON</span>
+</div>
+<span class="op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">HAZIRDA BEKLİYOR</span>
+</div>
+</div>
+<!-- 4. Dr. Sarah 'Tox' Chen -->
+<div class="op-card cursor-pointer group bg-surface-container hover:bg-surface-bright transition-all p-space-md rounded flex flex-col justify-between relative shadow-md" data-op-idx="3" onclick="selectOperative(3)">
+<div class="absolute top-2 right-2 bg-surface-container-lowest px-space-xs py-0.5 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">
+            [SYS.04 // FEMALE]
+          </div>
+<div class="flex items-start gap-space-md">
+<div class="w-20 h-24 bg-surface-container-lowest overflow-hidden rounded relative shrink-0">
+<img class="w-full h-full object-cover" data-alt="A portrait of Dr. Sarah Chen, female bio-alchemist specialist in hazardous materials combat gear, hazmat gas mask partially open, toxic vial chemical vials on tactical chest vest, radioactive green neon glow." src="https://lh3.googleusercontent.com/aida-public/AB6AXuATnxUbV_2RFMszEBXqpZikRB_DSjDBjdMESCXwI0KjH7ZTMRgZjsjjJlU21sJSNaKKDmuBrwk-8QZo50UZ3TpnxpYTzQyq3IeAK0m3EDZZeffr3BptRCn_rFpcrcQBF5jp8o1ty8HbpDpjvLnrE7HSvJUGE1M5Ntt4fW15z01pBYW7RTp2n8RPWW3pFdQVZvt5I-AoBQM9X3KtYFllEKoIh-pkyldTi6Tt92avnouf"/>
+<span class="absolute bottom-0 inset-x-0 bg-surface-container-lowest/80 text-center font-label-monospaced-caps text-label-monospaced-caps text-primary-container">BIO-ALCHEMIST</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KOD ADI: TOX</span>
+<h3 class="font-subheader-sector text-subheader-sector text-primary uppercase truncate group-hover:text-primary-container transition-colors">Dr. Sarah Chen</h3>
+<div class="mt-space-xs flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">AKTİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Neurotoxin Grenade</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">PASİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Asit Aşındırma DoT</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest px-space-sm py-1 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">SİLAH:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary uppercase">ACID LAUNCHER 9MM</span>
+</div>
+<span class="op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">HAZIRDA BEKLİYOR</span>
+</div>
+</div>
+<!-- 5. Viktor 'Ghost' Sokolov -->
+<div class="op-card cursor-pointer group bg-surface-container hover:bg-surface-bright transition-all p-space-md rounded flex flex-col justify-between relative shadow-md" data-op-idx="4" onclick="selectOperative(4)">
+<div class="absolute top-2 right-2 bg-surface-container-lowest px-space-xs py-0.5 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">
+            [SYS.05 // MALE]
+          </div>
+<div class="flex items-start gap-space-md">
+<div class="w-20 h-24 bg-surface-container-lowest overflow-hidden rounded relative shrink-0">
+<img class="w-full h-full object-cover" data-alt="A portrait of Viktor Sokolov, cold male sniper operative in ghillie mesh and cyber-monocle, focused piercing stare, precision tactical camouflage, muted dark slate background with sharp rim lights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1I6qI1YgyJXlZxXg-vOsCTVkzQ_Z-seIb2uQjhX_G9irqFsnfrV5O0HDIwE404Iv7UQ4ZPITV4MA-ToTlUdRtsbsGMOEfKO5bmwips5uMgHGVZNfnmPiYpahmTwMdJBOA_LUdzo2fe_FGkJju0pveR2t0CpY5s39Scbg92AM04O3eJp0JqNmk9phz3CPll3DBhNPSJRj89gtbQeNBfyrwX7XDmPYuA7vmVxc_cL6B"/>
+<span class="absolute bottom-0 inset-x-0 bg-surface-container-lowest/80 text-center font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed">SNIPER</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KOD ADI: GHOST</span>
+<h3 class="font-subheader-sector text-subheader-sector text-primary uppercase truncate group-hover:text-primary-container transition-colors">Viktor Sokolov</h3>
+<div class="mt-space-xs flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">AKTİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Thermal Piercing Round</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">PASİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">+50% Kritik Kafa Vuruşu</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest px-space-sm py-1 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">SİLAH:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary uppercase">AP-50 COIL RIFLE</span>
+</div>
+<span class="op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">HAZIRDA BEKLİYOR</span>
+</div>
+</div>
+<!-- 6. Maya 'Spark' Ramirez -->
+<div class="op-card cursor-pointer group bg-surface-container hover:bg-surface-bright transition-all p-space-md rounded flex flex-col justify-between relative shadow-md" data-op-idx="5" onclick="selectOperative(5)">
+<div class="absolute top-2 right-2 bg-surface-container-lowest px-space-xs py-0.5 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">
+            [SYS.06 // FEMALE]
+          </div>
+<div class="flex items-start gap-space-md">
+<div class="w-20 h-24 bg-surface-container-lowest overflow-hidden rounded relative shrink-0">
+<img class="w-full h-full object-cover" data-alt="A portrait of Maya Ramirez, young female combat engineer with utility headset, tactical welding goggles resting on forehead, holographic drone blueprints floating nearby, electric arcs and spark lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-OCuZNiewd0QE0g2Rv2vcHnFa-1Jb3JeByrm1NCvRspyoc2Ug1KBzPPvM-f3_zP-dSriHPRbXyeOi80qJ7V5aaw6h6-zy8Gly66mLsBCHiXnUvFCS7LjFufvI51QW_PmENTfwgJ2OJi1LTC6OXsT0j3wsN8Ms70MJqEHvxym4y7fU7lw-VZEO1py3iShsKP4mO1hxDKUvn-I2Z8qq2_BfjcSkr7CFveOd5Mm45nRr"/>
+<span class="absolute bottom-0 inset-x-0 bg-surface-container-lowest/80 text-center font-label-monospaced-caps text-label-monospaced-caps text-tertiary-fixed">ENGINEER</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KOD ADI: SPARK</span>
+<h3 class="font-subheader-sector text-subheader-sector text-primary uppercase truncate group-hover:text-primary-container transition-colors">Maya Ramirez</h3>
+<div class="mt-space-xs flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">AKTİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Auto-Sentry Turret</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">PASİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Mühimmat Dronu Sağlayıcı</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest px-space-sm py-1 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">SİLAH:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary uppercase">ARC-STUN CARBINE</span>
+</div>
+<span class="op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">HAZIRDA BEKLİYOR</span>
+</div>
+</div>
+<!-- 7. Lucas 'Pyro' Silva -->
+<div class="op-card cursor-pointer group bg-surface-container hover:bg-surface-bright transition-all p-space-md rounded flex flex-col justify-between relative shadow-md" data-op-idx="6" onclick="selectOperative(6)">
+<div class="absolute top-2 right-2 bg-surface-container-lowest px-space-xs py-0.5 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">
+            [SYS.07 // MALE]
+          </div>
+<div class="flex items-start gap-space-md">
+<div class="w-20 h-24 bg-surface-container-lowest overflow-hidden rounded relative shrink-0">
+<img class="w-full h-full object-cover" data-alt="A portrait of Lucas Silva, pyromancer male soldier in heat-shielded fire-retardant heavy armor with pilot flames reflected in visor, tactical thermite tanks on back, orange ember embers floating, dramatic lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDiFRN04AVi3RyqCRJSyjwpf6T1xq4qlmzUCNrryNCc67lUL2iQh85LmR3QkxiF2T7TCuhm_pf7_hCiC8JbY5kAcwBygDH3k079TyKDFHT_dmw5aqASD4wxhToxsJLd6hp-A4SEFauAkJdqk_8yVmDJ8SCLf28nrpcEsMCywkz6zYNypuGUhxbK2wheOcFLY7gv6eP9axwCmO3E1alPPglesFmyrDSo-XAyOZqbFCFh"/>
+<span class="absolute bottom-0 inset-x-0 bg-surface-container-lowest/80 text-center font-label-monospaced-caps text-label-monospaced-caps text-secondary-container">PYRO</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KOD ADI: PYRO</span>
+<h3 class="font-subheader-sector text-subheader-sector text-primary uppercase truncate group-hover:text-primary-container transition-colors">Lucas Silva</h3>
+<div class="mt-space-xs flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">AKTİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Napalm Incendiary Wall</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">PASİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Alev Alan Hasarı (Cleave)</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest px-space-sm py-1 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">SİLAH:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary uppercase">HELLFIRE FLAMETHROWER</span>
+</div>
+<span class="op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">HAZIRDA BEKLİYOR</span>
+</div>
+</div>
+<!-- 8. Zoe 'Shadow' Novak -->
+<div class="op-card cursor-pointer group bg-surface-container hover:bg-surface-bright transition-all p-space-md rounded flex flex-col justify-between relative shadow-md" data-op-idx="7" onclick="selectOperative(7)">
+<div class="absolute top-2 right-2 bg-surface-container-lowest px-space-xs py-0.5 rounded font-label-monospaced-caps text-label-monospaced-caps text-primary-container">
+            [SYS.08 // FEMALE]
+          </div>
+<div class="flex items-start gap-space-md">
+<div class="w-20 h-24 bg-surface-container-lowest overflow-hidden rounded relative shrink-0">
+<img class="w-full h-full object-cover" data-alt="A portrait of Zoe Novak, nimble female stealth scout operative, tactical sleek polymer cloaking stealth suit, short cropped hair, tactical night-vision sensors, low profile combat gear, deep shadows." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRduF0nBJLUbzdBFORdRu9KGVGTAuc3vbspym2kk_cpyIXKjz5Vok_Sm1FHiyarZmnBYNVHSYSG4C1uwiRHzxnh6RT4rZynLb6FDwZO8Y9q218TNqJgUfr59EgFwvZ-lhRKDz0OX-LGAgVAFybLMNO8S_qMLCKn7yFk3zCn_-XtwVbuCa85sh3CojY74aDfVgauZEylXeECL6NlpXasFNaxI_plQcmVbXMF-y6BpOT"/>
+<span class="absolute bottom-0 inset-x-0 bg-surface-container-lowest/80 text-center font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim">SCOUT RECON</span>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">KOD ADI: SHADOW</span>
+<h3 class="font-subheader-sector text-subheader-sector text-primary uppercase truncate group-hover:text-primary-container transition-colors">Zoe Novak</h3>
+<div class="mt-space-xs flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">AKTİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">Cloaking Decoy & Dash</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">PASİF:</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface truncate">+20% Hareket Sürati</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest px-space-sm py-1 rounded">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant">SİLAH:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary uppercase">SILENCED PDW-X</span>
+</div>
+<span class="op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">HAZIRDA BEKLİYOR</span>
+</div>
+</div>
+</div>
+<!-- Live Tactical Chat Box Terminal -->
+<div class="bg-surface-container-low rounded p-space-md flex flex-col gap-space-xs">
+<div class="flex items-center justify-between pb-space-xs bg-surface-container-lowest px-space-sm py-1 rounded">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">terminal</span> LOBİ İLETİŞİM KANALI // CHAT LOG
+          </span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">PROTOKOL: AES-256 GÜVENLİ</span>
+</div>
+<div class="h-28 overflow-y-auto space-y-1 font-body-telemetry-condensed text-body-telemetry-condensed text-on-surface-variant px-space-sm" id="chat-stream">
+<p><span class="text-primary-container">[SYS.NET]:</span> Socket connected to ws://relay.protocol-z.eu:8080 (18ms). Redis room lock acquired.</p>
+<p><span class="text-secondary">[Vance_Leader]:</span> Takım tamamlanıyor. Ağır zırhları kuşanın, Dalga 5'te Brute zombiler var.</p>
+<p><span class="text-primary-fixed-dim">[Elena_Medic]:</span> Şırınga kitlerim ve canlandırma sisim hazır. Arkanızdayım.</p>
+<p><span class="text-tertiary-fixed">[Jax_Gunner]:</span> Minigun soğutma ünitesi kalibre edildi. Cephane kutularını bol tutun.</p>
+<p class="text-primary"><span class="text-primary-container">[SYS.DEFCON]:</span> 4/4 Operatör hazır konumuna geçti. Komutan onayı bekleniyor.</p>
+</div>
+<div class="flex gap-space-xs pt-space-xs">
+<input class="flex-1 bg-surface-container-lowest px-space-sm py-space-xs rounded text-body-telemetry-condensed font-body-telemetry-condensed text-primary placeholder-on-surface-variant outline-none focus:bg-surface-container-high transition-colors" id="chat-input" onkeydown="if(event.key==='Enter')sendChat()" placeholder="// Takıma telsiz mesajı gönder..." type="text"/>
+<button class="bg-surface-container-high hover:bg-surface-bright text-primary px-space-md py-space-xs rounded font-label-monospaced-caps text-label-monospaced-caps uppercase transition-colors" onclick="sendChat()">
+            İLET
+          </button>
+</div>
+</div>
+</div>
+<!-- RIGHT REGION: ACTIVE SQUAD SLOTS & ENGAGEMENT DOCK (Col 9-12) -->
+<div class="xl:col-span-4 flex flex-col gap-space-md">
+<!-- Squad Status Section Header -->
+<div class="flex items-center justify-between bg-surface-container-low px-space-md py-space-sm rounded">
+<div class="flex items-center gap-space-sm">
+<span class="w-2.5 h-2.5 bg-primary-container"></span>
+<span class="font-headline-tactical text-headline-tactical text-primary uppercase tracking-wide">MÜFREZE (SQUAD)</span>
+</div>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-container bg-surface-container px-space-sm py-0.5 rounded uppercase">4/4 SLOT DOLU</span>
+</div>
+<!-- Single Player Team Fill Preference Toggle -->
+<div class="bg-surface-container p-space-md rounded flex items-center justify-between shadow-sm">
+<div class="flex flex-col">
+<span class="font-subheader-sector text-subheader-sector text-primary uppercase">YAPAY ZEKA / BOT DOLDUR</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">Eksik slotları taktiksel botlarla tamamla</span>
+</div>
+<button class="relative inline-flex h-6 w-12 shrink-0 cursor-pointer rounded bg-primary-container transition-colors" id="bot-toggle-btn" onclick="toggleBotFill()">
+<span class="inline-block h-5 w-5 transform rounded bg-surface-container-lowest transition translate-x-6 mt-0.5 ml-0.5" id="bot-toggle-thumb"></span>
+</button>
+</div>
+<!-- SQUAD SLOTS (1 TO 4) -->
+<div class="flex flex-col gap-space-sm" id="squad-slots-container">
+<!-- SLOT 1: Player / Squad Leader -->
+<div class="bg-surface-container-high p-space-md rounded flex flex-col gap-space-xs relative shadow-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="bg-primary-container text-on-primary-container font-label-monospaced-caps text-label-monospaced-caps px-space-xs py-0.5 rounded font-bold uppercase">SLOT 01 // LİDER</span>
+<span class="font-subheader-sector text-subheader-sector text-primary uppercase">Marcus 'Ironclad' Vance</span>
+</div>
+<div class="flex items-center gap-space-xs text-primary-container bg-surface-container-lowest px-space-xs py-0.5 rounded">
+<span class="material-symbols-outlined text-sm">wifi</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps uppercase">18ms</span>
+</div>
+</div>
+<!-- Loadout Readout -->
+<div class="grid grid-cols-3 gap-space-xs mt-space-xs bg-surface-container-lowest p-space-xs rounded">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">BİRİNCİL</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary truncate">Mag-Pulse 12G</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">İKİNCİL</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary truncate">Revolver .44</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">CİHAZ</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary-container truncate">Riot Barricade</span>
+</div>
+</div>
+<!-- Status Indicator -->
+<div class="flex items-center justify-between mt-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">OPERATÖR DURUMU:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps bg-primary-container text-on-primary-container px-space-sm py-0.5 rounded uppercase font-bold">HAZIR // READY</span>
+</div>
+</div>
+<!-- SLOT 2: Elena Rostova (Medic) -->
+<div class="bg-surface-container p-space-md rounded flex flex-col gap-space-xs relative shadow-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="bg-surface-container-lowest text-on-surface-variant font-label-monospaced-caps text-label-monospaced-caps px-space-xs py-0.5 rounded font-bold uppercase">SLOT 02</span>
+<span class="font-subheader-sector text-subheader-sector text-primary uppercase">Elena 'Valkyrie' Rostova</span>
+</div>
+<div class="flex items-center gap-space-xs text-primary-container bg-surface-container-lowest px-space-xs py-0.5 rounded">
+<span class="material-symbols-outlined text-sm">wifi</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps uppercase">24ms</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-space-xs mt-space-xs bg-surface-container-lowest p-space-xs rounded">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">BİRİNCİL</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary truncate">MK-4 SMG</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">İKİNCİL</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary truncate">Silenced Dart</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">CİHAZ</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary-container truncate">Biotic Vaporizer</span>
+</div>
+</div>
+<div class="flex items-center justify-between mt-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">OPERATÖR DURUMU:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps bg-primary-container text-on-primary-container px-space-sm py-0.5 rounded uppercase font-bold">HAZIR // READY</span>
+</div>
+</div>
+<!-- SLOT 3: Jax Thorne (Gunner) -->
+<div class="bg-surface-container p-space-md rounded flex flex-col gap-space-xs relative shadow-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="bg-surface-container-lowest text-on-surface-variant font-label-monospaced-caps text-label-monospaced-caps px-space-xs py-0.5 rounded font-bold uppercase">SLOT 03</span>
+<span class="font-subheader-sector text-subheader-sector text-primary uppercase">Jax 'Breaker' Thorne</span>
+</div>
+<div class="flex items-center gap-space-xs text-primary-container bg-surface-container-lowest px-space-xs py-0.5 rounded">
+<span class="material-symbols-outlined text-sm">wifi</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps uppercase">31ms</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-space-xs mt-space-xs bg-surface-container-lowest p-space-xs rounded">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">BİRİNCİL</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary truncate">Titan Vulcan</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">İKİNCİL</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary truncate">Auto Pistol 9mm</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">CİHAZ</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary-container truncate">Ammo Dispenser</span>
+</div>
+</div>
+<div class="flex items-center justify-between mt-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">OPERATÖR DURUMU:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps bg-primary-container text-on-primary-container px-space-sm py-0.5 rounded uppercase font-bold">HAZIR // READY</span>
+</div>
+</div>
+<!-- SLOT 4: Dr. Sarah Chen (Alchemist) -->
+<div class="bg-surface-container p-space-md rounded flex flex-col gap-space-xs relative shadow-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="bg-surface-container-lowest text-on-surface-variant font-label-monospaced-caps text-label-monospaced-caps px-space-xs py-0.5 rounded font-bold uppercase">SLOT 04</span>
+<span class="font-subheader-sector text-subheader-sector text-primary uppercase">Dr. Sarah 'Tox' Chen</span>
+</div>
+<div class="flex items-center gap-space-xs text-primary-container bg-surface-container-lowest px-space-xs py-0.5 rounded">
+<span class="material-symbols-outlined text-sm">wifi</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps uppercase">19ms</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-space-xs mt-space-xs bg-surface-container-lowest p-space-xs rounded">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">BİRİNCİL</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary truncate">Acid Launcher</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">İKİNCİL</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary truncate">Tox-Dart</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">CİHAZ</span>
+<span class="font-body-telemetry-condensed text-body-telemetry-condensed text-primary-container truncate">Neuro-Cloud Can</span>
+</div>
+</div>
+<div class="flex items-center justify-between mt-space-xs">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">OPERATÖR DURUMU:</span>
+<span class="font-label-monospaced-caps text-label-monospaced-caps bg-primary-container text-on-primary-container px-space-sm py-0.5 rounded uppercase font-bold">HAZIR // READY</span>
+</div>
+</div>
+</div>
+<!-- MAIN ACTION LAUNCH DOCK -->
+<div class="mt-auto bg-surface-container-low p-space-md rounded flex flex-col gap-space-md shadow-xl">
+<div class="flex items-center justify-between bg-surface-container-lowest px-space-md py-space-sm rounded">
+<div class="flex flex-col">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">GERİ SAYIM // LAUNCH CLOCK</span>
+<span class="font-metric-readout-lg text-metric-readout-lg text-primary-container" id="countdown-val">00:08</span>
+</div>
+<div class="flex flex-col text-right">
+<span class="font-label-monospaced-caps text-label-monospaced-caps text-secondary uppercase">GÖREV BÖLGESİ</span>
+<span class="font-subheader-sector text-subheader-sector text-primary uppercase">SEKTÖR 7: KARANTİNA MERKEZİ</span>
+</div>
+</div>
+<!-- Launch Ready Button with Phosphor Glow & Interactive Launch Function -->
+<button class="w-full bg-primary-container text-on-primary-container font-display-command text-headline-tactical py-space-md px-space-lg rounded uppercase tracking-wider transition-all duration-300 shadow-[0_0_24px_rgba(0,255,135,0.45)] hover:shadow-[0_0_36px_rgba(0,255,135,0.7)] hover:bg-surface-bright hover:text-primary-container active:scale-[0.99] flex items-center justify-center gap-space-md" id="launch-btn" onclick="triggerLaunch()">
+<span class="material-symbols-outlined text-3xl">swords</span>
+<span id="launch-btn-label">OPERASYONU BAŞLAT / READY UP</span>
+<span class="material-symbols-outlined text-3xl">arrow_forward</span>
+</button>
+<div class="flex items-center justify-between text-on-surface-variant font-label-monospaced-caps text-label-monospaced-caps uppercase px-space-xs">
+<span>OTO-KAYIT: AKTİF</span>
+<span>SUNUCU KİLİDİ: DOĞRULANDI</span>
+<span>GÖREV TİPİ: EXFIL DEFENSE</span>
+</div>
+</div>
+</div>
+</div>
+<!-- CLIENT-SIDE SCRIPT FOR REALTIME LOBBY INTERACTIONS -->
+<script>
+    let isBotFillEnabled = true;
+    let currentMode = 'coop';
+    let countdownSecs = 8;
+    let countdownInterval = null;
+
+    function toggleBotFill() {
+      isBotFillEnabled = !isBotFillEnabled;
+      const thumb = document.getElementById('bot-toggle-thumb');
+      const btn = document.getElementById('bot-toggle-btn');
+      if (isBotFillEnabled) {
+        thumb.classList.remove('translate-x-0');
+        thumb.classList.add('translate-x-6');
+        btn.classList.remove('bg-surface-container-highest');
+        btn.classList.add('bg-primary-container');
+        appendChatSystem('[LOBİ]: Yapay Zeka Bot Desteği aktif edildi. Boş slotlar doldurulacak.');
+      } else {
+        thumb.classList.remove('translate-x-6');
+        thumb.classList.add('translate-x-0');
+        btn.classList.remove('bg-primary-container');
+        btn.classList.add('bg-surface-container-highest');
+        appendChatSystem('[LOBİ]: Yapay Zeka Bot Desteği kapatıldı. Müfreze yalnız savaş modunda.');
+      }
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const soloBtn = document.getElementById('mode-solo-btn');
+      const coopBtn = document.getElementById('mode-coop-btn');
+
+      if (mode === 'solo') {
+        soloBtn.className = "mode-btn px-space-md py-space-sm rounded font-label-monospaced-caps text-label-monospaced-caps uppercase transition-all bg-primary-container text-on-primary-container font-bold shadow-[0_0_12px_rgba(0,255,135,0.4)]";
+        coopBtn.className = "mode-btn px-space-md py-space-sm rounded font-label-monospaced-caps text-label-monospaced-caps uppercase transition-all text-on-surface-variant hover:text-on-surface";
+        appendChatSystem('[MOD]: Tek Kişilik (Solo Operasyon) seçildi. Yalnız hayatta kalma parametreleri yüklendi.');
+      } else {
+        coopBtn.className = "mode-btn px-space-md py-space-sm rounded font-label-monospaced-caps text-label-monospaced-caps uppercase transition-all bg-primary-container text-on-primary-container font-bold shadow-[0_0_12px_rgba(0,255,135,0.4)]";
+        soloBtn.className = "mode-btn px-space-md py-space-sm rounded font-label-monospaced-caps text-label-monospaced-caps uppercase transition-all text-on-surface-variant hover:text-on-surface";
+        appendChatSystem('[MOD]: 2-4 Kişilik Çok Oyunculu Eşli (Co-Op) ağı doğrulandı.');
+      }
+    }
+
+    function selectOperative(idx) {
+      const cards = document.querySelectorAll('.op-card');
+      const opNames = [
+        "Marcus 'Ironclad' Vance",
+        "Elena 'Valkyrie' Rostova",
+        "Jax 'Breaker' Thorne",
+        "Dr. Sarah 'Tox' Chen",
+        "Viktor 'Ghost' Sokolov",
+        "Maya 'Spark' Ramirez",
+        "Lucas 'Pyro' Silva",
+        "Zoe 'Shadow' Novak"
+      ];
+
+      cards.forEach((card, index) => {
+        const badge = card.querySelector('.op-status-badge');
+        if (index === idx) {
+          card.classList.remove('bg-surface-container');
+          card.classList.add('bg-surface-container-high', 'shadow-[0_0_15px_rgba(0,255,135,0.2)]');
+          badge.textContent = 'SEÇİLDİ (P1)';
+          badge.className = 'op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-primary-container uppercase';
+        } else {
+          card.classList.remove('bg-surface-container-high', 'shadow-[0_0_15px_rgba(0,255,135,0.2)]');
+          card.classList.add('bg-surface-container');
+          badge.textContent = 'HAZIRDA BEKLİYOR';
+          badge.className = 'op-status-badge font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase';
+        }
+      });
+
+      appendChatSystem('[SEÇİM]: Oyuncu birincil tercihi ' + opNames[idx] + ' olarak güncellendi.');
+    }
+
+    function sendChat() {
+      const input = document.getElementById('chat-input');
+      const val = input.value.trim();
+      if (!val) return;
+      
+      const stream = document.getElementById('chat-stream');
+      const p = document.createElement('p');
+      p.innerHTML = '<span class="text-primary-container font-bold">[Komutan Vance]:</span> ' + val;
+      stream.appendChild(p);
+      stream.scrollTop = stream.scrollHeight;
+      input.value = '';
+    }
+
+    function appendChatSystem(text) {
+      const stream = document.getElementById('chat-stream');
+      const p = document.createElement('p');
+      p.className = 'text-primary-fixed-dim';
+      p.innerHTML = '<span class="text-primary-container">[SYS]:</span> ' + text;
+      stream.appendChild(p);
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    function triggerLaunch() {
+      const btn = document.getElementById('launch-btn');
+      const label = document.getElementById('launch-btn-label');
+      label.textContent = "İNİSİYATİF BAŞLATILIYOR...";
+      btn.classList.add('opacity-90', 'animate-pulse');
+
+      if (!countdownInterval) {
+        countdownInterval = setInterval(() => {
+          if (countdownSecs > 0) {
+            countdownSecs--;
+            document.getElementById('countdown-val').textContent = '00:0' + countdownSecs;
+          } else {
+            clearInterval(countdownInterval);
+            label.textContent = "İNİŞ GERÇEKLEŞTİRİLİYOR!";
+            appendChatSystem('[GÖREV]: Harita yükleniyor: SEKTÖR 7. HUD aktif ediliyor...');
+          }
+        }, 1000);
+      }
+    }
+  </script>
+</div></main><footer class="w-full bg-surface-container-lowest py-space-md"><div class="w-full px-gutter-desktop flex flex-col sm:flex-row items-center justify-between gap-space-sm"><div class="flex items-center gap-space-sm"><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">© 2025 PROTOCOL-Z MILITARY OPERATIONAL SYSTEMS // LEVEL-4 BIO-HAZARD CLEARANCE ONLY</span></div><div class="flex items-center gap-space-md"><span class="font-label-monospaced-caps text-label-monospaced-caps text-on-surface-variant uppercase">ENCRYPTION: 4096-BIT TACTICAL QUANTUM</span><span class="font-label-monospaced-caps text-label-monospaced-caps text-primary-fixed-dim uppercase">DEFCON-1 STATUS ACTIVE</span></div></div></footer></body></html>

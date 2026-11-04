@@ -1,0 +1,23 @@
+{
+  "name": "@protocol-z/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PROTOCOL-Z Electron shell — Steam PC packaging spine",
+  "author": "PROTOCOL-Z",
+  "main": "src/main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "build": "yarn workspace @protocol-z/game-client build:desktop",
+    "package": "yarn build && electron-builder --config electron-builder.yml -c.win.signAndEditExecutable=false",
+    "package:dir": "yarn build && electron-builder --config electron-builder.yml --dir -c.win.signAndEditExecutable=false",
+    "typecheck": "node -e \"console.log('desktop: no TS sources')\""
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.protocolz.game",
+    "productName": "PROTOCOL-Z"
+  }
+}

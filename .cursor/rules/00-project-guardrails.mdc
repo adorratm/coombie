@@ -1,0 +1,21 @@
+---
+description: Core safety and engineering rules for this existing survivor-like game repository.
+alwaysApply: true
+---
+# Project guardrails
+
+- This is an existing, playable PC/Steam survivor-like game. Preserve working behavior and the current architecture.
+- The engine, language, renderer, build system, test commands, and runtime constraints are unknown until verified from repository files. Never guess them.
+- Before editing, inspect relevant source, configuration, assets, build scripts, tests, and existing patterns. Prefer evidence from the repository over assumptions.
+- Do not migrate engines, languages, frameworks, renderers, physics systems, UI frameworks, or asset formats unless explicitly requested.
+- Do not perform broad refactors as a side effect of a feature task. Make the smallest coherent change.
+- Do not invent APIs, engine features, asset paths, animation states, input actions, or build commands. Search for existing implementations first.
+- Keep gameplay tuning data separate from code where the project already supports data-driven configuration. Follow established project conventions.
+- Preserve save compatibility. Any save schema change must include a migration or a documented compatibility strategy.
+- For gameplay changes, consider pause, restart, death, level transitions, low frame rate, invalid targets, and simultaneous effects.
+- For performance-sensitive systems, avoid unbounded per-frame allocations, accidental O(n^2) work, repeated asset loading, and uncontrolled entity growth. Measure before optimizing.
+- Do not add third-party dependencies without explaining why, license implications, platform support, and maintenance cost.
+- Do not overwrite, delete, rename, or regenerate user assets without explicit approval.
+- Never report a build, test, runtime check, or visual verification as passed unless it was actually run and its result observed.
+- Separate facts, assumptions, and recommendations in reports.
+- Before finishing, summarize changed files, behavior changes, verification performed, and known risks.

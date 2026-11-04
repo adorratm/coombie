@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>PROTOCOL-Z // ACTIVE COMBAT VIEWPORT</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&amp;family=Geist:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-secondary-fixed": "#3b0900",
+            "on-error": "#690005",
+            "on-secondary-fixed-variant": "#862200",
+            "surface-bright": "#363a3d",
+            "surface-container-high": "#262a2e",
+            "surface-tint": "#00e478",
+            "tertiary-fixed-dim": "#ffb95f",
+            "outline-variant": "#3b4b3d",
+            "on-tertiary-container": "#8a5700",
+            "surface": "#101417",
+            "primary-container": "#00ff87",
+            "surface-container-low": "#181c1f",
+            "background": "#101417",
+            "inverse-surface": "#e0e3e7",
+            "surface-container": "#1c2023",
+            "primary-fixed-dim": "#00e478",
+            "secondary-fixed-dim": "#ffb5a0",
+            "secondary": "#ffb5a0",
+            "tertiary-container": "#ffd8ad",
+            "error-container": "#93000a",
+            "on-tertiary-fixed": "#2a1700",
+            "surface-variant": "#313539",
+            "surface-dim": "#101417",
+            "on-error-container": "#ffdad6",
+            "on-background": "#e0e3e7",
+            "primary-fixed": "#60ff98",
+            "tertiary": "#fffaf8",
+            "on-primary-fixed": "#00210c",
+            "on-tertiary-fixed-variant": "#653e00",
+            "secondary-fixed": "#ffdbd1",
+            "on-primary": "#003919",
+            "on-primary-container": "#007138",
+            "outline": "#849585",
+            "on-surface-variant": "#b9cbb9",
+            "inverse-on-surface": "#2d3134",
+            "inverse-primary": "#006d36",
+            "on-secondary-container": "#fffbff",
+            "on-primary-fixed-variant": "#005227",
+            "secondary-container": "#d73b00",
+            "primary": "#f1ffef",
+            "on-surface": "#e0e3e7",
+            "on-tertiary": "#472a00",
+            "tertiary-fixed": "#ffddb8",
+            "surface-container-highest": "#313539",
+            "on-secondary": "#5f1500",
+            "error": "#ffb4ab",
+            "surface-container-lowest": "#0b0f12"
+          },
+          fontFamily: {
+            "metric-readout-lg": ["Chivo", "sans-serif"],
+            "display-command": ["Chivo", "sans-serif"],
+            "subheader-sector": ["Chivo", "sans-serif"],
+            "headline-tactical": ["Chivo", "sans-serif"],
+            "body-telemetry": ["Geist", "sans-serif"],
+            "body-telemetry-condensed": ["Geist", "sans-serif"],
+            "label-monospaced-caps": ["Geist", "monospace"],
+            "metric-readout-sm": ["Geist", "monospace"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      user-select: none;
+      background-color: #06090c;
+    }
+    /* CRT Scanline & Grain Shader Overlay */
+    .crt-scanlines {
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+    }
+    /* Toxic Vignette Glow */
+    .toxic-vignette {
+      box-shadow: inset 0 0 120px rgba(0, 255, 135, 0.08), inset 0 0 60px rgba(239, 68, 68, 0.12);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-surface font-body-telemetry text-on-surface h-screen w-screen relative overflow-hidden select-none">
+<!-- ========================================================================= -->
+<!-- 1. LIVE THREE.JS 3D INTERACTIVE COMBAT SCENE VIEWPORT                     -->
+<!-- ========================================================================= -->
+<!-- STITCH_THREEJS_START:ANIMATION_10 class="absolute inset-0 w-full h-full z-0 block cursor-crosshair" -->
+<div class="absolute inset-0 w-full h-full z-0 block cursor-crosshair" style="display:block;">
+<script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
+<div id="threejs-container-ANIMATION_10" style="width:100%;height:100%"></div>
+<script>
+(function() {
+  const container = document.getElementById('threejs-container-ANIMATION_10');
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const width = container.clientWidth || window.innerWidth;
+const height = container.clientHeight || window.innerHeight;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x06090c, 0.025);
+
+const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+camera.position.set(0, 18, 14);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+renderer.setSize(width, height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x1a2e26, 1.8);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0x00ff87, 2.2);
+dirLight.position.set(12, 25, 10);
+dirLight.castShadow = true;
+scene.add(dirLight);
+
+const redWarningLight = new THREE.PointLight(0xff2a42, 3.5, 30);
+redWarningLight.position.set(0, 4, 0);
+scene.add(redWarningLight);
+
+// Ground Grid Arena
+const groundGeo = new THREE.PlaneGeometry(60, 60, 40, 40);
+const groundMat = new THREE.MeshPhongMaterial({
+  color: 0x090e12,
+  emissive: 0x020507,
+  shininess: 30,
+  wireframe: false
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Grid Helper with Biohazard Neon lines
+const grid = new THREE.GridHelper(60, 40, 0x00ff87, 0x142820);
+grid.position.y = 0.02;
+scene.add(grid);
+
+// Central Defense Reactor Core
+const coreGeo = new THREE.CylinderGeometry(1.4, 1.8, 3, 16);
+const coreMat = new THREE.MeshPhongMaterial({ color: 0x00ff87, emissive: 0x008844, shininess: 80 });
+const reactorCore = new THREE.Mesh(coreGeo, coreMat);
+reactorCore.position.set(0, 1.5, 0);
+reactorCore.castShadow = true;
+scene.add(reactorCore);
+
+// Pulse Shield Ring around reactor
+const ringGeo = new THREE.TorusGeometry(3.5, 0.08, 16, 64);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff87, transparent: true, opacity: 0.8 });
+const shieldRing = new THREE.Mesh(ringGeo, ringMat);
+shieldRing.rotation.x = Math.PI / 2;
+shieldRing.position.y = 0.2;
+scene.add(shieldRing);
+
+// 4 Co-Op Operatives (Player Team)
+const operatives = [];
+const operativeConfigs = [
+  { name: "Marcus", role: "Tank", color: 0x00ff87, pos: [-2, 0, 1.5], scale: 1.2 },
+  { name: "Elena", role: "Medic", color: 0x00e5ff, pos: [2, 0, 1.5], scale: 0.95 },
+  { name: "Jax", role: "Gunner", color: 0xffaa00, pos: [-1.5, 0, -2], scale: 1.1 },
+  { name: "Sarah", role: "Alchemist", color: 0xa855f7, pos: [1.8, 0, -2], scale: 0.95 }
+];
+
+operativeConfigs.forEach((cfg) => {
+  const opGroup = new THREE.Group();
+  
+  // Body (Armor)
+  const bodyGeo = new THREE.BoxGeometry(0.7 * cfg.scale, 1.2 * cfg.scale, 0.5 * cfg.scale);
+  const bodyMat = new THREE.MeshPhongMaterial({ color: 0x1a2428, emissive: cfg.color, emissiveIntensity: 0.25 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.8 * cfg.scale;
+  body.castShadow = true;
+  opGroup.add(body);
+
+  // Helmet / Visor
+  const headGeo = new THREE.BoxGeometry(0.4 * cfg.scale, 0.4 * cfg.scale, 0.45 * cfg.scale);
+  const headMat = new THREE.MeshBasicMaterial({ color: cfg.color });
+  const head = new THREE.Mesh(headGeo, headMat);
+  head.position.set(0, 1.6 * cfg.scale, 0.05);
+  opGroup.add(head);
+
+  // Weapon Barrel
+  const gunGeo = new THREE.CylinderGeometry(0.08, 0.08, 1, 8);
+  const gunMat = new THREE.MeshPhongMaterial({ color: 0x334155 });
+  const gun = new THREE.Mesh(gunGeo, gunMat);
+  gun.rotation.x = Math.PI / 2;
+  gun.position.set(0.35 * cfg.scale, 0.9 * cfg.scale, 0.6 * cfg.scale);
+  opGroup.add(gun);
+
+  // Muzzle flash light
+  const muzzleLight = new THREE.PointLight(cfg.color, 0, 6);
+  muzzleLight.position.set(0.35 * cfg.scale, 0.9 * cfg.scale, 1.2 * cfg.scale);
+  opGroup.add(muzzleLight);
+
+  opGroup.position.set(cfg.pos[0], 0, cfg.pos[2]);
+  scene.add(opGroup);
+  operatives.push({ group: opGroup, muzzleLight, fireTimer: Math.random() * 2, cfg });
+});
+
+// Zombie Swarm
+const zombies = [];
+const zombieCount = 28;
+const zombieMat = new THREE.MeshPhongMaterial({ color: 0x2d3a29, emissive: 0x162410, shininess: 10 });
+const mutantMat = new THREE.MeshPhongMaterial({ color: 0x7f1d1d, emissive: 0xef4444, emissiveIntensity: 0.6 });
+const acidMat = new THREE.MeshPhongMaterial({ color: 0x84cc16, emissive: 0xa3e635, emissiveIntensity: 0.5 });
+
+for (let i = 0; i < zombieCount; i++) {
+  const zGroup = new THREE.Group();
+  const isBoss = (i === 0);
+  const isAcid = (i % 6 === 0);
+
+  const scale = isBoss ? 2.4 : (isAcid ? 1.1 : 0.85 + Math.random() * 0.3);
+  const currentMat = isBoss ? mutantMat : (isAcid ? acidMat : zombieMat);
+
+  const torsoGeo = new THREE.BoxGeometry(0.6 * scale, 1.0 * scale, 0.4 * scale);
+  const torso = new THREE.Mesh(torsoGeo, currentMat);
+  torso.position.y = 0.7 * scale;
+  torso.castShadow = true;
+  zGroup.add(torso);
+
+  const zHeadGeo = new THREE.SphereGeometry(0.25 * scale, 8, 8);
+  const zHead = new THREE.Mesh(zHeadGeo, currentMat);
+  zHead.position.set(0, 1.35 * scale, 0.1);
+  zGroup.add(zHead);
+
+  // Glowing eyes
+  const eyeGeo = new THREE.SphereGeometry(0.04 * scale, 4, 4);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0xff0033 : (isAcid ? 0xccff00 : 0xff3b30) });
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeL.position.set(-0.1 * scale, 1.38 * scale, 0.3 * scale);
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeR.position.set(0.1 * scale, 1.38 * scale, 0.3 * scale);
+  zGroup.add(eyeL);
+  zGroup.add(eyeR);
+
+  // Arms outstretched forward
+  const armGeo = new THREE.CylinderGeometry(0.08 * scale, 0.08 * scale, 0.7 * scale, 6);
+  const armL = new THREE.Mesh(armGeo, currentMat);
+  armL.rotation.x = Math.PI / 2.2;
+  armL.position.set(-0.35 * scale, 0.9 * scale, 0.35 * scale);
+  const armR = new THREE.Mesh(armGeo, currentMat);
+  armR.rotation.x = Math.PI / 2.2;
+  armR.position.set(0.35 * scale, 0.9 * scale, 0.35 * scale);
+  zGroup.add(armL);
+  zGroup.add(armR);
+
+  // Spawn position around edges
+  const angle = Math.random() * Math.PI * 2;
+  const dist = isBoss ? 16 : (11 + Math.random() * 14);
+  zGroup.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+
+  scene.add(zGroup);
+  zombies.push({
+    group: zGroup,
+    speed: isBoss ? 0.022 : (isAcid ? 0.035 : 0.04 + Math.random() * 0.025),
+    isBoss,
+    isAcid,
+    wobbleSpeed: 4 + Math.random() * 4,
+    offset: Math.random() * 10
+  });
+}
+
+// Particle System for Muzzle Flashes & Toxic Spores
+const particleCount = 200;
+const particleGeo = new THREE.BufferGeometry();
+const particlePositions = new Float32Array(particleCount * 3);
+for (let p = 0; p < particleCount * 3; p += 3) {
+  particlePositions[p] = (Math.random() - 0.5) * 30;
+  particlePositions[p + 1] = Math.random() * 6;
+  particlePositions[p + 2] = (Math.random() - 0.5) * 30;
+}
+particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+const particleMat = new THREE.PointsMaterial({
+  color: 0x00ff87,
+  size: 0.12,
+  transparent: true,
+  opacity: 0.75
+});
+const particles = new THREE.Points(particleGeo, particleMat);
+scene.add(particles);
+
+// Bullet Tracer Lines
+const tracers = [];
+const tracerMat = new THREE.LineBasicMaterial({ color: 0x00ff87, linewidth: 2 });
+for (let t = 0; t < 6; t++) {
+  const tracerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const line = new THREE.Line(tracerGeo, tracerMat);
+  line.visible = false;
+  scene.add(line);
+  tracers.push(line);
+}
+
+// Interactive Mouse Aiming
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const planeIntersect = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let targetAimPoint = new THREE.Vector3(0, 0, 0);
+
+function onPointerMove(event) {
+  const rect = container.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersectPoint = new THREE.Vector3();
+  raycaster.ray.intersectPlane(planeIntersect, intersectPoint);
+  if (intersectPoint) {
+    targetAimPoint.copy(intersectPoint);
+  }
+}
+window.addEventListener('pointermove', onPointerMove);
+
+// Resize handler
+function onResize() {
+  const w = container.clientWidth || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+
+// Animation Loop
+let clock = new THREE.Clock();
+let tracerIdx = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const time = clock.getElapsedTime();
+
+  // Core rotation & warning pulse
+  reactorCore.rotation.y += 0.8 * dt;
+  shieldRing.rotation.z += 0.4 * dt;
+  const pulse = Math.sin(time * 3);
+  redWarningLight.intensity = 2.5 + pulse * 1.5;
+  shieldRing.scale.setScalar(1 + Math.sin(time * 2) * 0.05);
+
+  // Animate floating toxic spores
+  const pArray = particleGeo.attributes.position.array;
+  for (let i = 1; i < particleCount * 3; i += 3) {
+    pArray[i] += dt * 0.3;
+    if (pArray[i] > 6) pArray[i] = 0.2;
+  }
+  particleGeo.attributes.position.needsUpdate = true;
+
+  // Operative AI & Player Facing
+  operatives.forEach((op, idx) => {
+    if (idx === 0) {
+      // Main player aims directly at mouse cursor
+      op.group.lookAt(targetAimPoint.x, 0, targetAimPoint.z);
+    } else {
+      // Co-op allies track closest zombies
+      let nearest = null;
+      let minDist = 999;
+      zombies.forEach(z => {
+        const d = op.group.position.distanceTo(z.group.position);
+        if (d < minDist) { minDist = d; nearest = z; }
+      });
+      if (nearest) {
+        op.group.lookAt(nearest.group.position.x, 0, nearest.group.position.z);
+      }
+    }
+
+    // Firing cycle
+    op.fireTimer -= dt;
+    if (op.fireTimer <= 0) {
+      op.fireTimer = 0.18 + Math.random() * 0.25;
+      op.muzzleLight.intensity = 5;
+      setTimeout(() => { if (op.muzzleLight) op.muzzleLight.intensity = 0; }, 40);
+
+      // Create a visible tracer
+      const tracer = tracers[tracerIdx % tracers.length];
+      tracerIdx++;
+      const startPos = new THREE.Vector3();
+      op.group.getWorldPosition(startPos);
+      startPos.y = 0.9;
+      
+      const dir = new THREE.Vector3();
+      op.group.getWorldDirection(dir);
+      const endPos = startPos.clone().add(dir.multiplyScalar(12 + Math.random() * 4));
+      endPos.y = 0.8;
+
+      tracer.geometry.setFromPoints([startPos, endPos]);
+      tracer.visible = true;
+      setTimeout(() => { tracer.visible = false; }, 60);
+    }
+  });
+
+  // Zombies advance toward center with grotesque limp/wobble
+  zombies.forEach((z) => {
+    const toCenter = new THREE.Vector3(0, 0, 0).sub(z.group.position).normalize();
+    z.group.position.addScaledVector(toCenter, z.speed);
+    z.group.lookAt(0, z.group.position.y, 0);
+
+    // Grotesque zombie shuffle rotation
+    z.group.rotation.z = Math.sin(time * z.wobbleSpeed + z.offset) * 0.12;
+    z.group.rotation.x = Math.sin(time * (z.wobbleSpeed * 0.8) + z.offset) * 0.08;
+
+    // Reset zombie if it reaches defense perimeter
+    if (z.group.position.length() < 3.2) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 16 + Math.random() * 8;
+      z.group.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+})();
+</script>
+</div>
+<!-- STITCH_THREEJS_END:ANIMATION_10 -->
+<!-- ========================================================================= -->
+<!-- 2. GAME ENGINE CRT SCANLINES & TOXIC VIGNETTE OVERLAYS                   -->
+<!-- ========================================================================= -->
+<div class="crt-scanlines toxic-vignette absolute inset-0 z-10"></div>
+<!-- Atmospheric Grid Overlay & Corner Watermarks -->
+<div class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-3 text-[10px] font-label-monospaced-caps text-on-surface-variant/40">
+<div class="flex justify-between items-center tracking-widest">
+<span>SEC-CAM FEED // ARENA_ALPHA_09 // 60.0 FPS</span>
+<span class="text-primary-container/60 animate-pulse">● LIVE TAC-LINK: DEFCON-1</span>
+</div>
+<div class="flex justify-between items-end tracking-wider">
+<span>SYS.ENC: 4096-BIT QUANTUM // VISOR-OS V1.0.4</span>
+<span>MUTAGEN TOXICITY: 64.2% [CRITICAL]</span>
+</div>
+</div>
+<!-- ========================================================================= -->
+<!-- 3. HARDCORE TACTICAL HUD LAYER OVERLAY                                   -->
+<!-- ========================================================================= -->
+<div class="relative z-20 w-full h-full flex flex-col justify-between p-3 lg:p-5 pointer-events-none">
+<!-- ------------------------------------------------------------- -->
+<!-- TOP HUD ROW: CO-OP VITALS, WAVE TRACKER, MINI-RADAR           -->
+<!-- ------------------------------------------------------------- -->
+<div class="w-full flex items-start justify-between gap-4">
+<!-- TOP-LEFT: CO-OP SQUAD VITALS PANEL -->
+<div class="w-72 lg:w-80 pointer-events-auto flex flex-col gap-2">
+<div class="bg-surface-container-low/90 backdrop-blur-md border-l-2 border-primary-container p-2.5 rounded shadow-2xl">
+<div class="flex items-center justify-between border-b border-surface-container-highest/60 pb-1.5 mb-2">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-ping"></span>
+<span class="font-label-monospaced-caps text-[10px] text-primary tracking-widest uppercase font-bold">TİM TELEMETRİSİ // 4/4 AKTİF</span>
+</div>
+<span class="font-label-monospaced-caps text-[10px] text-primary-container font-mono">SİNYAL: %99</span>
+</div>
+<!-- Operative 1: Marcus [Tank - Local Player] -->
+<div class="bg-surface-container/80 hover:bg-surface-container-high/90 p-1.5 rounded mb-1.5 border border-primary-container/30 transition-all">
+<div class="flex items-center justify-between text-xs mb-1">
+<span class="font-headline-tactical text-primary font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary-container">shield_person</span>
+                MARCUS [P1 - TANK]
+              </span>
+<span class="bg-primary-container text-on-primary-container text-[9px] font-label-monospaced-caps font-black px-1 rounded animate-pulse">ULT HAZIR</span>
+</div>
+<div class="space-y-1">
+<!-- HP Bar -->
+<div class="flex items-center gap-1.5 text-[9px] font-mono">
+<span class="text-on-surface-variant w-4 font-bold">HP</span>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded overflow-hidden">
+<div class="h-full bg-primary-container w-[82%] shadow-[0_0_8px_#00ff87]"></div>
+</div>
+<span class="text-primary w-12 text-right">820/1000</span>
+</div>
+<!-- Shield Bar -->
+<div class="flex items-center gap-1.5 text-[9px] font-mono">
+<span class="text-on-surface-variant w-4 font-bold">ZRH</span>
+<div class="flex-1 h-1 bg-surface-container-highest rounded overflow-hidden">
+<div class="h-full bg-surface-tint w-full"></div>
+</div>
+<span class="text-on-surface-variant w-12 text-right">400/400</span>
+</div>
+</div>
+</div>
+<!-- Operative 2: Elena [Medic] -->
+<div class="bg-surface-container/60 p-1.5 rounded mb-1.5">
+<div class="flex items-center justify-between text-xs mb-0.5">
+<span class="font-headline-tactical text-primary/90 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-secondary">medical_services</span>
+                ELENA [MEDİK]
+              </span>
+<span class="text-[9px] font-label-monospaced-caps text-secondary-fixed">HEAL CLOUD: 4s</span>
+</div>
+<div class="flex items-center gap-1.5 text-[9px] font-mono">
+<span class="text-on-surface-variant w-4 font-bold">HP</span>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded overflow-hidden">
+<div class="h-full bg-primary-container w-[78%]"></div>
+</div>
+<span class="text-primary w-12 text-right">510/650</span>
+</div>
+</div>
+<!-- Operative 3: Jax [Heavy Gunner] -->
+<div class="bg-surface-container/60 p-1.5 rounded mb-1.5">
+<div class="flex items-center justify-between text-xs mb-0.5">
+<span class="font-headline-tactical text-primary/90 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-tertiary-fixed-dim">crisis_alert</span>
+                JAX [AĞIR SİLAH]
+              </span>
+<span class="text-[9px] font-label-monospaced-caps text-secondary uppercase animate-pulse">ŞARJÖR: 88%</span>
+</div>
+<div class="flex items-center gap-1.5 text-[9px] font-mono">
+<span class="text-on-surface-variant w-4 font-bold">HP</span>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded overflow-hidden">
+<div class="h-full bg-primary-container w-[83%]"></div>
+</div>
+<span class="text-primary w-12 text-right">750/900</span>
+</div>
+</div>
+<!-- Operative 4: Dr. Sarah Chen [Alchemist] -->
+<div class="bg-surface-container/60 p-1.5 rounded">
+<div class="flex items-center justify-between text-xs mb-0.5">
+<span class="font-headline-tactical text-primary/90 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-purple-400">biotech</span>
+                DR. CHEN [SİMYACI]
+              </span>
+<span class="text-[9px] font-label-monospaced-caps text-primary-container uppercase">SENTRİ: 100%</span>
+</div>
+<div class="flex items-center gap-1.5 text-[9px] font-mono">
+<span class="text-on-surface-variant w-4 font-bold">HP</span>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded overflow-hidden">
+<div class="h-full bg-primary-container w-full"></div>
+</div>
+<span class="text-primary w-12 text-right">600/600</span>
+</div>
+</div>
+</div>
+<!-- Tactical Radio Comm Log -->
+<div class="hidden sm:flex flex-col gap-1 bg-surface-container-low/75 backdrop-blur-md p-2 rounded text-[10px] font-mono border-l-2 border-outline-variant">
+<div class="flex items-center gap-1 text-primary-container">
+<span class="material-symbols-outlined text-xs">graphic_eq</span>
+<span class="font-bold tracking-wider">TELSİZ İLETİŞİMİ [COMMS-ON]</span>
+</div>
+<div class="text-on-surface-variant leading-tight">
+<span class="text-primary font-bold">[ELENA]:</span> İkinci dalga kuzey kapısından geliyor, barikatı koruyun!
+          </div>
+<div class="text-on-surface-variant leading-tight">
+<span class="text-primary font-bold">[HQ]:</span> Süper mutant tespit edildi. Hellstorm saldırısını hazır tutun!
+          </div>
+</div>
+</div>
+<!-- TOP-CENTER: WAVE TELEMETRY, BOSS WARNING & TEAM SCORE -->
+<div class="flex flex-col items-center gap-2 pointer-events-auto max-w-lg w-full">
+<!-- Main Wave Banner -->
+<div class="bg-surface-container-low/95 backdrop-blur-md px-5 py-2.5 rounded-b-xl border-b-2 border-x border-primary-container/40 shadow-2xl flex flex-col items-center text-center">
+<span class="font-label-monospaced-caps text-[10px] text-secondary tracking-widest uppercase font-bold flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            AKTİF İSTİLA EVRESİ
+          </span>
+<div class="flex items-baseline gap-2">
+<span class="font-display-command text-3xl sm:text-4xl text-primary font-black tracking-tight drop-shadow-[0_0_12px_rgba(0,255,135,0.4)]">
+              DALGA 14
+            </span>
+<span class="text-on-surface-variant font-mono text-sm">/ ∞</span>
+</div>
+<!-- Horde Progress Bar -->
+<div class="w-52 sm:w-64 mt-1.5 flex flex-col gap-0.5">
+<div class="flex justify-between text-[9px] font-mono font-bold">
+<span class="text-primary-container">SÜRÜ TEMİZLENİYOR</span>
+<span class="text-primary">74%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded overflow-hidden flex gap-0.5">
+<div class="h-full bg-primary-container w-[74%] shadow-[0_0_6px_#00ff87]"></div>
+</div>
+</div>
+</div>
+<!-- BOSS HEALTH BAR / IMMINENT HORDE WARNING -->
+<div class="w-full bg-surface-container-low/90 backdrop-blur-md px-3 py-1.5 rounded border border-red-500/50 flex flex-col gap-1 shadow-lg animate-pulse">
+<div class="flex items-center justify-between text-[10px] font-label-monospaced-caps font-bold">
+<span class="text-red-400 flex items-center gap-1 uppercase">
+<span class="material-symbols-outlined text-xs">dangerous</span>
+              TEHDİT: GOLIATH CHARGER [SÜPER MUTANT]
+            </span>
+<span class="text-red-400 font-mono">00:38 SN</span>
+</div>
+<div class="w-full h-2 bg-surface-container-highest rounded overflow-hidden">
+<div class="h-full bg-gradient-to-r from-red-600 to-amber-500 w-[62%]"></div>
+</div>
+</div>
+<!-- Objective Indicator: Generator Integrity -->
+<div class="bg-surface-container-low/85 backdrop-blur-md px-3 py-1 rounded text-[11px] font-mono flex items-center gap-2 border border-surface-container-high">
+<span class="w-2 h-2 bg-primary-container rounded-sm rotate-45 animate-spin"></span>
+<span class="text-on-surface-variant">JENERATÖR BÜTÜNLÜĞÜ:</span>
+<span class="text-primary-container font-bold">78% [SAVUNULUYOR]</span>
+</div>
+</div>
+<!-- TOP-RIGHT: DYNAMIC MINIMAP RADAR & TOTAL SCORE -->
+<div class="w-52 lg:w-64 pointer-events-auto flex flex-col items-end gap-2">
+<!-- Team EXP & Score -->
+<div class="bg-surface-container-low/90 backdrop-blur-md px-3 py-2 rounded border-r-2 border-primary-container w-full text-right shadow-xl">
+<span class="font-label-monospaced-caps text-[9px] text-on-surface-variant block uppercase">TOPLAM TAKIM SKORU</span>
+<span class="font-display-command text-xl lg:text-2xl text-primary font-black tracking-wide leading-none">
+            94,200 <span class="text-xs text-primary-container font-mono">PTS</span>
+</span>
+<div class="flex items-center justify-end gap-2 mt-1 text-[9px] font-mono text-on-surface-variant">
+<span>SÜRE: <strong class="text-primary">18:42</strong></span>
+<span>|</span>
+<span>İMHA: <strong class="text-primary-container">1,842</strong></span>
+</div>
+</div>
+<!-- 360-Degree Mini Tactical Radar -->
+<div class="relative w-44 h-44 bg-surface-container-low/95 backdrop-blur-md rounded-lg p-2 border border-outline-variant/60 shadow-2xl flex flex-col justify-between">
+<div class="flex items-center justify-between text-[9px] font-mono text-on-surface-variant border-b border-surface-container-highest/60 pb-1">
+<span>RADAR T-360</span>
+<span class="text-primary-container flex items-center gap-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-ping"></span> AKTİF
+            </span>
+</div>
+<!-- Radar Screen Area -->
+<div class="relative w-full h-28 rounded bg-surface-container-lowest/80 overflow-hidden flex items-center justify-center border border-primary-container/20">
+<!-- Concentric rings -->
+<div class="absolute w-24 h-24 rounded-full border border-primary-container/20"></div>
+<div class="absolute w-14 h-14 rounded-full border border-primary-container/30"></div>
+<!-- Axis Crosshairs -->
+<div class="absolute w-full h-px bg-primary-container/20"></div>
+<div class="absolute h-full w-px bg-primary-container/20"></div>
+<!-- Sweeping Radar Beam -->
+<div class="absolute w-1/2 h-1/2 origin-bottom-right bg-gradient-to-br from-primary-container/40 to-transparent animate-spin" style="animation-duration: 3s;"></div>
+<!-- Allied Dot (Center Team) -->
+<div class="absolute top-1/2 left-1/2 w-2 h-2 -ml-1 -mt-1 bg-primary-container rounded-full shadow-[0_0_8px_#00ff87]"></div>
+<div class="absolute top-[44%] left-[54%] w-1.5 h-1.5 bg-cyan-400 rounded-full"></div>
+<!-- Hostile Swarm Blips -->
+<div class="absolute top-3 left-4 w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
+<div class="absolute top-5 left-7 w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<div class="absolute bottom-4 right-5 w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse"></div>
+<div class="absolute bottom-6 right-7 w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+<!-- Supply Air Drop -->
+<div class="absolute top-4 right-5 w-2 h-2 bg-yellow-400 rotate-45"></div>
+</div>
+<!-- Legend -->
+<div class="flex items-center justify-between text-[8px] font-mono text-on-surface-variant pt-0.5">
+<span class="flex items-center gap-0.5"><span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span> DOST</span>
+<span class="flex items-center gap-0.5"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> TEHDİT</span>
+<span class="flex items-center gap-0.5"><span class="w-1.5 h-1.5 bg-yellow-400 rotate-45"></span> İKMAL</span>
+</div>
+</div>
+</div>
+</div>
+<!-- ------------------------------------------------------------- -->
+<!-- CENTER HUD: TARGETING RETICLE & COMBAT VECTOR INDICATORS      -->
+<!-- ------------------------------------------------------------- -->
+<div class="w-full flex-1 flex flex-col items-center justify-center relative pointer-events-none">
+<!-- Target Rangefinder Crosshair Reticle -->
+<div class="relative w-24 h-24 flex items-center justify-center opacity-85">
+<div class="absolute inset-0 rounded-full border border-primary-container/30 animate-pulse"></div>
+<div class="w-14 h-14 rounded-full border-2 border-dashed border-primary-container/70 animate-spin" style="animation-duration: 10s;"></div>
+<div class="absolute w-full h-px bg-primary-container/40"></div>
+<div class="absolute h-full w-px bg-primary-container/40"></div>
+<div class="w-2 h-2 bg-primary-container rounded-full shadow-[0_0_10px_#00ff87]"></div>
+<span class="absolute -bottom-5 font-mono text-[9px] text-primary-container tracking-widest font-bold">LOCK: 14.2M</span>
+</div>
+<!-- Perimeter Swarm Vector Warning Flags -->
+<div class="absolute top-10 left-1/3 bg-red-600/90 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 animate-bounce">
+<span class="material-symbols-outlined text-xs">arrow_downward</span>
+        DALGA KÜMESİ A (x24)
+      </div>
+<div class="absolute bottom-16 right-1/3 bg-amber-600/90 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">arrow_upward</span>
+        ASİT TÜKÜREN (x6)
+      </div>
+</div>
+<!-- ------------------------------------------------------------- -->
+<!-- BOTTOM COMBAT DECK: WEAPONS, HEAT GAUGE, HOTKEYS & CONTROLS   -->
+<!-- ------------------------------------------------------------- -->
+<div class="w-full flex flex-col md:flex-row items-end justify-between gap-3 pointer-events-none">
+<!-- BOTTOM-LEFT: KEYBOARD CONTROLS HELPER -->
+<div class="pointer-events-auto bg-surface-container-low/85 backdrop-blur-md px-3 py-2 rounded border border-surface-container-highest flex items-center gap-3 text-[10px] font-mono text-on-surface-variant">
+<span class="flex items-center gap-1"><kbd class="bg-surface-container-highest text-primary px-1.5 py-0.5 rounded font-bold">L-CLICK</kbd> ATEŞ</span>
+<span class="flex items-center gap-1"><kbd class="bg-surface-container-highest text-primary px-1.5 py-0.5 rounded font-bold">SPACE</kbd> ATILMA</span>
+<span class="flex items-center gap-1"><kbd class="bg-surface-container-highest text-primary px-1.5 py-0.5 rounded font-bold">R</kbd> ŞARJÖR</span>
+<span class="flex items-center gap-1"><kbd class="bg-surface-container-highest text-primary px-1.5 py-0.5 rounded font-bold">TAB</kbd> HARİTA</span>
+</div>
+<!-- BOTTOM-CENTER / RIGHT: PRIMARY GUN HUD & ABILITY DECK -->
+<div class="pointer-events-auto flex flex-wrap items-end gap-2 bg-surface-container-low/95 backdrop-blur-md p-2.5 rounded-t-xl border-t-2 border-x border-primary-container/40 shadow-2xl">
+<!-- Weapon Telemetry & Ammo Readout -->
+<div class="flex items-center gap-3 bg-surface-container px-3 py-2 rounded border border-surface-container-high">
+<div class="flex flex-col">
+<span class="text-[9px] font-label-monospaced-caps text-primary-container uppercase font-bold">BİRİNCİL ATEŞLİ SİLAH</span>
+<span class="font-headline-tactical text-sm lg:text-base text-primary font-black uppercase">ASSAULT RIFLE MK-IV</span>
+<div class="flex items-center gap-1 text-[9px] font-mono mt-0.5">
+<span class="bg-primary-container/20 text-primary-container px-1 rounded">AUTO-BURST</span>
+<span class="bg-surface-container-highest text-on-surface-variant px-1 rounded">7.62mm AP</span>
+</div>
+</div>
+<!-- Ammo Counter Big Display -->
+<div class="flex items-baseline gap-1 bg-surface-container-lowest px-3 py-1.5 rounded border border-primary-container/30">
+<span class="font-display-command text-3xl lg:text-4xl text-primary font-black leading-none drop-shadow-[0_0_8px_rgba(0,255,135,0.5)]">34</span>
+<span class="font-mono text-sm text-on-surface-variant font-bold">/ 180</span>
+</div>
+<!-- Barrel Heat Gauge -->
+<div class="flex flex-col min-w-[70px] text-[9px] font-mono">
+<div class="flex justify-between">
+<span class="text-on-surface-variant">ISI</span>
+<span class="text-secondary font-bold">42%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded overflow-hidden mt-0.5">
+<div class="h-full bg-secondary w-[42%]"></div>
+</div>
+<span class="text-[8px] text-on-surface-variant/80 mt-0.5 text-right">STABİL</span>
+</div>
+</div>
+<!-- Ability Hotkeys Deck -->
+<div class="flex items-center gap-1.5">
+<!-- Skill Q: Toxic Grenade -->
+<button class="group relative flex flex-col items-center bg-surface-container hover:bg-surface-container-high p-2 rounded border border-surface-container-highest active:scale-95 transition-all w-16">
+<span class="absolute -top-1.5 left-1.5 bg-surface-container-highest text-primary text-[9px] font-mono font-bold px-1 rounded">Q</span>
+<span class="material-symbols-outlined text-primary-container text-xl group-hover:scale-110 transition-transform">science</span>
+<span class="font-headline-tactical text-[8px] text-primary uppercase mt-0.5 leading-none">TOKSİK</span>
+<span class="text-[8px] font-mono text-primary-container">HAZIR</span>
+</button>
+<!-- Skill E: Aegis Shield -->
+<button class="group relative flex flex-col items-center bg-surface-container hover:bg-surface-container-high p-2 rounded border border-surface-container-highest active:scale-95 transition-all w-16">
+<span class="absolute -top-1.5 left-1.5 bg-surface-container-highest text-primary text-[9px] font-mono font-bold px-1 rounded">E</span>
+<span class="material-symbols-outlined text-surface-tint text-xl group-hover:scale-110 transition-transform">security</span>
+<span class="font-headline-tactical text-[8px] text-primary uppercase mt-0.5 leading-none">KALKAN</span>
+<span class="text-[8px] font-mono text-primary-container">HAZIR</span>
+</button>
+<!-- Skill R: Adrenaline (Cooldown Active) -->
+<button class="group relative flex flex-col items-center bg-surface-container/70 p-2 rounded border border-surface-container-highest opacity-75 w-16">
+<span class="absolute -top-1.5 left-1.5 bg-surface-container-highest text-secondary text-[9px] font-mono font-bold px-1 rounded">R</span>
+<span class="material-symbols-outlined text-secondary text-xl">vaccines</span>
+<span class="font-headline-tactical text-[8px] text-secondary uppercase mt-0.5 leading-none">ADRENALİN</span>
+<span class="text-[8px] font-mono text-secondary font-bold">3.2s</span>
+</button>
+<!-- Skill F: Ultimate 'HELLSTORM' Orbital Strike -->
+<button class="group relative flex flex-col items-center bg-gradient-to-b from-primary-container/25 to-surface-container p-2 rounded border border-primary-container shadow-[0_0_15px_rgba(0,255,135,0.4)] hover:brightness-125 active:scale-95 transition-all w-20">
+<span class="absolute -top-1.5 left-1.5 bg-primary-container text-on-primary-container text-[9px] font-mono font-black px-1.5 rounded">F</span>
+<span class="material-symbols-outlined text-primary-container text-xl animate-pulse">rocket_launch</span>
+<span class="font-headline-tactical text-[9px] text-primary font-black uppercase mt-0.5 leading-none">HELLSTORM</span>
+<span class="bg-primary-container text-on-primary-container text-[8px] font-mono font-black px-1 rounded mt-0.5">ATEŞLE</span>
+</button>
+</div>
+<!-- Tactical Emergency Call Air Support -->
+<button class="bg-secondary-container hover:bg-red-600 text-on-secondary-container px-3 py-2 rounded font-headline-tactical text-xs uppercase flex items-center gap-1.5 transition-colors shadow-lg active:scale-95">
+<span class="material-symbols-outlined text-sm">emergency</span>
+<span>HAVA DESTEĞİ</span>
+</button>
+</div>
+</div>
+</div>
+</body></html>

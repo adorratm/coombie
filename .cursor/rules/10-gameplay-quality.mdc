@@ -1,0 +1,14 @@
+---
+description: Apply when changing combat, abilities, enemies, progression, difficulty, or game balance.
+globs: 
+alwaysApply: false
+---
+# Gameplay quality standards
+
+- Define the player-facing outcome and acceptance criteria before implementation.
+- Preserve deterministic and reproducible behavior where practical; use the project's existing random seed/RNG approach.
+- Keep damage, status effects, targeting, cooldowns, and progression rules consistent across player, allies, and enemies.
+- Handle edge cases: target destroyed mid-effect, source despawned, overlapping hitboxes, pause/time scale, scene transition, and simultaneous triggers.
+- Avoid hidden power creep. Explain how new content interacts with existing upgrades and difficulty curves.
+- For each new ability or enemy, specify counterplay, readability, VFX/SFX cues, and tuning parameters.
+- Do not balance by intuition alone when telemetry or simulation can be used. State assumptions and propose measurable tests.

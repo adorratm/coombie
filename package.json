@@ -1,0 +1,56 @@
+{
+  "name": "protocol-z",
+  "private": true,
+  "version": "0.1.0",
+  "description": "PROTOCOL-Z — Co-op zombie defense survival (cross-platform monorepo)",
+  "packageManager": "yarn@4.18.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "yarn workspace @protocol-z/api dev",
+    "dev:web": "yarn workspace @protocol-z/web dev",
+    "dev:game": "yarn workspace @protocol-z/game-client dev",
+    "dev:desktop": "yarn workspace @protocol-z/desktop dev",
+    "build": "yarn workspaces foreach -Apt run build",
+    "typecheck": "yarn workspaces foreach -Apt run typecheck",
+    "test": "yarn workspace @protocol-z/game-client test",
+    "ci": "yarn workspace @protocol-z/shared build && yarn typecheck && yarn test",
+    "build:packages": "yarn workspace @protocol-z/shared build && yarn workspace @protocol-z/game-engine build && yarn workspace @protocol-z/game-client build",
+    "build:desktop": "yarn workspace @protocol-z/game-client build:desktop",
+    "package:desktop": "yarn workspace @protocol-z/desktop package",
+    "package:desktop:dir": "yarn workspace @protocol-z/desktop package:dir",
+    "docker:up": "docker compose -f infra/docker-compose.yml up -d --build",
+    "docker:down": "docker compose -f infra/docker-compose.yml down",
+    "docker:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "docker:dev": "docker compose -f infra/docker-compose.dev.yml up -d",
+    "docker:dev:down": "docker compose -f infra/docker-compose.dev.yml down"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  },
+  "volta": {
+    "node": "26.13.0",
+    "yarn": "4.18.1"
+  },
+  "engines": {
+    "node": ">=26.13.0"
+  },
+  "resolutions": {
+    "typescript": "6.0.3",
+    "@nestjs/common": "11.1.6",
+    "@nestjs/core": "11.1.6",
+    "@nestjs/platform-express": "11.1.6",
+    "@nestjs/platform-socket.io": "11.1.6",
+    "@nestjs/websockets": "11.1.6",
+    "@nestjs/config": "4.0.2",
+    "@nestjs/typeorm": "11.0.0",
+    "@nestjs/cli": "11.0.10",
+    "@nestjs/schematics": "11.0.7",
+    "next": "15.5.3",
+    "ioredis": "5.7.0",
+    "typeorm": "0.3.26",
+    "uuid": "11.1.0"
+  }
+}

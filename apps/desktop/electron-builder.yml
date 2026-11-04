@@ -1,0 +1,39 @@
+appId: com.protocolz.game
+productName: PROTOCOL-Z
+copyright: Copyright © PROTOCOL-Z
+directories:
+  output: release
+  buildResources: build
+files:
+  - src/main.cjs
+  - package.json
+extraResources:
+  - from: game-dist
+    to: game-dist
+    filter:
+      - '**/*'
+  - from: steam_appid.txt
+    to: steam_appid.txt
+asar: true
+win:
+  # Avoid winCodeSign symlink privilege errors on locked-down Windows hosts.
+  signAndEditExecutable: false
+  signDlls: false
+  target:
+    - target: dir
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+linux:
+  target:
+    - AppImage
+  category: Game
+mac:
+  target:
+    - dmg
+  category: public.app-category.games
+# Steam: upload `release/win-unpacked` via SteamPipe.
+# Replace steam_appid.txt value 480 (Spacewar test) with the real AppID before shipping.

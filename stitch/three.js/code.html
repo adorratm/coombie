@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+<!-- STITCH_THREEJS_START:ANIMATION_10 class="fixed inset-0 w-full h-full bg-transparent" -->
+<div class="fixed inset-0 w-full h-full bg-transparent" style="display:block;">
+<script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
+<div id="threejs-container-ANIMATION_10" style="width:100%;height:100%"></div>
+<script>
+(function() {
+  const container = document.getElementById('threejs-container-ANIMATION_10');
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const width = container.clientWidth || window.innerWidth;
+const height = container.clientHeight || window.innerHeight;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x06090c, 0.025);
+
+const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+camera.position.set(0, 18, 14);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+renderer.setSize(width, height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x1a2e26, 1.8);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0x00ff87, 2.2);
+dirLight.position.set(12, 25, 10);
+dirLight.castShadow = true;
+scene.add(dirLight);
+
+const redWarningLight = new THREE.PointLight(0xff2a42, 3.5, 30);
+redWarningLight.position.set(0, 4, 0);
+scene.add(redWarningLight);
+
+// Ground Grid Arena
+const groundGeo = new THREE.PlaneGeometry(60, 60, 40, 40);
+const groundMat = new THREE.MeshPhongMaterial({
+  color: 0x090e12,
+  emissive: 0x020507,
+  shininess: 30,
+  wireframe: false
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Grid Helper with Biohazard Neon lines
+const grid = new THREE.GridHelper(60, 40, 0x00ff87, 0x142820);
+grid.position.y = 0.02;
+scene.add(grid);
+
+// Central Defense Reactor Core
+const coreGeo = new THREE.CylinderGeometry(1.4, 1.8, 3, 16);
+const coreMat = new THREE.MeshPhongMaterial({ color: 0x00ff87, emissive: 0x008844, shininess: 80 });
+const reactorCore = new THREE.Mesh(coreGeo, coreMat);
+reactorCore.position.set(0, 1.5, 0);
+reactorCore.castShadow = true;
+scene.add(reactorCore);
+
+// Pulse Shield Ring around reactor
+const ringGeo = new THREE.TorusGeometry(3.5, 0.08, 16, 64);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff87, transparent: true, opacity: 0.8 });
+const shieldRing = new THREE.Mesh(ringGeo, ringMat);
+shieldRing.rotation.x = Math.PI / 2;
+shieldRing.position.y = 0.2;
+scene.add(shieldRing);
+
+// 4 Co-Op Operatives (Player Team)
+const operatives = [];
+const operativeConfigs = [
+  { name: "Marcus", role: "Tank", color: 0x00ff87, pos: [-2, 0, 1.5], scale: 1.2 },
+  { name: "Elena", role: "Medic", color: 0x00e5ff, pos: [2, 0, 1.5], scale: 0.95 },
+  { name: "Jax", role: "Gunner", color: 0xffaa00, pos: [-1.5, 0, -2], scale: 1.1 },
+  { name: "Sarah", role: "Alchemist", color: 0xa855f7, pos: [1.8, 0, -2], scale: 0.95 }
+];
+
+operativeConfigs.forEach((cfg) => {
+  const opGroup = new THREE.Group();
+  
+  // Body (Armor)
+  const bodyGeo = new THREE.BoxGeometry(0.7 * cfg.scale, 1.2 * cfg.scale, 0.5 * cfg.scale);
+  const bodyMat = new THREE.MeshPhongMaterial({ color: 0x1a2428, emissive: cfg.color, emissiveIntensity: 0.25 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.8 * cfg.scale;
+  body.castShadow = true;
+  opGroup.add(body);
+
+  // Helmet / Visor
+  const headGeo = new THREE.BoxGeometry(0.4 * cfg.scale, 0.4 * cfg.scale, 0.45 * cfg.scale);
+  const headMat = new THREE.MeshBasicMaterial({ color: cfg.color });
+  const head = new THREE.Mesh(headGeo, headMat);
+  head.position.set(0, 1.6 * cfg.scale, 0.05);
+  opGroup.add(head);
+
+  // Weapon Barrel
+  const gunGeo = new THREE.CylinderGeometry(0.08, 0.08, 1, 8);
+  const gunMat = new THREE.MeshPhongMaterial({ color: 0x334155 });
+  const gun = new THREE.Mesh(gunGeo, gunMat);
+  gun.rotation.x = Math.PI / 2;
+  gun.position.set(0.35 * cfg.scale, 0.9 * cfg.scale, 0.6 * cfg.scale);
+  opGroup.add(gun);
+
+  // Muzzle flash light
+  const muzzleLight = new THREE.PointLight(cfg.color, 0, 6);
+  muzzleLight.position.set(0.35 * cfg.scale, 0.9 * cfg.scale, 1.2 * cfg.scale);
+  opGroup.add(muzzleLight);
+
+  opGroup.position.set(cfg.pos[0], 0, cfg.pos[2]);
+  scene.add(opGroup);
+  operatives.push({ group: opGroup, muzzleLight, fireTimer: Math.random() * 2, cfg });
+});
+
+// Zombie Swarm
+const zombies = [];
+const zombieCount = 28;
+const zombieMat = new THREE.MeshPhongMaterial({ color: 0x2d3a29, emissive: 0x162410, shininess: 10 });
+const mutantMat = new THREE.MeshPhongMaterial({ color: 0x7f1d1d, emissive: 0xef4444, emissiveIntensity: 0.6 });
+const acidMat = new THREE.MeshPhongMaterial({ color: 0x84cc16, emissive: 0xa3e635, emissiveIntensity: 0.5 });
+
+for (let i = 0; i < zombieCount; i++) {
+  const zGroup = new THREE.Group();
+  const isBoss = (i === 0);
+  const isAcid = (i % 6 === 0);
+
+  const scale = isBoss ? 2.4 : (isAcid ? 1.1 : 0.85 + Math.random() * 0.3);
+  const currentMat = isBoss ? mutantMat : (isAcid ? acidMat : zombieMat);
+
+  const torsoGeo = new THREE.BoxGeometry(0.6 * scale, 1.0 * scale, 0.4 * scale);
+  const torso = new THREE.Mesh(torsoGeo, currentMat);
+  torso.position.y = 0.7 * scale;
+  torso.castShadow = true;
+  zGroup.add(torso);
+
+  const zHeadGeo = new THREE.SphereGeometry(0.25 * scale, 8, 8);
+  const zHead = new THREE.Mesh(zHeadGeo, currentMat);
+  zHead.position.set(0, 1.35 * scale, 0.1);
+  zGroup.add(zHead);
+
+  // Glowing eyes
+  const eyeGeo = new THREE.SphereGeometry(0.04 * scale, 4, 4);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0xff0033 : (isAcid ? 0xccff00 : 0xff3b30) });
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeL.position.set(-0.1 * scale, 1.38 * scale, 0.3 * scale);
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeR.position.set(0.1 * scale, 1.38 * scale, 0.3 * scale);
+  zGroup.add(eyeL);
+  zGroup.add(eyeR);
+
+  // Arms outstretched forward
+  const armGeo = new THREE.CylinderGeometry(0.08 * scale, 0.08 * scale, 0.7 * scale, 6);
+  const armL = new THREE.Mesh(armGeo, currentMat);
+  armL.rotation.x = Math.PI / 2.2;
+  armL.position.set(-0.35 * scale, 0.9 * scale, 0.35 * scale);
+  const armR = new THREE.Mesh(armGeo, currentMat);
+  armR.rotation.x = Math.PI / 2.2;
+  armR.position.set(0.35 * scale, 0.9 * scale, 0.35 * scale);
+  zGroup.add(armL);
+  zGroup.add(armR);
+
+  // Spawn position around edges
+  const angle = Math.random() * Math.PI * 2;
+  const dist = isBoss ? 16 : (11 + Math.random() * 14);
+  zGroup.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+
+  scene.add(zGroup);
+  zombies.push({
+    group: zGroup,
+    speed: isBoss ? 0.022 : (isAcid ? 0.035 : 0.04 + Math.random() * 0.025),
+    isBoss,
+    isAcid,
+    wobbleSpeed: 4 + Math.random() * 4,
+    offset: Math.random() * 10
+  });
+}
+
+// Particle System for Muzzle Flashes & Toxic Spores
+const particleCount = 200;
+const particleGeo = new THREE.BufferGeometry();
+const particlePositions = new Float32Array(particleCount * 3);
+for (let p = 0; p < particleCount * 3; p += 3) {
+  particlePositions[p] = (Math.random() - 0.5) * 30;
+  particlePositions[p + 1] = Math.random() * 6;
+  particlePositions[p + 2] = (Math.random() - 0.5) * 30;
+}
+particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+const particleMat = new THREE.PointsMaterial({
+  color: 0x00ff87,
+  size: 0.12,
+  transparent: true,
+  opacity: 0.75
+});
+const particles = new THREE.Points(particleGeo, particleMat);
+scene.add(particles);
+
+// Bullet Tracer Lines
+const tracers = [];
+const tracerMat = new THREE.LineBasicMaterial({ color: 0x00ff87, linewidth: 2 });
+for (let t = 0; t < 6; t++) {
+  const tracerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const line = new THREE.Line(tracerGeo, tracerMat);
+  line.visible = false;
+  scene.add(line);
+  tracers.push(line);
+}
+
+// Interactive Mouse Aiming
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const planeIntersect = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let targetAimPoint = new THREE.Vector3(0, 0, 0);
+
+function onPointerMove(event) {
+  const rect = container.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersectPoint = new THREE.Vector3();
+  raycaster.ray.intersectPlane(planeIntersect, intersectPoint);
+  if (intersectPoint) {
+    targetAimPoint.copy(intersectPoint);
+  }
+}
+window.addEventListener('pointermove', onPointerMove);
+
+// Resize handler
+function onResize() {
+  const w = container.clientWidth || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+
+// Animation Loop
+let clock = new THREE.Clock();
+let tracerIdx = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const time = clock.getElapsedTime();
+
+  // Core rotation & warning pulse
+  reactorCore.rotation.y += 0.8 * dt;
+  shieldRing.rotation.z += 0.4 * dt;
+  const pulse = Math.sin(time * 3);
+  redWarningLight.intensity = 2.5 + pulse * 1.5;
+  shieldRing.scale.setScalar(1 + Math.sin(time * 2) * 0.05);
+
+  // Animate floating toxic spores
+  const pArray = particleGeo.attributes.position.array;
+  for (let i = 1; i < particleCount * 3; i += 3) {
+    pArray[i] += dt * 0.3;
+    if (pArray[i] > 6) pArray[i] = 0.2;
+  }
+  particleGeo.attributes.position.needsUpdate = true;
+
+  // Operative AI & Player Facing
+  operatives.forEach((op, idx) => {
+    if (idx === 0) {
+      // Main player aims directly at mouse cursor
+      op.group.lookAt(targetAimPoint.x, 0, targetAimPoint.z);
+    } else {
+      // Co-op allies track closest zombies
+      let nearest = null;
+      let minDist = 999;
+      zombies.forEach(z => {
+        const d = op.group.position.distanceTo(z.group.position);
+        if (d < minDist) { minDist = d; nearest = z; }
+      });
+      if (nearest) {
+        op.group.lookAt(nearest.group.position.x, 0, nearest.group.position.z);
+      }
+    }
+
+    // Firing cycle
+    op.fireTimer -= dt;
+    if (op.fireTimer <= 0) {
+      op.fireTimer = 0.18 + Math.random() * 0.25;
+      op.muzzleLight.intensity = 5;
+      setTimeout(() => { if (op.muzzleLight) op.muzzleLight.intensity = 0; }, 40);
+
+      // Create a visible tracer
+      const tracer = tracers[tracerIdx % tracers.length];
+      tracerIdx++;
+      const startPos = new THREE.Vector3();
+      op.group.getWorldPosition(startPos);
+      startPos.y = 0.9;
+      
+      const dir = new THREE.Vector3();
+      op.group.getWorldDirection(dir);
+      const endPos = startPos.clone().add(dir.multiplyScalar(12 + Math.random() * 4));
+      endPos.y = 0.8;
+
+      tracer.geometry.setFromPoints([startPos, endPos]);
+      tracer.visible = true;
+      setTimeout(() => { tracer.visible = false; }, 60);
+    }
+  });
+
+  // Zombies advance toward center with grotesque limp/wobble
+  zombies.forEach((z) => {
+    const toCenter = new THREE.Vector3(0, 0, 0).sub(z.group.position).normalize();
+    z.group.position.addScaledVector(toCenter, z.speed);
+    z.group.lookAt(0, z.group.position.y, 0);
+
+    // Grotesque zombie shuffle rotation
+    z.group.rotation.z = Math.sin(time * z.wobbleSpeed + z.offset) * 0.12;
+    z.group.rotation.x = Math.sin(time * (z.wobbleSpeed * 0.8) + z.offset) * 0.08;
+
+    // Reset zombie if it reaches defense perimeter
+    if (z.group.position.length() < 3.2) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 16 + Math.random() * 8;
+      z.group.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+})();
+</script>
+</div>
+<!-- STITCH_THREEJS_END:ANIMATION_10 -->
+</body>
+</html>
