@@ -4,6 +4,8 @@ export function createInput(target: Window | HTMLElement = window) {
   const keys: KeyState = {};
   const mouse = { x: 0, y: 0, down: false };
   let zoomDelta = 0;
+  let weaponWheel = 0;
+  let wheelAcc = 0;
 
   const onKeyDown = (e: KeyboardEvent) => {
     keys[e.code] = true;
@@ -29,10 +31,21 @@ export function createInput(target: Window | HTMLElement = window) {
   const onPointerUp = () => {
     mouse.down = false;
   };
+  // Wheel = weapon slots; Shift/Ctrl + wheel (or +/-) = camera zoom.
   const onWheel = (e: WheelEvent) => {
-    const step = e.deltaMode === 1 ? 0.14 : 0.08;
-    zoomDelta += Math.sign(e.deltaY) * step;
     e.preventDefault();
+    if (e.shiftKey || e.ctrlKey || e.altKey) {
+      const step = e.deltaMode === 1 ? 0.14 : 0.08;
+      const d = e.deltaY !== 0 ? e.deltaY : e.deltaX; // Shift turns vertical wheel into deltaX on some OSes
+      zoomDelta += Math.sign(d) * step;
+      return;
+    }
+    // accumulate trackpad deltas so one notch = one weapon
+    wheelAcc += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
+    if (Math.abs(wheelAcc) >= 60) {
+      weaponWheel += Math.sign(wheelAcc);
+      wheelAcc = 0;
+    }
   };
 
   target.addEventListener('keydown', onKeyDown as EventListener);
@@ -57,6 +70,12 @@ export function createInput(target: Window | HTMLElement = window) {
     return { x, z };
   };
 
+  const consumeWeaponWheel = () => {
+    const d = weaponWheel;
+    weaponWheel = 0;
+    return d;
+  };
+
   const consumeZoomDelta = () => {
     const d = zoomDelta;
     zoomDelta = 0;
@@ -72,5 +91,5 @@ export function createInput(target: Window | HTMLElement = window) {
     target.removeEventListener('wheel', onWheel as EventListener);
   };
 
-  return { keys, mouse, moveAxis, consumeZoomDelta, dispose };
+  return { keys, mouse, moveAxis, consumeZoomDelta, consumeWeaponWheel, dispose };
 }

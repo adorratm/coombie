@@ -89,6 +89,8 @@ const retargetCache = new Map<string, RetargetedSet>();
 const _v = new THREE.Vector3();
 
 function hipsHeightOf(vrm: VRM): number {
+  const hinted = (vrm as unknown as { hipsHeight?: number }).hipsHeight;
+  if (typeof hinted === 'number') return hinted;
   const hips = vrm.humanoid?.getNormalizedBoneNode('hips' as VRMHumanBoneName);
   if (!hips) return 1;
   vrm.scene.updateMatrixWorld(true);
@@ -150,6 +152,11 @@ export interface OperativeAnimInput {
   shotSerial: number;
   hitSerial: number;
   abilitySerial: number;
+  /** optional: dash (jump clip) / cast (fast toss) one-shots */
+  dashSerial?: number;
+  castSerial?: number;
+  /** melee weapon equipped: "shot" plays an overhead swing instead of the rifle fire clip */
+  melee?: boolean;
   reloading: boolean;
   /** Seconds the weapon takes to reload (scales the reload clip). */
   reloadTime: number;
@@ -188,7 +195,7 @@ export class OperativeAnimator {
   private cyclePhase = 0;
   private aimW = 0;
   private aimHold = 0;
-  private last = { shot: 0, hit: 0, ability: 0 };
+  private last = { shot: 0, hit: 0, ability: 0, dash: 0, cast: 0 };
 
   constructor(root: THREE.Object3D, clips: RetargetedSet) {
     this.mixer = new THREE.AnimationMixer(root);
@@ -211,7 +218,7 @@ export class OperativeAnimator {
     // aim layer = idle upper half on its own action so it can override run/walk carry
     const idle = clips.get('idle');
     if (idle) this.addOverlay('aim', idle.upper, true);
-    for (const id of ['fire', 'reload', 'hit', 'ability']) {
+    for (const id of ['fire', 'reload', 'hit', 'ability', 'jump']) {
       const rc = clips.get(id);
       if (rc) this.addOverlay(id, rc.upper, false);
     }
@@ -293,7 +300,8 @@ export class OperativeAnimator {
     if (inp.shotSerial !== this.last.shot) {
       this.last.shot = inp.shotSerial;
       this.aimHold = 1.1;
-      if (!inp.reloading) this.trigger('fire', 1.6, 0.55);
+      if (inp.melee) this.trigger('ability', 3.2, 1);
+      else if (!inp.reloading) this.trigger('fire', 1.6, 0.55);
     }
     const reload = this.overlays.get('reload');
     if (reload) {
@@ -314,12 +322,21 @@ export class OperativeAnimator {
       this.last.ability = inp.abilitySerial;
       this.trigger('ability', 2.2, 1);
     }
+    if ((inp.castSerial ?? 0) !== this.last.cast) {
+      this.last.cast = inp.castSerial ?? 0;
+      this.trigger('ability', 3.4, 0.9);
+    }
+    if ((inp.dashSerial ?? 0) !== this.last.dash) {
+      this.last.dash = inp.dashSerial ?? 0;
+      this.trigger('jump', 1.8, 1);
+    }
 
     // --- overlay weights (priority: reload > ability > hit > fire > aim) -------
     this.aimHold = Math.max(0, this.aimHold - dt);
     this.aimW = THREE.MathUtils.damp(this.aimW, this.aimHold > 0 && inp.alive ? 1 : 0.35, 8, dt);
     const want: Array<[string, number]> = [
       ['reload', reload ? this.envelope(reload, 0.12, 0.2) * reload.peak : 0],
+      ['jump', this.ov('jump', 0.04, 0.15)],
       ['ability', this.ov('ability', 0.08, 0.2)],
       ['hit', this.ov('hit', 0.04, 0.15)],
       ['fire', this.ov('fire', 0.02, 0.08)],

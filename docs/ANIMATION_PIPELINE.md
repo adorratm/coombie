@@ -24,3 +24,14 @@ azaltmak için oynatma hızını hareket hızına göre ölçekler.
 ## Not
 `scripts/vendor/FBXLoader.patched.js`: three r187 FBXLoader + bazı Mixamo dosyalarının footer'ında
 takılan "Unknown property type" hatası için tek satırlık yama (top-level null record = içerik sonu).
+
+## Karakter modelleri (Rocketbox, MIT)
+- Kaynak: https://github.com/microsoft/Microsoft-Rocketbox — `scripts/rocketbox/roster.json` hangi avatarın hangi operatör/zombi olduğunu tutar.
+- Yeniden üret: Rocketbox'ı klonla, sonra `node scripts/rocketbox/build-all.mjs <Microsoft-Rocketbox klasörü>` → `public/avatars/rb/*.glb`
+  (Python 3 + Pillow gerekir; doku atlası `scripts/rocketbox/atlas.py`).
+- Operatör: ~9k üçgen, 2048 atlas · Zombi: ~4.5k üçgen, 1024 atlas · her karakter tek malzeme = tek draw call.
+- Çalışma zamanı: `src/humanoidRig.ts` (VRM benzeri normalized rig; Mixamo klipleri + prosedürel zombi pozları Biped kemiklerine),
+  `src/zombieLook.ts` (tür başına çürüme/kan/safra shader'ı, göz parıltısı, vücut oranı, model havuzu).
+- Zombi şablonu URL başına bir kez yüklenir; her zombi `SkeletonUtils.clone` kopyasıdır (geometri/doku paylaşılır).
+- Eski VRM'ler (`public/avatars/*.vrm`) artık yüklenmiyor; silinebilir (~200 MB).
+- İnceleme: `/anim-lab.html?zombies=1` (6 zombi türü), `?zombies=1&only=boss,acid`, `?grid=1` (8 operatör).

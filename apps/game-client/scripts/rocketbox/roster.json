@@ -1,0 +1,42 @@
+{
+  "_doc": "Rocketbox avatar \u2192 game asset map. Run: node scripts/rocketbox/build-all.mjs <path-to-Microsoft-Rocketbox>",
+  "operatives": {
+    "ironclad": "Professions/Military_Male_01",
+    "breaker": "Professions/Police_Male_02",
+    "warden": "Professions/Military_Male_04",
+    "havoc": "Professions/Fire_Male_01",
+    "valkyrie": "Adults/Female_Adult_15",
+    "ghost": "Adults/Female_Adult_04",
+    "tox": "Adults/Female_Adult_03",
+    "spark": "Adults/Female_Party_01"
+  },
+  "zombies": {
+    "grunt_a": "Adults/Male_Adult_02",
+    "grunt_b": "Adults/Male_Adult_06",
+    "grunt_c": "Adults/Female_Adult_09",
+    "grunt_d": "Adults/Male_Adult_04",
+    "runner_a": "Professions/Sports_Male_04",
+    "runner_b": "Adults/Female_Party_02",
+    "tank": "Professions/Construction_Male_04",
+    "acid": "Professions/Medical_Male_01",
+    "screamer": "Adults/Female_Adult_11",
+    "boss": "Professions/Construction_Male_01"
+  },
+  "settings": {
+    "operative": {
+      "tris": 9000,
+      "atlas": 2048,
+      "quality": 82
+    },
+    "zombie": {
+      "tris": 4500,
+      "atlas": 1024,
+      "quality": 78
+    }
+  },
+  "morph": {
+    "op_spark": {
+      "bust": 1.6
+    }
+  }
+}

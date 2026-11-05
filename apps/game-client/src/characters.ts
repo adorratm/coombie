@@ -333,7 +333,7 @@ export function createOperative(opts: {
     moveSpeed: opts.moveSpeed ?? 6.5,
     isPlayer: opts.isPlayer ?? false,
     gender,
-    avatarUrl: opts.avatarUrl ?? (gender === 'female' ? '/avatars/op_valkyrie.vrm' : '/avatars/op_ironclad.vrm'),
+    avatarUrl: opts.avatarUrl ?? (gender === 'female' ? '/avatars/rb/op_valkyrie.glb' : '/avatars/rb/op_ironclad.glb'),
     rosterId: opts.rosterId,
     classId: opts.classId,
     weaponIndex,

@@ -1,4 +1,6 @@
 import { createArena, type ArenaHandle, type ArenaHudState } from './arena';
+import { createLobby } from './lobby';
+import { currentRunLoadout, loadProfile } from './loadout';
 import type { AudioBusId } from './audio';
 import {
   META_UNLOCKS,
@@ -22,7 +24,9 @@ const BUS_LABELS: Array<{ id: AudioBusId; label: string }> = [
 const root = document.getElementById('app');
 if (!root) throw new Error('#app missing');
 
-let arena: ArenaHandle = createArena(root);
+// Arena is created when a run starts from the lobby.
+let arena = null as unknown as ArenaHandle;
+let running = false;
 let meta: MetaSaveData = loadMetaSave();
 let runCommitted = false;
 let lastCommit: RunCommitResult | null = null;
@@ -72,6 +76,44 @@ const el = {
   lockN: document.getElementById('lockN')!,
   banishN: document.getElementById('banishN')!,
   embers: document.getElementById('embers')!,
+  heroSkills: document.getElementById('heroSkills')!,
+  slotBar: document.getElementById('slotBar')!,
+};
+
+const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
+const renderHeroSkills = (hud: ArenaHudState) => {
+  if (el.heroSkills.childElementCount !== hud.heroAbilities.length) {
+    el.heroSkills.replaceChildren(
+      ...hud.heroAbilities.map(() => {
+        const d = document.createElement('div');
+        d.className = 'skill';
+        d.innerHTML = '<span class="ico"></span><div class="cd"></div><div class="cdt"></div><span class="key"></span><span class="lv"></span>';
+        return d;
+      }),
+    );
+  }
+  hud.heroAbilities.forEach((a, i) => {
+    const d = el.heroSkills.children[i] as HTMLElement;
+    const ready = a.cooldown <= 0.01;
+    d.classList.toggle('ready', ready);
+    d.style.setProperty('--sk', hex(a.color));
+    d.title = `${a.slot} · ${a.name} (Sv ${a.level})`;
+    (d.querySelector('.ico') as HTMLElement).textContent = a.icon;
+    (d.querySelector('.key') as HTMLElement).textContent = a.slot;
+    (d.querySelector('.lv') as HTMLElement).textContent = `Sv${a.level}`;
+    (d.querySelector('.cd') as HTMLElement).style.height = ready ? '0%' : `${Math.min(100, (a.cooldown / Math.max(0.01, a.maxCooldown)) * 100)}%`;
+    (d.querySelector('.cdt') as HTMLElement).textContent = ready ? '' : a.cooldown >= 1 ? String(Math.ceil(a.cooldown)) : a.cooldown.toFixed(1);
+  });
+};
+const renderSlots = (hud: ArenaHudState) => {
+  el.slotBar.replaceChildren(
+    ...hud.weaponSlots.map((w, i) => {
+      const d = document.createElement('div');
+      d.className = `slot${w.active ? ' on' : ''} t${w.tier}`;
+      d.innerHTML = `<span class="n">${i + 1}</span>${w.name}`;
+      return d;
+    }),
+  );
 };
 
 let focusIndex = 0;
@@ -283,6 +325,8 @@ const ensurePauseBuses = () => {
 };
 
 const renderHud = (hud: ArenaHudState) => {
+  renderHeroSkills(hud);
+  renderSlots(hud);
   const m = hud.mission;
   const upgrading = hud.pausedForUpgrade && hud.choices.length > 0;
   const paused = hud.paused && !upgrading && hud.alive && !runCommitted;
@@ -422,11 +466,16 @@ const renderResults = (hud: ArenaHudState) => {
   renderMetaShop();
 };
 
-const onResize = () => arena.setSize(root.clientWidth, root.clientHeight);
+const onResize = () => {
+  if (running) arena.setSize(root.clientWidth, root.clientHeight);
+};
 
 const restartRun = () => {
-  arena.dispose();
-  arena = createArena(root);
+  if (running) arena.dispose();
+  lobby.hide();
+  el.hud.style.display = '';
+  arena = createArena(root, { loadout: currentRunLoadout() });
+  running = true;
   runCommitted = false;
   lastCommit = null;
   meta = loadMetaSave();
@@ -466,8 +515,24 @@ el.btnPauseRestart.addEventListener('click', () => {
   restartRun();
 });
 
+const toMenu = () => {
+  if (running) arena.dispose();
+  running = false;
+  meta = loadMetaSave();
+  el.results.classList.remove('on');
+  el.pause.classList.remove('on');
+  el.upgrade.classList.remove('on');
+  el.downed.classList.remove('on');
+  el.hud.style.display = 'none';
+  lobby.show();
+};
+const lobbyHost = document.getElementById('lobby')!;
+const lobby = createLobby(lobbyHost, () => restartRun());
+document.getElementById('btnMenu')?.addEventListener('click', toMenu);
+document.getElementById('btnPauseMenu')?.addEventListener('click', toMenu);
+
 window.addEventListener('keydown', (e) => {
-  if (e.code !== 'Escape') return;
+  if (e.code !== 'Escape' || !running) return;
   const hud = arena.getHudState();
   if (!hud.alive || runCommitted || hud.pausedForUpgrade) return;
   e.preventDefault();
@@ -484,6 +549,10 @@ let lastSig = '';
 
 const loop = (t: number) => {
   try {
+    if (!running) {
+      requestAnimationFrame(loop);
+      return;
+    }
     arena.animate(t);
     if (t - lastHudMs > 90) {
       lastHudMs = t;
@@ -511,6 +580,8 @@ const loop = (t: number) => {
         hud.lockedChoiceIndex ?? -1,
         Math.floor(hud.runTimeSec),
         hud.abilityReady ? 1 : 0,
+        hud.heroAbilities.map((a) => Math.ceil(a.cooldown * 5)).join(','),
+        hud.weaponSlots.findIndex((w) => w.active),
         runCommitted ? 1 : 0,
         meta.credits,
       ].join(';');
@@ -525,5 +596,6 @@ const loop = (t: number) => {
   requestAnimationFrame(loop);
 };
 
-renderHud(arena.getHudState());
+loadProfile();
+toMenu();
 requestAnimationFrame(loop);

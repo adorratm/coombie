@@ -8,6 +8,8 @@
 import * as THREE from 'three';
 import { createVrmAvatar, type VrmAvatarHandle } from '../avatars';
 import { OPERATIVE_ROSTER } from '../roster';
+import { zombieModelUrl, ZOMBIE_LOOKS } from '../zombieLook';
+import type { ZombieKind } from '../zombieKinds';
 import type { OperativeAnimInput } from '../animLibrary';
 
 const qs = new URLSearchParams(location.search);
@@ -16,6 +18,8 @@ type Mode = (typeof MODES)[number];
 let mode: Mode = (MODES as readonly string[]).includes(qs.get('mode') ?? '') ? (qs.get('mode') as Mode) : 'runF';
 const fixedSteps = qs.has('steps') ? Number(qs.get('steps')) : -1;
 const grid = qs.get('grid') === '1';
+const zombiesMode = qs.get('zombies') === '1';
+const ZKINDS = (Object.keys(ZOMBIE_LOOKS) as ZombieKind[]).filter((k) => !qs.get('only') || qs.get('only')!.split(',').includes(k));
 let opId = qs.get('op') ?? 'ironclad';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -39,7 +43,7 @@ scene.add(new THREE.GridHelper(40, 40, 0x2c3a31, 0x1a221d));
 const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 200);
 const view = qs.get('view') ?? 'side';
 function placeCamera(): void {
-  const span = grid ? 9 : 1;
+  const span = grid || (zombiesMode && ZKINDS.length > 2) ? 9 : zombiesMode ? 0.4 : 1;
   if (view === 'top') camera.position.set(0, 9 + span, 6 + span * 0.6);
   else if (view === 'front') camera.position.set(0, 1.6, 6 + span);
   else camera.position.set(4.5 + span * 0.5, 2.2, 4.5 + span * 0.5);
@@ -49,6 +53,8 @@ placeCamera();
 
 interface Actor {
   handle: VrmAvatarHandle;
+  zkind?: ZombieKind;
+  phase: number;
   serial: { shot: number; hit: number; ability: number };
   reloading: boolean;
   t: number;
@@ -83,23 +89,42 @@ function inputFor(a: Actor, dt: number): OperativeAnimInput {
 async function spawn(): Promise<void> {
   for (const a of actors) a.handle.dispose();
   actors = [];
-  const defs = grid ? OPERATIVE_ROSTER : OPERATIVE_ROSTER.filter((o) => o.id === opId);
-  const made = await Promise.all(
-    defs.map((d) =>
-      createVrmAvatar({ url: d.avatarUrl, accentColor: d.accent, gender: d.gender, style: 'operative', showRing: false }),
-    ),
-  );
-  made.forEach((h, i) => {
-    h.root.position.x = grid ? (i - (made.length - 1) / 2) * 1.6 : 0;
+  const heights: Record<ZombieKind, number> = { grunt: 1.9, runner: 1.75, tank: 2.35, acid: 2.05, screamer: 2.2, boss: 2.85 };
+  const made: Array<{ h: VrmAvatarHandle; zkind?: ZombieKind }> = zombiesMode
+    ? await Promise.all(
+        ZKINDS.map(async (k) => ({
+          zkind: k,
+          h: await createVrmAvatar({ url: zombieModelUrl(k), accentColor: 0xffffff, style: 'zombie', zombieKind: k, targetHeight: heights[k], showRing: false }),
+        })),
+      )
+    : await Promise.all(
+        (grid ? OPERATIVE_ROSTER : OPERATIVE_ROSTER.filter((o) => o.id === opId)).map(async (d) => ({
+          h: await createVrmAvatar({ url: d.avatarUrl, accentColor: d.accent, gender: d.gender, style: 'operative', showRing: false }),
+        })),
+      );
+  const spacing = zombiesMode ? 2.1 : 1.6;
+  made.forEach(({ h, zkind }, i) => {
+    h.root.position.x = made.length > 1 ? (i - (made.length - 1) / 2) * spacing : 0;
     scene.add(h.root);
-    actors.push({ handle: h, serial: { shot: 0, hit: 0, ability: 0 }, reloading: false, t: 0 });
+    actors.push({ handle: h, zkind, phase: i * 0.7, serial: { shot: 0, hit: 0, ability: 0 }, reloading: false, t: 0 });
   });
   (window as unknown as { __labReady: boolean }).__labReady = true;
-  (window as unknown as { __labAnimated: boolean }).__labAnimated = made.every((h) => !!h.animator);
+  (window as unknown as { __labAnimated: boolean }).__labAnimated = made.every(({ h }) => zombiesMode || !!h.animator);
 }
 
 function step(dt: number): void {
-  for (const a of actors) a.handle.update(dt, true, true, 0, 0, a.reloading, 0, { grip: 'rifle', anim: inputFor(a, dt) });
+  for (const a of actors) {
+    if (a.zkind) {
+      a.t += dt;
+      const attacking = mode === 'fire' || mode === 'hit';
+      a.phase += dt * (a.zkind === 'runner' ? 9 : a.zkind === 'boss' || a.zkind === 'tank' ? 3.5 : 5);
+      const atk = attacking ? (a.t % 1.4) / 1.4 : 0;
+      const skill = a.zkind === 'acid' ? 'spit' : a.zkind === 'boss' || a.zkind === 'tank' ? 'slam' : a.zkind === 'screamer' ? 'shriek' : 'claw';
+      a.handle.update(dt, mode !== 'idle', false, a.phase, a.phase * 0.35, false, 0, undefined, { kind: a.zkind, attackAnim: atk, skill });
+      continue;
+    }
+    a.handle.update(dt, true, true, 0, 0, a.reloading, 0, { grip: 'rifle', anim: inputFor(a, dt) });
+  }
 }
 
 // UI

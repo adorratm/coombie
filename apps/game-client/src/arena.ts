@@ -10,6 +10,9 @@ import {
   preloadAvatars,
 } from './avatars';
 import { rosterById } from './roster';
+import { currentRunLoadout, type AbilitySlot, type RunLoadout } from './loadout';
+import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
+import { WEAPONS as ALL_WEAPONS, weaponByVariant, weaponIndexOfVariant, weaponVariantId, type WeaponFxDef } from './weapons';
 import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
 import { waveKindForLevel } from '@protocol-z/shared';
 import {
@@ -112,6 +115,9 @@ import {
 } from './zombieCombat';
 
 export interface ArenaHudState {
+  heroId: string;
+  heroAbilities: Array<{ slot: string; name: string; icon: string; color: number; cooldown: number; maxCooldown: number; level: number }>;
+  weaponSlots: Array<{ name: string; active: boolean; tier: number }>;
   weapon: string;
   weaponId: WeaponId;
   className: string;
@@ -219,6 +225,7 @@ type Bullet = {
   damage: number;
   owner: OperativeVisual;
   pierce: number;
+  fx?: WeaponFxDef;
 };
 
 const PLAYER_RADIUS = 0.55;
@@ -229,7 +236,8 @@ const ZOMBIE_HIT_QUERY_R = 1.5;
 const CAM_ZOOM_MIN = 0.55;
 const CAM_ZOOM_MAX = 1.85;
 
-export function createArena(container: HTMLElement): ArenaHandle {
+export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout } = {}): ArenaHandle {
+  const loadout = opts.loadout ?? currentRunLoadout();
   const scene = new THREE.Scene();
   // Cinematic dark gritty apocalyptic atmosphere (YAZS style)
   scene.background = new THREE.Color(0x06080b);
@@ -287,7 +295,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
   const metaAtBoot = loadMetaSave();
 
   // Solo start — allies join only via rescue events
-  const hero = rosterById('ironclad');
+  const hero = rosterById(loadout.heroId);
   const player = createOperative({
     color: hero.accent,
     scale: hero.scale,
@@ -301,6 +309,11 @@ export function createArena(container: HTMLElement): ArenaHandle {
     rosterId: hero.id,
     classId: hero.classId,
   });
+  player.root.userData.cosmetics = {
+    costume: loadout.costume,
+    accessories: loadout.accessories,
+    backpack: loadout.backpack,
+  };
   // Hide neon proxy until VRM arrives — avoids placeholder flash on boot
   player.proxy.visible = false;
   player.root.position.set(0, 0, 8);
@@ -315,10 +328,17 @@ export function createArena(container: HTMLElement): ArenaHandle {
   let showSkillTree = false;
   let showInventory = false;
 
-  // Sync player weapon to unlocked rifle class
-  setOperativeWeapon(player, hero.weaponIndex);
+  // Loadout slots (1–5 + backpack). Every family counts as unlocked so level-up
+  // "unlock weapon" cards never fight the armory loadout.
+  const weaponSlots = loadout.weaponSlots.length ? [...loadout.weaponSlots] : ['rifle'];
+  let activeSlot = 0;
+  setOperativeWeapon(player, weaponIndexOfVariant(weaponSlots[0]!));
   setActiveClassForWeapon(progress, player.weapon.id);
   progress.activeClassId = hero.classId;
+  for (const w of ALL_WEAPONS) progress.unlockedWeapons.add(w.id);
+  let heroRt: HeroAbilityRuntime | null = null;
+  const NO_BUFF: HeroBuffs = { damage: 1, fireRate: 1, move: 1, armor: 0, crit: 0 };
+  const heroBuffs = (op: OperativeVisual): HeroBuffs => (heroRt ? heroRt.buffsFor(op, simTime) : NO_BUFF);
   applyMetaRunBonuses(progress, player, metaAtBoot);
   void (async () => {
     await preloadAvatars();
@@ -454,8 +474,13 @@ export function createArena(container: HTMLElement): ArenaHandle {
     gems.push({ mesh, life: 16, xp: value });
   };
 
-  const spawnFlash = (origin: THREE.Vector3) => {
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), flashMat.clone());
+  const flashGeo = new THREE.SphereGeometry(0.16, 8, 6);
+  const spawnFlash = (origin: THREE.Vector3, color = 0xffe29a, scale = 1) => {
+    const m = flashMat.clone();
+    m.color.setHex(color);
+    const mesh = new THREE.Mesh(flashGeo, m);
+    mesh.scale.setScalar(Math.max(0.2, scale));
+    mesh.userData.base = Math.max(0.2, scale);
     mesh.position.copy(origin);
     scene.add(mesh);
     flashes.push({ mesh, life: 0.07 });
@@ -564,8 +589,9 @@ export function createArena(container: HTMLElement): ArenaHandle {
     const weaponId = opts?.weaponId ?? player.weapon.id;
     const fromPlayer = opts?.fromPlayer ?? true;
     const stats = getCombatStats(weaponId);
-    const crit = Math.random() < stats.critChance;
-    const dmg = rawDamage * stats.damageMult * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
+    const hb = fromPlayer ? heroBuffs(player) : NO_BUFF;
+    const crit = Math.random() < stats.critChance + hb.crit;
+    const dmg = rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
     z.hp -= dmg;
     z.healthBar.setRatio(z.hp / z.maxHp);
     z.healthBar.setVisible(true);
@@ -611,7 +637,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
   const damageOperative = (op: OperativeVisual, amount: number, from: THREE.Vector3): boolean => {
     if (!op.alive || op.invuln > 0) return false;
     const armor = op.isPlayer ? runtimeMods().armorFlat : 0;
-    let reduced = Math.max(1, amount * (1 - Math.min(0.55, armor / 120)));
+    let reduced = Math.max(1, amount * (1 - Math.min(0.55, armor / 120)) * (1 - heroBuffs(op).armor));
     if (op.isPlayer && skills.shield > 0) {
       const absorbed = Math.min(skills.shield, reduced);
       skills.shield -= absorbed;
@@ -744,11 +770,127 @@ export function createArena(container: HTMLElement): ArenaHandle {
     audio.playWeaponSwitch();
   };
 
+  const equipSlot = (i: number) => {
+    if (i < 0 || i >= weaponSlots.length || !player.alive) return;
+    if (i === activeSlot && weaponVariantId(player.weapon) === weaponSlots[i]) return;
+    activeSlot = i;
+    const def = weaponByVariant(weaponSlots[i]!);
+    setOperativeWeapon(player, weaponIndexOfVariant(weaponSlots[i]!));
+    setActiveClassForWeapon(progress, def.id);
+    audio.playWeaponSwitch();
+  };
+  const cycleSlot = (delta: number) => {
+    if (weaponSlots.length < 2) return;
+    equipSlot((activeSlot + delta + weaponSlots.length) % weaponSlots.length);
+  };
+
   const equipWeaponId = (id: WeaponId) => {
     if (!progress.unlockedWeapons.has(id)) return;
     setOperativeWeaponById(player, id);
     setActiveClassForWeapon(progress, id);
     audio.playWeaponSwitch();
+  };
+
+  // ---- weapon impact effects (per-variant fx) ----
+  const beams: Array<{ line: THREE.Line; life: number }> = [];
+  const beamMats = new Map<number, THREE.LineBasicMaterial>();
+  const spawnBeam = (from: THREE.Vector3, to: THREE.Vector3, color: number) => {
+    let m = beamMats.get(color);
+    if (!m) {
+      m = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1, toneMapped: false, blending: THREE.AdditiveBlending });
+      beamMats.set(color, m);
+    }
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const p = from.clone().lerp(to, i / 6);
+      if (i > 0 && i < 6) p.add(new THREE.Vector3((Math.random() - 0.5) * 0.45, (Math.random() - 0.5) * 0.35, (Math.random() - 0.5) * 0.45));
+      pts.push(p);
+    }
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), m);
+    scene.add(line);
+    beams.push({ line, life: 0.12 });
+  };
+  const bulletImpact = (b: Bullet, at: THREE.Vector3, z: ZombieVisual | null, dir: THREE.Vector3) => {
+    const f = b.fx;
+    if (!f) return;
+    const opts = { weaponId: b.owner.weapon.id, fromPlayer: b.owner.isPlayer };
+    const chance = f.statusChance ?? 0.25;
+    switch (f.impact) {
+      case 'explosive': {
+        const r = (f.aoe ?? 2.5) * progress.mods.aoeRadiusMult;
+        fx.spawnHitRing(at.clone().setY(0.2), 0xffa040, 0.2);
+        fx.spawnWarnRing(at, r, 0xff8a2a, 0.12);
+        fx.spawnBloodBurst(at.clone().setY(0.8), 1.6, 0xffa040);
+        spawnFlash(at.clone().setY(0.8), 0xffb060, r * 1.2);
+        audio.playGunshot('shotgun', 0);
+        shake = Math.max(shake, 0.18 + r * 0.03);
+        zombieHash.query(at.x, at.z, r, zombieQuery);
+        for (let i = 0; i < zombieQuery.length; i++) {
+          const o = zombieQuery[i]!;
+          if (o.hp <= 0 || o === z) continue;
+          const d = Math.hypot(o.root.position.x - at.x, o.root.position.z - at.z);
+          if (d > r) continue;
+          const kd = o.root.position.clone().sub(at).setY(0).normalize();
+          damageZombie(o, b.damage * 0.75 * (1 - (d / r) * 0.5), o.root.position.clone().setY(1.1), kd, opts);
+          o.root.position.addScaledVector(kd, 0.6);
+        }
+        break;
+      }
+      case 'incendiary':
+        if (z && Math.random() < chance) applyStatus(z, 'burn', 1.6 * progress.mods.statusPower);
+        if (f.aoe) {
+          fx.spawnHitRing(at, 0xff5a1f, 0.15);
+          zombieHash.query(at.x, at.z, f.aoe, zombieQuery);
+          for (let i = 0; i < zombieQuery.length; i++) if (zombieQuery[i]!.hp > 0) applyStatus(zombieQuery[i]!, 'burn', 1.4);
+        }
+        fx.spawnBloodBurst(at, 0.5, 0xff7a2a);
+        break;
+      case 'cryo':
+        if (z && Math.random() < chance) applyStatus(z, 'chill', 1.8 * progress.mods.statusPower);
+        fx.spawnBloodBurst(at, 0.45, 0x9be7ff);
+        break;
+      case 'toxic':
+        if (z && Math.random() < chance) applyStatus(z, 'toxin', 1.6 * progress.mods.statusPower);
+        fx.spawnBloodBurst(at, 0.45, 0x9cff2e);
+        break;
+      case 'shock': {
+        if (!z) break;
+        let cur = z;
+        const hit = new Set<ZombieVisual>([z]);
+        for (let k = 0; k < (f.chain ?? 2); k++) {
+          let best: ZombieVisual | null = null;
+          let bestD = 6;
+          zombieHash.query(cur.root.position.x, cur.root.position.z, 6, zombieQuery);
+          for (let i = 0; i < zombieQuery.length; i++) {
+            const o = zombieQuery[i]!;
+            if (o.hp <= 0 || hit.has(o)) continue;
+            const d = o.root.position.distanceTo(cur.root.position);
+            if (d < bestD) {
+              bestD = d;
+              best = o;
+            }
+          }
+          if (!best) break;
+          hit.add(best);
+          const a = cur.root.position.clone().setY(1.2);
+          const c = best.root.position.clone().setY(1.2);
+          spawnBeam(a, c, 0x8fdcff);
+          damageZombie(best, b.damage * 0.6, c, c.clone().sub(a).setY(0).normalize(), opts);
+          applyStatus(best, 'chill', 0.8);
+          cur = best;
+        }
+        fx.spawnHitRing(at, 0x8fdcff, 0.2);
+        break;
+      }
+      case 'heavy':
+        if (z) {
+          z.root.position.addScaledVector(dir.clone().setY(0), 0.25);
+          fx.spawnBloodBurst(at, 1.25);
+        }
+        break;
+      default:
+        break;
+    }
   };
 
   const fireFrom = (op: OperativeVisual) => {
@@ -815,8 +957,10 @@ export function createArena(container: HTMLElement): ArenaHandle {
     alignGunToAim(op, op.recoil);
     op.gun.updateWorldMatrix(true, true);
     op.muzzlePoint.getWorldPosition(muzzleWorld);
-    op.muzzleLight.intensity = 8;
-    spawnFlash(muzzleWorld);
+    const wfx = weapon.fx;
+    op.muzzleLight.intensity = 8 * (wfx?.flashScale ?? 1);
+    if (wfx) op.muzzleLight.color.setHex(wfx.flash);
+    spawnFlash(muzzleWorld, wfx?.flash ?? 0xffe29a, wfx?.flashScale ?? 1);
     audio.playGunshot(weapon.sfx, pan);
 
     let pierce = 0;
@@ -836,15 +980,20 @@ export function createArena(container: HTMLElement): ArenaHandle {
       }
       const mesh = new THREE.Mesh(bulletGeo, bulletMat(pierce > 0 ? 0x88eeff : weapon.tracerColor));
       mesh.position.copy(muzzleWorld);
+      const tr = wfx?.tracer ?? 1;
+      mesh.scale.set(tr, tr, tr * (wfx?.impact === 'explosive' ? 1.2 : 2.6));
+      mesh.lookAt(muzzleWorld.clone().add(dir));
       scene.add(mesh);
       const pierceBonus = pierce > 0 ? getActiveClass(progress).ability.power : 1;
+      const speed = (55 + weapon.range * 0.4) * (wfx?.speed ?? 1);
       bullets.push({
         mesh,
-        vel: dir.multiplyScalar(55 + weapon.range * 0.4),
-        life: weapon.range / 40,
+        vel: dir.multiplyScalar(speed),
+        life: weapon.range / (40 * (wfx?.speed ?? 1)),
         damage: weapon.damage * (op.isPlayer ? pierceBonus : 1) * (op.isPlayer ? 1 : 0.85),
         owner: op,
-        pierce,
+        pierce: Math.max(pierce, wfx?.pierce ?? 0),
+        fx: wfx,
       });
     }
   };
@@ -865,7 +1014,48 @@ export function createArena(container: HTMLElement): ArenaHandle {
     const stats = getCombatStats(op.weapon.id);
     const rateMul = op.isPlayer ? stats.fireRateMult : 1;
     const disrupt = fireRateDebuffMul(op, performance.now() / 1000);
-    op.fireCooldown = (op.weapon.fireRate / Math.max(0.35, rateMul)) * disrupt;
+    op.fireCooldown = (op.weapon.fireRate / Math.max(0.35, rateMul * heroBuffs(op).fireRate)) * disrupt;
+  };
+
+  heroRt = createHeroAbilityRuntime(hero.id, loadout.abilityLevels, {
+    scene,
+    fx,
+    player,
+    squad,
+    zombies,
+    aim: mouseAim,
+    damageZombie: (z, dmg, at, dir) => damageZombie(z, dmg, at, dir, { weaponId: player.weapon.id, fromPlayer: true }),
+    moveWithCollision: applyMoveWithCollision,
+    revive: (op) => {
+      op.alive = true;
+      op.hp = op.maxHp * 0.5;
+      op.root.visible = true;
+      op.invuln = 1.5;
+      op.healthBar.setVisible(true);
+      op.healthBar.setRatio(op.hp / op.maxHp);
+      fx.spawnHitRing(op.root.position, 0x7cffb2);
+    },
+    addPierceShots: (k) => {
+      progress.pierceShots += k;
+    },
+    shake: (a) => {
+      shake = Math.max(shake, a);
+    },
+    anim: (op, kind) => bumpOperativeAnim(op, kind),
+    sfx: (kind) => {
+      if (kind === 'boom') audio.playGunshot('shotgun', 0);
+      else if (kind === 'zap') audio.playHit('crit');
+      else if (kind === 'throw') audio.playWeaponSwitch();
+      else audio.playAbility();
+    },
+    powerMult: () => progress.abilityPowerMult,
+    aoeMult: () => progress.mods.aoeRadiusMult,
+    cdrMult: () => 1 - Math.min(0.6, progress.mods.abilityCdr),
+  });
+
+  const castHero = (slot: AbilitySlot) => {
+    if (!player.alive || progress.pendingPicks > 0 || !heroRt) return;
+    if (heroRt.cast(slot, simTime)) shake = Math.max(shake, 0.12);
   };
 
   const activateAbility = () => {
@@ -894,7 +1084,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
     if (!card) return;
     audio.playLevelUp();
     refreshPlayerMaxHp();
-    if (card.unlockWeapon) equipWeaponId(card.unlockWeapon);
+    if (card.heroRank && heroRt) heroRt.bonus[card.heroRank] = progress.heroRankBonus[card.heroRank];
   };
 
   const doRerollUpgrades = () => {
@@ -970,15 +1160,16 @@ export function createArena(container: HTMLElement): ArenaHandle {
       return;
     }
 
-    const ids: WeaponId[] = ['rifle', 'smg', 'shotgun', 'sniper', 'lmg', 'pistol', 'knife', 'bat', 'axe'];
-    for (let i = 0; i < ids.length; i++) {
+    for (let i = 0; i < 8; i++) {
       const code = `Digit${i + 1}`;
-      if (input.keys[code] && !prevKeys[code]) equipWeaponId(ids[i]!);
+      if (input.keys[code] && !prevKeys[code]) equipSlot(i);
       prevKeys[code] = !!input.keys[code];
     }
-    if (input.keys.KeyQ && !prevKeys.KeyQ) equipUnlockedByStep(-1);
-    if (input.keys.KeyE && !prevKeys.KeyE) equipUnlockedByStep(1);
-    if (input.keys.KeyR && !prevKeys.KeyR) activateAbility();
+    const wheel = input.consumeWeaponWheel();
+    if (wheel !== 0) cycleSlot(wheel > 0 ? 1 : -1);
+    if (input.keys.KeyQ && !prevKeys.KeyQ) castHero('q');
+    if (input.keys.KeyE && !prevKeys.KeyE) castHero('e');
+    if (input.keys.KeyR && !prevKeys.KeyR) castHero('r');
     if (input.keys.KeyF && !prevKeys.KeyF) {
       if (activateRage(skills, simTime)) {
         audio.playAbility();
@@ -1023,7 +1214,23 @@ export function createArena(container: HTMLElement): ArenaHandle {
     const cdr = Math.min(0.6, progress.mods.abilityCdr);
     const maxCd = cls.ability.cooldown * (1 - cdr);
     return {
-      weapon: weaponDisplayName(progress, player.weapon.id),
+      heroId: hero.id,
+      heroAbilities: heroRt
+        ? (['q', 'e', 'r'] as AbilitySlot[]).map((sl) => ({
+            slot: sl.toUpperCase(),
+            name: heroRt!.defs[sl].name,
+            icon: heroRt!.defs[sl].icon,
+            color: heroRt!.defs[sl].color,
+            cooldown: heroRt!.cooldowns[sl],
+            maxCooldown: heroRt!.maxCooldown(sl),
+            level: heroRt!.level(sl),
+          }))
+        : [],
+      weaponSlots: weaponSlots.map((v, i) => {
+        const w = weaponByVariant(v);
+        return { name: w.name, active: i === activeSlot, tier: w.tier ?? 1 };
+      }),
+      weapon: player.weapon.variant ? player.weapon.name : weaponDisplayName(progress, player.weapon.id),
       weaponId: player.weapon.id,
       className: cls.name,
       abilityName: cls.ability.name,
@@ -1231,7 +1438,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
       }
     }
 
-    const moveMul = runtimeMods().moveSpeedMult * (isRaging(skills, simTime) ? 1.12 : 1);
+    const moveMul = runtimeMods().moveSpeedMult * (isRaging(skills, simTime) ? 1.12 : 1) * heroBuffs(player).move;
     const axis = input.moveAxis();
     const moving = player.alive && Math.hypot(axis.x, axis.z) > 0.01;
     if (moving) {
@@ -1310,7 +1517,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
       let allyMoving = false;
       // Dead-zone so allies don't jitter/slide when already in formation
       if (dist > 0.55) {
-        const step = Math.min(dist, ally.moveSpeed * (dist > 4 ? 1.15 : 0.95) * dt);
+        const step = Math.min(dist, ally.moveSpeed * (dist > 4 ? 1.15 : 0.95) * heroBuffs(ally).move * dt);
         applyMoveWithCollision(ally.root, (dx / dist) * step, (dz / dist) * step, PLAYER_RADIUS);
         allyMoving = dist > 0.7;
         // Face travel direction while catching up
@@ -1495,10 +1702,14 @@ export function createArena(container: HTMLElement): ArenaHandle {
             weaponId: b.owner.weapon.id,
             fromPlayer: b.owner.isPlayer,
           });
+          bulletImpact(b, hitPos, hitZ, tmp);
           if (b.pierce > 0) {
             b.pierce -= 1;
             continue;
           }
+        } else if (b.fx?.impact === 'explosive') {
+          hitPos.copy(b.mesh.position).setY(0.3);
+          bulletImpact(b, hitPos, null, tmp.copy(b.vel).normalize());
         }
         scene.remove(b.mesh);
         bullets.splice(i, 1);
@@ -1506,6 +1717,16 @@ export function createArena(container: HTMLElement): ArenaHandle {
     }
 
     abilityRuntime.update(dt, zombies, damageZombie);
+    heroRt?.update(dt, simTime);
+    for (let i = beams.length - 1; i >= 0; i--) {
+      const bm = beams[i]!;
+      bm.life -= dt;
+      if (bm.life <= 0) {
+        scene.remove(bm.line);
+        bm.line.geometry.dispose();
+        beams.splice(i, 1);
+      }
+    }
 
     for (let i = gems.length - 1; i >= 0; i--) {
       const gem = gems[i]!;
@@ -1553,11 +1774,10 @@ export function createArena(container: HTMLElement): ArenaHandle {
       const f = flashes[i]!;
       f.life -= dt;
       (f.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, f.life / 0.07);
-      f.mesh.scale.setScalar(1 + (0.07 - f.life) * 10);
+      f.mesh.scale.setScalar(((f.mesh.userData.base as number) ?? 1) * (1 + (0.07 - f.life) * 10));
       if (f.life <= 0) {
         scene.remove(f.mesh);
         (f.mesh.material as THREE.Material).dispose();
-        f.mesh.geometry.dispose();
         flashes.splice(i, 1);
       }
     }
@@ -1676,6 +1896,7 @@ export function createArena(container: HTMLElement): ArenaHandle {
       audio.dispose();
       fx.dispose();
       abilityRuntime.dispose();
+      heroRt?.dispose();
       container.removeEventListener('pointerdown', onClick);
       disposeMaterialTextures();
       renderer.dispose();

@@ -104,6 +104,8 @@ export interface UpgradeCardDef {
   icon?: string;
   /** Synergy requires at least one of these status chances > 0 after previous picks */
   requiresStatus?: StatusId;
+  /** +1 run level to the hero's Q / E / R ability (max +3 per run) */
+  heroRank?: 'q' | 'e' | 'r';
 }
 
 export const DEFAULT_MODS: PlayerMods = {
@@ -285,6 +287,9 @@ export const WEAPON_CLASSES: WeaponClassDef[] = [
 
 /** Level-up card pool — data-driven; append to extend. */
 export const UPGRADE_CARDS: UpgradeCardDef[] = [
+  { id: 'hero_rank_q', name: 'Taktik Eğitim [Q]', description: 'Q yeteneği +1 seviye: daha güçlü, geniş, sık', rarity: 'rare', kind: 'ability_boost', heroRank: 'q', icon: 'Q', weight: 7 },
+  { id: 'hero_rank_e', name: 'Saha Uzmanlığı [E]', description: 'E yeteneği +1 seviye: daha güçlü, geniş, sık', rarity: 'rare', kind: 'ability_boost', heroRank: 'e', icon: 'E', weight: 7 },
+  { id: 'hero_rank_r', name: 'Nihai Ustalık [R]', description: 'R yeteneği +1 seviye: daha güçlü, geniş, sık', rarity: 'epic', kind: 'ability_boost', heroRank: 'r', icon: 'R', weight: 6 },
   {
     id: 'dmg_amp',
     name: 'Kinetic Amplifiers',
@@ -790,6 +795,7 @@ export interface ProgressState {
   banishes: number;
   lockedChoiceIndex: number | null;
   banishedIds: Set<string>;
+  heroRankBonus: { q: number; e: number; r: number };
 }
 
 export function xpForLevel(level: number): number {
@@ -841,6 +847,7 @@ export function createProgressState(startClass: ClassId = 'assaulter'): Progress
     banishes: 2,
     lockedChoiceIndex: null,
     banishedIds: new Set(),
+    heroRankBonus: { q: 0, e: 0, r: 0 },
   };
 }
 
@@ -868,6 +875,7 @@ function applyPassive(mods: PlayerMods, passive: Partial<PlayerMods>): void {
 
 export function applyUpgradeCard(state: ProgressState, card: UpgradeCardDef): void {
   state.pickedIds.push(card.id);
+  if (card.heroRank) state.heroRankBonus[card.heroRank] = Math.min(3, state.heroRankBonus[card.heroRank] + 1);
 
   if (card.mods) {
     for (const [k, v] of Object.entries(card.mods) as [keyof PlayerMods, number][]) {
@@ -950,6 +958,7 @@ export function rollUpgradeChoices(state: ProgressState, count = 4): UpgradeCard
       if (state.level < 4) return false;
     }
     if (card.requiresStatus && !hasStatusChance(state, card.requiresStatus)) return false;
+    if (card.heroRank && state.heroRankBonus[card.heroRank] >= 3) return false;
     return true;
   });
 

@@ -2,9 +2,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRM, VRMHumanBoneName, VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import type { OperativeVisual, ZombieVisual } from './characters';
-import { allAvatarUrls, ZOMBIE_AVATAR_URLS } from './roster';
+import { allAvatarUrls } from './roster';
+import { HumanoidRig, instantiateRig, isRigUrl, loadRigTemplate } from './humanoidRig';
+import { allZombieModelUrls, applyZombieLook, zombieModelUrl } from './zombieLook';
+import { applyCosmetics, type Cosmetics } from './costumeLook';
 import { sampleZombieGait } from './zombieGait';
-import { toZombieAvatarKind, type ZombieKind } from './zombieKinds';
+import type { ZombieKind } from './zombieKinds';
 import type { ZombieVrmLod } from './vrmLod';
 import {
   loadAnimLibrary,
@@ -18,8 +21,8 @@ export type AvatarGender = 'male' | 'female';
 
 /** Human operative VRMs — never use zombie_* here. */
 export const AVATAR_PATHS: Record<AvatarGender, string> = {
-  male: '/avatars/op_ironclad.vrm',
-  female: '/avatars/op_valkyrie.vrm',
+  male: '/avatars/rb/op_ironclad.glb',
+  female: '/avatars/rb/op_valkyrie.glb',
 };
 
 export interface VrmPoseOpts {
@@ -159,10 +162,10 @@ function loadVrmFresh(url: string): Promise<VRM> {
 }
 
 export async function preloadAvatars(): Promise<void> {
-  const urls = allAvatarUrls();
+  const urls = [...allAvatarUrls(), ...allZombieModelUrls()];
   await Promise.all(
     urls.map((url) =>
-      fetchVrmBuffer(url).catch((err) => {
+      (isRigUrl(url) ? loadRigTemplate(url) : fetchVrmBuffer(url)).catch((err) => {
         console.warn('[avatars] preload failed', url, err);
       }),
     ),
@@ -277,12 +280,22 @@ export function bindGunToVrmHand(op: OperativeVisual, avatar: VrmAvatarHandle): 
   if (!hand) return;
 
   avatar.rightHand = hand;
-  avatar.leftHand = bone(avatar.vrm, VRMHumanBoneName.LeftHand);
+  avatar.leftHand = avatar.leftHand ?? bone(avatar.vrm, VRMHumanBoneName.LeftHand);
   avatar.weaponMount = hand;
 
   hand.add(op.gun);
   const grip = op.weapon.grip;
-  if (grip === 'pistol') {
+  if ((avatar.vrm as unknown as { isHumanoidRig?: boolean }).isHumanoidRig) {
+    // Rocketbox hands are in centimetre bone space: compensate so the gun keeps its world size,
+    // and seat the grip in the palm (Biped hand +X runs toward the fingers).
+    op.root.updateMatrixWorld(true);
+    const hs = hand.getWorldScale(_gunFwd).x / Math.max(1e-6, op.root.getWorldScale(_gunAim).x);
+    const base = grip === 'pistol' ? 0.95 : grip === 'melee' ? 1.0 : grip === 'smg' ? 0.95 : 0.92;
+    op.gun.scale.setScalar(base / hs);
+    op.gun.userData.rigGrip = new THREE.Vector3(0.075 / hs, -0.01 / hs, 0.02 / hs);
+    op.gun.userData.rigUnit = 1 / hs;
+    op.gun.position.copy(op.gun.userData.rigGrip as THREE.Vector3);
+  } else if (grip === 'pistol') {
     op.gun.position.set(0.02, -0.04, 0.05);
     op.gun.scale.setScalar(0.85);
   } else if (grip === 'melee') {
@@ -333,7 +346,10 @@ export function alignGunToAim(op: OperativeVisual, recoil = 0, reloadProgress = 
   _gunLocalQ.copy(_gunParentQ).invert().multiply(_gunWorldQ);
   op.gun.quaternion.copy(_gunLocalQ);
 
-  if (melee) {
+  const rigGrip = op.gun.userData.rigGrip as THREE.Vector3 | undefined;
+  if (rigGrip) {
+    op.gun.position.copy(rigGrip);
+  } else if (melee) {
     op.gun.position.set(0.02, -0.02 + swing * 0.08, 0.04 + swing * 0.12);
   } else if (op.weapon.grip === 'pistol') {
     op.gun.position.set(0.02, -0.04 - recoil * 0.03, 0.05);
@@ -639,14 +655,26 @@ export async function createVrmAvatar(opts: {
   style?: VrmStyle;
   targetHeight?: number;
   showRing?: boolean;
+  zombieKind?: ZombieKind;
+  cosmetics?: Cosmetics;
 }): Promise<VrmAvatarHandle> {
   const style = opts.style ?? 'operative';
   const gender = opts.gender ?? 'male';
+  const rigModel = isRigUrl(opts.url);
   const [vrm, animLib] = await Promise.all([
-    loadVrmFresh(opts.url),
+    rigModel ? (instantiateRig(opts.url) as unknown as Promise<VRM>) : loadVrmFresh(opts.url),
     style === 'operative' ? loadAnimLibrary(OPERATOR_ANIM_URL) : Promise.resolve(null),
   ]);
-  tintVrmScene(vrm.scene, opts.accentColor, style);
+  const rig = rigModel ? (vrm as unknown as HumanoidRig) : null;
+  let disposeLook: (() => void) | null = null;
+  if (rig) {
+    // zombie procedural poses were tuned in the VRM0 normalized frame; clips are VRM1
+    rig.flipXZ = style === 'zombie';
+    if (style === 'zombie') disposeLook = applyZombieLook(rig, opts.zombieKind ?? 'grunt');
+    else if (opts.cosmetics) disposeLook = applyCosmetics(rig, opts.cosmetics);
+  } else {
+    tintVrmScene(vrm.scene, opts.accentColor, style);
+  }
 
   // Retarget in unscaled model space (hips track is in the VRM's local units).
   let animator: OperativeAnimator | null = null;
@@ -670,6 +698,9 @@ export async function createVrmAvatar(opts: {
     (style === 'zombie' ? (size.y > 2.4 ? 2.6 : 1.85) : gender === 'female' ? 1.95 : 2.1);
   const s = size.y > 0.01 ? targetH / size.y : 1;
   vrm.scene.scale.setScalar(s);
+  const girth = (vrm.scene.userData.girth as number | undefined) ?? 1;
+  vrm.scene.scale.x *= girth;
+  vrm.scene.scale.z *= girth;
   box.setFromObject(vrm.scene);
   vrm.scene.position.y = -box.min.y;
   root.add(vrm.scene);
@@ -690,8 +721,9 @@ export async function createVrmAvatar(opts: {
     root.add(ring);
   }
 
-  const rightHand = bone(vrm, VRMHumanBoneName.RightHand);
-  const leftHand = bone(vrm, VRMHumanBoneName.LeftHand);
+  // Rig proxies are flat and hidden — props must ride the real skinned bones.
+  const rightHand = rig ? rig.bone('rightHand') : bone(vrm, VRMHumanBoneName.RightHand);
+  const leftHand = rig ? rig.bone('leftHand') : bone(vrm, VRMHumanBoneName.LeftHand);
   const weaponMount = rightHand;
 
   // Break T-pose: Z hangs arms, Y brings them forward (XYZ order)
@@ -744,10 +776,14 @@ export async function createVrmAvatar(opts: {
     zombieOpts?: ZombiePoseOpts,
   ) => {
     if (animator && poseOpts?.anim) {
-      animator.update(dt, poseOpts.anim);
-      // Clip set is rifle-based: melee weapons still swing procedurally on top.
-      if (poseOpts.grip === 'melee' && (poseOpts.meleeSwing ?? 0) > 0) {
-        applyMeleeHoldPose(vrm, dt, poseOpts.meleeSwing ?? 0, moving ? 1 : 0, 0);
+      animator.update(dt, { ...poseOpts.anim, melee: poseOpts.grip === 'melee' });
+      // Weapon-specific recoil on top of the clip: chest/head pitch back + right arm kick.
+      const kick = THREE.MathUtils.clamp(poseOpts.fireKick ?? 0, 0, 1);
+      if (kick > 0.01 && poseOpts.grip !== 'melee') {
+        const sign = rig ? 1 : -1; // VRM0 normalized frame is mirrored
+        vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.UpperChest)?.rotateX(-0.16 * kick * sign);
+        vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Head)?.rotateX(0.08 * kick * sign);
+        vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)?.rotateZ(0.1 * kick * sign);
       }
       vrm.update(dt);
       return;
@@ -857,7 +893,13 @@ export async function createVrmAvatar(opts: {
     dispose: () => {
       animator?.dispose();
       root.removeFromParent();
-      VRMUtils.deepDispose(vrm.scene);
+      if (rig) {
+        // geometry / textures are shared with the template — only per-instance data goes
+        disposeLook?.();
+        rig.scene.traverse((o) => (o as THREE.SkinnedMesh).skeleton?.dispose());
+      } else {
+        VRMUtils.deepDispose(vrm.scene);
+      }
     },
   };
 }
@@ -889,6 +931,7 @@ export async function attachVrmToOperative(
           gender: g,
           style: 'operative',
           showRing: op.isPlayer,
+          cosmetics: op.root.userData.cosmetics as Cosmetics | undefined,
         });
         for (const child of [...op.root.children]) {
           if (child.name.startsWith('vrm-')) child.removeFromParent();
@@ -917,7 +960,8 @@ export async function attachVrmToOperative(
 const zombieAttachInflight = new WeakMap<ZombieVisual, Promise<VrmAvatarHandle | null>>();
 
 /** Soft cap of live zombie VRM instances (far zombies stay on proxy). */
-export const MAX_ZOMBIE_VRM = 22;
+export const MAX_ZOMBIE_VRM =
+  typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 28 : 56;
 let liveZombieVrm = 0;
 let zombieVrmAttachBudget = 0;
 
@@ -955,8 +999,7 @@ export async function attachVrmToZombie(z: ZombieVisual): Promise<VrmAvatarHandl
   if (inflight) return inflight;
   if (liveZombieVrm >= MAX_ZOMBIE_VRM) return null;
 
-  const avatarKind = toZombieAvatarKind(z.kind);
-  const url = ZOMBIE_AVATAR_URLS[avatarKind] ?? ZOMBIE_AVATAR_URLS.grunt;
+  const url = zombieModelUrl(z.kind);
   const accent =
     z.kind === 'acid'
       ? 0x84cc16
@@ -992,6 +1035,7 @@ export async function attachVrmToZombie(z: ZombieVisual): Promise<VrmAvatarHandl
         style: 'zombie',
         targetHeight,
         showRing: false,
+        zombieKind: z.kind,
       });
       if ((z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm) {
         avatar.dispose();
@@ -1081,7 +1125,7 @@ export function updateZombieVrm(
   avatar.vrm.humanoid?.update();
 }
 
-export type OperativeAnimEvent = 'shot' | 'hit' | 'ability';
+export type OperativeAnimEvent = 'shot' | 'hit' | 'ability' | 'dash' | 'cast';
 
 /** Gameplay → animation one-shot trigger (fire, take damage, cast ability). */
 export function bumpOperativeAnim(op: OperativeVisual, kind: OperativeAnimEvent): void {
@@ -1100,6 +1144,8 @@ function operativeAnimInput(op: OperativeVisual, dt: number): OperativeAnimInput
     anim_shot?: number;
     anim_hit?: number;
     anim_ability?: number;
+    anim_dash?: number;
+    anim_cast?: number;
   };
   const pos = op.root.position;
   if (!ud.animPrev) ud.animPrev = pos.clone();
@@ -1120,6 +1166,8 @@ function operativeAnimInput(op: OperativeVisual, dt: number): OperativeAnimInput
     shotSerial: ud.anim_shot ?? 0,
     hitSerial: ud.anim_hit ?? 0,
     abilitySerial: ud.anim_ability ?? 0,
+    dashSerial: ud.anim_dash ?? 0,
+    castSerial: ud.anim_cast ?? 0,
     reloading: op.reloading,
     reloadTime: op.weapon.reloadTime,
     alive: op.alive,
