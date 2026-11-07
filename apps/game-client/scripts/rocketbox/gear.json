@@ -1,0 +1,13 @@
+{
+  "_doc": "Wearable gear extracted from Rocketbox avatars (MIT). Rebuild: see docs/ANIMATION_PIPELINE.md. Each entry: [source avatar, material regex]; _m = male body, _f = female body.",
+  "helmet_mil_m": ["Professions/Military_Male_01", "helmet"],
+  "helmet_mil_f": ["Professions/Military_Female_01", "helmet"],
+  "helmet_swat_m": ["Professions/Police_Male_02", "helmet"],
+  "helmet_swat_f": ["Professions/Police_Female_01", "helmet"],
+  "helmet_fire_m": ["Professions/Fire_Male_01", "helmet"],
+  "helmet_fire_f": ["Professions/Fire_Female_01", "helmet"],
+  "vest_mil_m": ["Professions/Military_Male_04", "equipment"],
+  "vest_mil_f": ["Professions/Military_Female_02", "equipment"],
+  "vest_swat_m": ["Professions/Police_Male_02", "equipment"],
+  "vest_swat_f": ["Professions/Police_Female_01", "equipment"]
+}

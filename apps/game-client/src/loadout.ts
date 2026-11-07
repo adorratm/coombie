@@ -1,6 +1,7 @@
 import { loadMetaSave, writeMetaSave } from './metaSave';
 import { OPERATIVE_ROSTER, type OperativeId } from './roster';
 import { WEAPONS, weaponVariantId, weaponByVariant } from './weapons';
+import type { MissionSelection } from './gameModes';
 
 /**
  * Player profile for the pre-run lobby: selected hero, owned cosmetics / weapons /
@@ -36,19 +37,26 @@ export const COSTUMES: CostumeDef[] = [
   { id: 'gold_elite', name: 'Altın Elit', cost: 1200, primary: 0xc9a23a, secondary: 0x2a2418, strength: 0.7 },
 ];
 
-export type AccessoryId = 'belt' | 'holster' | 'chest_rig' | 'kneepads' | 'headlamp';
+export type AccessoryId = 'belt' | 'holster' | 'chest_rig' | 'kneepads' | 'headlamp' | 'helmet_mil' | 'helmet_swat' | 'helmet_fire' | 'vest_swat';
+export type AccessorySlot = 'head' | 'torso' | 'waist' | 'leg' | 'knee';
 export interface AccessoryDef {
   id: AccessoryId;
   name: string;
   cost: number;
   desc: string;
+  /** one accessory per slot */
+  slot: AccessorySlot;
 }
 export const ACCESSORIES: AccessoryDef[] = [
-  { id: 'belt', name: 'Taktik Kemer', cost: 150, desc: 'Cepli bel kemeri.' },
-  { id: 'holster', name: 'Bacak Kılıfı', cost: 150, desc: 'Sağ uyluğa tabanca kılıfı.' },
-  { id: 'chest_rig', name: 'Göğüs Yeleği', cost: 350, desc: 'Plakalı yelek ve şarjör cepleri.' },
-  { id: 'kneepads', name: 'Dizlik', cost: 120, desc: 'Çift dizlik.' },
-  { id: 'headlamp', name: 'Kafa Lambası', cost: 200, desc: 'Parlayan kafa lambası.' },
+  { id: 'helmet_mil', name: 'Askeri Kask', cost: 300, desc: 'ACU kamuflajlı balistik kask.', slot: 'head' },
+  { id: 'helmet_swat', name: 'SWAT Kaskı', cost: 380, desc: 'Siyah taktik kask.', slot: 'head' },
+  { id: 'helmet_fire', name: 'İtfaiye Kaskı', cost: 260, desc: 'Isıya dayanıklı itfaiyeci kaskı.', slot: 'head' },
+  { id: 'headlamp', name: 'Kafa Lambası', cost: 200, desc: 'Parlayan kafa lambası.', slot: 'head' },
+  { id: 'chest_rig', name: 'Askeri Teçhizat', cost: 350, desc: 'ACU bel cepleri ve teçhizat kemeri.', slot: 'torso' },
+  { id: 'vest_swat', name: 'SWAT Teçhizatı', cost: 450, desc: 'Görev kemeri ve bacak kılıfı.', slot: 'torso' },
+  { id: 'belt', name: 'Taktik Kemer', cost: 150, desc: 'Cepli bel kemeri.', slot: 'waist' },
+  { id: 'holster', name: 'Bacak Kılıfı', cost: 150, desc: 'Sağ uyluğa tabanca kılıfı.', slot: 'leg' },
+  { id: 'kneepads', name: 'Dizlik', cost: 120, desc: 'Çift dizlik.', slot: 'knee' },
 ];
 
 export interface BackpackDef {
@@ -78,6 +86,8 @@ export interface Profile {
   owned: string[];
   heroes: Record<string, HeroLoadout>;
   starterGranted: boolean;
+  /** last chosen map / mode / difficulty */
+  mission?: MissionSelection;
 }
 
 const KEY = 'protocol-z-profile-v1';
@@ -238,6 +248,17 @@ export interface RunLoadout {
   backpack: 0 | 1 | 2 | 3;
   weaponSlots: string[];
   abilityLevels: Record<AbilitySlot, number>;
+  mission?: MissionSelection;
+}
+
+export function setMission(m: MissionSelection): void {
+  const p = loadProfile();
+  p.mission = m;
+  saveProfile(p);
+}
+
+export function currentMission(): MissionSelection {
+  return loadProfile().mission ?? { map: 'city', mode: 'survival', difficulty: 'normal' };
 }
 
 export function currentRunLoadout(): RunLoadout {
@@ -250,5 +271,6 @@ export function currentRunLoadout(): RunLoadout {
     backpack: h.backpack,
     weaponSlots: h.slots.filter((v) => weaponByVariant(v)),
     abilityLevels: { ...h.abilities },
+    mission: p.mission ?? { map: 'city', mode: 'survival', difficulty: 'normal' },
   };
 }

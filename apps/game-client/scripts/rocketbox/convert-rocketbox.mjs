@@ -41,6 +41,8 @@ const TARGET_TRIS = Number(opt('tris', 9000));
 const ATLAS = Number(opt('atlas', 2048));
 const QUALITY = Number(opt('quality', 82));
 const NAME = path.basename(srcDir.replace(/\/$/, ''));
+// --part <regex>: keep only material groups whose colour texture matches (gear extraction: helmet, equipment…)
+const PART = opt('part', null) ? new RegExp(opt('part', ''), 'i') : null;
 
 // ---------------------------------------------------------------- humanoid map (Biped → VRM)
 const BIPED = {
@@ -279,6 +281,7 @@ for (const gr of groups) {
   byMat.get(gr.materialIndex).push(gr);
 }
 for (const [mi, grs] of byMat) {
+  if (PART && !PART.test(mats[mi]?.map?.userData?.src ?? '')) continue;
   const map = new Map();
   const pos = [], nor = [], uv = [], si = [], sw = [], idx = [];
   for (const gr of grs) {

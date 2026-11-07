@@ -76,6 +76,25 @@ export const ZOMBIE_LOOKS: Record<ZombieKind, ZombieLookDef> = {
     bones: { neck: 1.12, head: 1.06 },
     pool: ['screamer'],
   },
+  crawler: {
+    skin: [0.55, 0.5, 0.45],
+    desat: 0.6,
+    blood: 0.85,
+    bile: [0.2, 0.05, 0.02],
+    eye: 0xff5a2a,
+    girth: 0.9,
+    pool: ['grunt_b', 'grunt_d', 'runner_a'],
+  },
+  bloater: {
+    skin: [0.6, 0.64, 0.4],
+    desat: 0.5,
+    blood: 0.35,
+    bile: [0.55, 0.9, 0.12],
+    eye: 0xd9f99d,
+    girth: 1.45,
+    bones: { chest: 1.28, upperChest: 1.22, head: 0.92 },
+    pool: ['grunt_a', 'grunt_c', 'acid'],
+  },
   boss: {
     skin: [0.46, 0.3, 0.28],
     desat: 0.4,
@@ -86,10 +105,65 @@ export const ZOMBIE_LOOKS: Record<ZombieKind, ZombieLookDef> = {
     bones: { upperChest: 1.22, leftUpperArm: 1.18, rightUpperArm: 1.18, head: 0.84 },
     pool: ['boss'],
   },
+  stalker: {
+    skin: [0.34, 0.35, 0.37],
+    desat: 0.8,
+    blood: 0.55,
+    bile: [0.05, 0.05, 0.08],
+    eye: 0xf0f4ff,
+    girth: 0.88,
+    bones: { head: 0.95, neck: 1.08 },
+    pool: ['runner_a', 'runner_b'],
+  },
+  burner: {
+    skin: [0.2, 0.16, 0.14],
+    desat: 0.3,
+    blood: 0.35,
+    bile: [0.95, 0.4, 0.05],
+    eye: 0xff8a20,
+    pool: ['grunt_a', 'grunt_c'],
+  },
+  riot: {
+    skin: [0.52, 0.54, 0.48],
+    desat: 0.6,
+    blood: 0.5,
+    bile: [0, 0, 0],
+    eye: 0xffb020,
+    girth: 1.12,
+    bones: { upperChest: 1.1, chest: 1.08 },
+    pool: ['grunt_b', 'grunt_d'],
+  },
+  hive: {
+    skin: [0.66, 0.58, 0.44],
+    desat: 0.45,
+    blood: 0.6,
+    bile: [0.75, 0.55, 0.1],
+    eye: 0xd9c060,
+    girth: 1.5,
+    bones: { chest: 1.3, upperChest: 1.25, head: 0.9 },
+    pool: ['grunt_a', 'acid'],
+  },
+  volt: {
+    skin: [0.5, 0.56, 0.64],
+    desat: 0.7,
+    blood: 0.3,
+    bile: [0.3, 0.6, 1.0],
+    eye: 0x9fd8ff,
+    pool: ['grunt_c', 'runner_b'],
+  },
+  hooker: {
+    skin: [0.5, 0.2, 0.18],
+    desat: 0.3,
+    blood: 0.8,
+    bile: [0.3, 0.9, 0.1],
+    eye: 0x7cff3a,
+    pool: [],
+  },
 };
 
 export function zombieModelUrl(kind: ZombieKind): string {
-  const pool = ZOMBIE_LOOKS[kind]?.pool ?? ZOMBIE_LOOKS.grunt.pool;
+  if (kind === 'hooker') return '/zombies/hooker/Zombie_Hooker.glb';
+  const pool = ZOMBIE_LOOKS[kind]?.pool.length ? ZOMBIE_LOOKS[kind].pool : ZOMBIE_LOOKS.grunt.pool;
   const id = pool[Math.floor(Math.random() * pool.length)]!;
   return `/avatars/rb/zombie_${id}.glb`;
 }

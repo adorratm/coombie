@@ -1,4 +1,10 @@
 import * as THREE from 'three';
+import { preloadWeaponModels } from './weaponAssets';
+import { holdGun } from './gunHold';
+import { ZOMBIE_ANIM_URL, ZombieAnimator, type ClipSeg } from './zombieAnim';
+import { createHookerModel } from './hooker';
+
+const _zs = new THREE.Vector3();
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRM, VRMHumanBoneName, VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import type { OperativeVisual, ZombieVisual } from './characters';
@@ -35,6 +41,8 @@ export interface VrmPoseOpts {
 }
 
 export interface ZombiePoseOpts {
+  /** ground speed (m/s) for clip-driven zombies */
+  speed?: number;
   kind?: ZombieKind;
   attackAnim?: number;
   skill?: string;
@@ -49,6 +57,8 @@ export interface VrmAvatarHandle {
   weaponMount: THREE.Object3D | null;
   /** Mixamo clip animator (operatives) — null → procedural pose fallback */
   animator: OperativeAnimator | null;
+  /** Mixamo clip animator (zombies) — null → procedural gait */
+  zombieAnim: ZombieAnimator | null;
   update: (
     dt: number,
     moving: boolean,
@@ -162,6 +172,7 @@ function loadVrmFresh(url: string): Promise<VRM> {
 }
 
 export async function preloadAvatars(): Promise<void> {
+  void preloadWeaponModels();
   const urls = [...allAvatarUrls(), ...allZombieModelUrls()];
   await Promise.all(
     urls.map((url) =>
@@ -319,6 +330,8 @@ export function bindGunToVrmHand(op: OperativeVisual, avatar: VrmAvatarHandle): 
  */
 export function alignGunToAim(op: OperativeVisual, recoil = 0, reloadProgress = -1): void {
   if (!op.gun.userData.vrmBound) return;
+  // rig avatars are posed (gun + support-hand IK) once per frame in updateOperativeVrm
+  if (op.gun.userData.rigHeld) return;
 
   const parent = op.gun.parent;
   if (!parent) return;
@@ -663,7 +676,7 @@ export async function createVrmAvatar(opts: {
   const rigModel = isRigUrl(opts.url);
   const [vrm, animLib] = await Promise.all([
     rigModel ? (instantiateRig(opts.url) as unknown as Promise<VRM>) : loadVrmFresh(opts.url),
-    style === 'operative' ? loadAnimLibrary(OPERATOR_ANIM_URL) : Promise.resolve(null),
+    loadAnimLibrary(style === 'operative' ? OPERATOR_ANIM_URL : ZOMBIE_ANIM_URL),
   ]);
   const rig = rigModel ? (vrm as unknown as HumanoidRig) : null;
   let disposeLook: (() => void) | null = null;
@@ -671,14 +684,26 @@ export async function createVrmAvatar(opts: {
     // zombie procedural poses were tuned in the VRM0 normalized frame; clips are VRM1
     rig.flipXZ = style === 'zombie';
     if (style === 'zombie') disposeLook = applyZombieLook(rig, opts.zombieKind ?? 'grunt');
-    else if (opts.cosmetics) disposeLook = applyCosmetics(rig, opts.cosmetics);
+    else if (opts.cosmetics) disposeLook = await applyCosmetics(rig, { gender, ...opts.cosmetics });
   } else {
     tintVrmScene(vrm.scene, opts.accentColor, style);
   }
 
   // Retarget in unscaled model space (hips track is in the VRM's local units).
   let animator: OperativeAnimator | null = null;
-  if (animLib) {
+  let zombieAnim: ZombieAnimator | null = null;
+  if (animLib && style === 'zombie' && rig) {
+    try {
+      const clips = retargetLibrary(vrm, animLib, `${opts.url}#zombie`);
+      const kind = opts.zombieKind ?? 'grunt';
+      if (ZombieAnimator.supports(clips, kind)) {
+        zombieAnim = new ZombieAnimator(vrm.scene, clips, kind);
+        rig.flipXZ = false; // clips are authored in the VRM1 normalized frame
+      }
+    } catch (err) {
+      console.warn('[avatars] zombie clip retarget failed — procedural gait', opts.url, err);
+    }
+  } else if (animLib) {
     try {
       const clips = retargetLibrary(vrm, animLib, opts.url);
       if (OperativeAnimator.supports(clips)) animator = new OperativeAnimator(vrm.scene, clips);
@@ -727,7 +752,9 @@ export async function createVrmAvatar(opts: {
   const weaponMount = rightHand;
 
   // Break T-pose: Z hangs arms, Y brings them forward (XYZ order)
-  if (animator) {
+  if (zombieAnim) {
+    zombieAnim.update(0, 0, 1);
+  } else if (animator) {
     animator.update(0, {
       localVelX: 0,
       localVelZ: 0,
@@ -775,6 +802,12 @@ export async function createVrmAvatar(opts: {
     poseOpts?: VrmPoseOpts,
     zombieOpts?: ZombiePoseOpts,
   ) => {
+    if (zombieAnim) {
+      vrm.scene.getWorldScale(_zs);
+      zombieAnim.update(dt, zombieOpts?.speed ?? 0, _zs.y);
+      vrm.update(dt);
+      return;
+    }
     if (animator && poseOpts?.anim) {
       animator.update(dt, { ...poseOpts.anim, melee: poseOpts.grip === 'melee' });
       // Weapon-specific recoil on top of the clip: chest/head pitch back + right arm kick.
@@ -889,9 +922,11 @@ export async function createVrmAvatar(opts: {
     leftHand,
     weaponMount,
     animator,
+    zombieAnim,
     update,
     dispose: () => {
       animator?.dispose();
+      zombieAnim?.dispose();
       root.removeFromParent();
       if (rig) {
         // geometry / textures are shared with the template — only per-instance data goes
@@ -973,10 +1008,40 @@ export function liveZombieVrmCount(): number {
   return liveZombieVrm;
 }
 
+// Reuse dead zombies' skinned avatars instead of cloning a new rig per spawn
+// (rig instantiation + material setup was a main source of frame hitches).
+const zombiePool = new Map<string, VrmAvatarHandle[]>();
+const POOL_PER_KIND = 8;
+
+/** Park a zombie avatar for reuse (or dispose it when the pool is full). */
+export function poolZombieAvatar(kind: string, avatar: VrmAvatarHandle): void {
+  if (!avatar.zombieAnim || kind === 'hooker') {
+    avatar.dispose();
+    return;
+  }
+  const list = zombiePool.get(kind) ?? [];
+  if (list.length >= POOL_PER_KIND) {
+    avatar.dispose();
+    return;
+  }
+  avatar.root.removeFromParent();
+  avatar.zombieAnim.reset();
+  if (!avatar.root.userData.shadowOff) {
+    avatar.root.userData.shadowOff = true;
+    avatar.root.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = false;
+    });
+  }
+  avatar.root.visible = false;
+  avatar.root.userData.poolKind = kind;
+  list.push(avatar);
+  zombiePool.set(kind, list);
+}
+
 export function disposeZombieVrm(z: ZombieVisual): void {
   const avatar = (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm;
   if (!avatar) return;
-  avatar.dispose();
+  poolZombieAvatar(z.kind, avatar);
   delete (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm;
   liveZombieVrm = Math.max(0, liveZombieVrm - 1);
   z.proxy.visible = true;
@@ -987,6 +1052,14 @@ export function requestZombieVrm(z: ZombieVisual): void {
   const existing = (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm;
   if (existing || zombieAttachInflight.has(z)) return;
   if (liveZombieVrm >= MAX_ZOMBIE_VRM) return;
+  const pooled = zombiePool.get(z.kind)?.pop();
+  if (pooled) {
+    pooled.root.visible = false;
+    z.root.add(pooled.root);
+    (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm = pooled;
+    liveZombieVrm += 1;
+    return;
+  }
   if (zombieVrmAttachBudget <= 0) return;
   zombieVrmAttachBudget -= 1;
   void attachVrmToZombie(z);
@@ -1028,6 +1101,34 @@ export async function attachVrmToZombie(z: ZombieVisual): Promise<VrmAvatarHandl
   const job = (async () => {
     try {
       if (liveZombieVrm >= MAX_ZOMBIE_VRM) return null;
+      if (z.kind === 'hooker') {
+        const hk = await createHookerModel(2.75);
+        if ((z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm) return (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm!;
+        hk.root.visible = false;
+        z.root.add(hk.root);
+        z.root.userData.hookerAnim = hk.anim;
+        hk.root.userData.poolKind = 'hooker';
+        z.root.userData.hookSpawn = hk.spawn;
+        const handle = {
+          vrm: { scene: hk.root, update: () => undefined, humanoid: null } as unknown as VRM,
+          root: hk.root,
+          gender: 'male' as AvatarGender,
+          rightHand: hk.spawn,
+          leftHand: null,
+          weaponMount: null,
+          animator: null,
+          zombieAnim: hk.anim as unknown as ZombieAnimator,
+          update: (dt: number, _m: boolean, _a: boolean, _p: number, _b: number, _r?: boolean, _rp?: number, _po?: VrmPoseOpts, zo?: ZombiePoseOpts) =>
+            hk.anim.update(dt, zo?.speed ?? 0),
+          dispose: () => {
+            hk.anim.dispose();
+            hk.root.removeFromParent();
+          },
+        } satisfies VrmAvatarHandle;
+        (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm = handle;
+        liveZombieVrm += 1;
+        return handle;
+      }
       const avatar = await createVrmAvatar({
         url,
         accentColor: accent,
@@ -1047,6 +1148,7 @@ export async function attachVrmToZombie(z: ZombieVisual): Promise<VrmAvatarHandl
         const mesh = o as THREE.Mesh;
         if (mesh.isMesh) mesh.castShadow = false;
       });
+      avatar.root.userData.poolKind = z.kind;
       z.root.add(avatar.root);
       (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm = avatar;
       liveZombieVrm += 1;
@@ -1105,11 +1207,40 @@ export function updateZombieVrm(
     return;
   }
   if (lod === 'skip') {
-    // Freeze current presentation (avoid T-pose flash before first full pose).
+    // Freeze current presentation (avoid T-pose flash before first full pose);
+    // clip zombies bank the time so animation speed stays correct.
+    if (avatar.zombieAnim) {
+      const u = z.root.userData as { animAcc?: number };
+      u.animAcc = Math.min(0.25, (u.animAcc ?? 0) + dt);
+    }
     return;
   }
 
   setZombieVrmPresentation(z, true);
+
+  const ud = z.root.userData as ZombieAnimState;
+  if (avatar.zombieAnim) {
+    const za = avatar.zombieAnim;
+    // ground speed from the actual displacement (includes lunges / charges / knockback)
+    const step = Math.min(0.25, (ud.animAcc ?? 0) + dt);
+    ud.animAcc = 0;
+    const p = z.root.position;
+    if (!ud.lastPos) ud.lastPos = p.clone();
+    const sp = step > 1e-4 ? Math.hypot(p.x - ud.lastPos.x, p.z - ud.lastPos.z) / step : 0;
+    ud.lastPos.copy(p);
+    ud.speedEma = THREE.MathUtils.damp(ud.speedEma ?? 0, Math.min(sp, 16), 10, step);
+    const q = ud.animQueue;
+    if (q && q.length) {
+      for (const ev of q) {
+        if (ev.kind === 'hit') za.hit();
+        else if (ev.kind === 'spawn') za.standUp(ev.dur);
+        else if (ev.seg) za.play(ev.seg, ev.dur, ev.priority ?? 1);
+      }
+      q.length = 0;
+    }
+    avatar.update(step, moving, false, z.animPhase, 0, false, 0, undefined, { speed: ud.speedEma, kind: z.kind });
+    return;
+  }
 
   if (lod === 'reduced') {
     avatar.vrm.update(dt);
@@ -1123,6 +1254,152 @@ export function updateZombieVrm(
   });
   // Ensure normalized arm pose lands on the raw skinned mesh this frame.
   avatar.vrm.humanoid?.update();
+}
+
+interface ZombieAnimEvent {
+  kind: 'act' | 'hit' | 'spawn';
+  seg?: ClipSeg;
+  dur: number;
+  priority?: number;
+}
+interface ZombieAnimState {
+  lastPos?: THREE.Vector3;
+  speedEma?: number;
+  animQueue?: ZombieAnimEvent[];
+  animAcc?: number;
+  animTick?: number;
+}
+
+/** Queue a clip one-shot for a zombie (applied on its next animation update). */
+export function queueZombieAnim(z: ZombieVisual, ev: ZombieAnimEvent): void {
+  const ud = z.root.userData as ZombieAnimState;
+  (ud.animQueue ??= []).push(ev);
+}
+
+/**
+ * Detach the zombie's skinned avatar as a corpse that plays its death clip, then
+ * sinks into the ground. Returns false when the zombie has no clip avatar (caller
+ * removes it as before).
+ */
+export function spawnZombieCorpse(z: ZombieVisual, scene: THREE.Scene, corpses: ZombieCorpse[], max = 8): boolean {
+  const avatar = (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm;
+  if (!avatar?.zombieAnim || !avatar.root.visible || corpses.length >= max) return false;
+  z.root.updateMatrixWorld(true);
+  const holder = new THREE.Group();
+  z.root.matrixWorld.decompose(holder.position, holder.quaternion, holder.scale);
+  holder.position.y = 0;
+  holder.add(avatar.root);
+  scene.add(holder);
+  const dur = avatar.zombieAnim.die();
+  delete (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm;
+  liveZombieVrm = Math.max(0, liveZombieVrm - 1);
+  corpses.push({ holder, avatar, t: 0, hold: Math.max(1.2, dur) + 2.2 });
+  return true;
+}
+
+export interface ZombieCorpse {
+  holder: THREE.Group;
+  avatar: VrmAvatarHandle;
+  t: number;
+  hold: number;
+}
+
+export function tickZombieCorpses(corpses: ZombieCorpse[], dt: number): void {
+  for (let i = corpses.length - 1; i >= 0; i--) {
+    const c = corpses[i]!;
+    c.t += dt;
+    if (c.t < c.hold + 1.4) {
+      if (c.t < c.hold - 2.0) c.avatar.update(dt, false, false, 0, 0, false, 0, undefined, { speed: 0 });
+      if (c.t > c.hold) c.holder.position.y = -((c.t - c.hold) / 1.4) * 0.9;
+      continue;
+    }
+    c.holder.removeFromParent();
+    poolZombieAvatar((c.avatar.root.userData.poolKind as string | undefined) ?? 'grunt', c.avatar);
+    corpses.splice(i, 1);
+  }
+}
+
+/** Death / revive presentation: clip death when the avatar has an animator, else hide. */
+export function setOperativeDead(op: OperativeVisual, dead: boolean): void {
+  const avatar = (op as OperativeVisual & { vrm?: VrmAvatarHandle }).vrm;
+  if (avatar?.animator) {
+    if (dead) avatar.animator.die();
+    else avatar.animator.revive();
+    op.root.visible = true;
+    op.gun.visible = !dead;
+    return;
+  }
+  op.root.visible = !dead;
+}
+
+export type OperativeActionKind = 'throw' | 'shout' | 'shove' | 'deploy' | 'kick' | 'impact' | 'knockdown' | 'roll' | 'radio' | 'shock';
+
+let radioMesh: THREE.Group | null = null;
+function radioProp(): THREE.Group {
+  if (!radioMesh) {
+    radioMesh = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.15, 0.032), new THREE.MeshStandardMaterial({ color: 0x23261f, roughness: 0.6, metalness: 0.2 }));
+    const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.008, 0.11, 6), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+    ant.position.set(0.016, 0.125, 0);
+    const led = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.008, 0.004), new THREE.MeshBasicMaterial({ color: 0x40ff60 }));
+    led.position.set(-0.012, 0.06, 0.017);
+    radioMesh.add(body, ant, led);
+  }
+  return radioMesh.clone();
+}
+
+/** Take the radio out, call in support, put it away (hides the gun meanwhile). */
+function radioCall(op: OperativeVisual, an: OperativeAnimator): boolean {
+  const av = (op as OperativeVisual & { vrm?: VrmAvatarHandle }).vrm;
+  // reach into the pocket for the radio, then talk into it
+  const ok = an.playAction('pocket', 0.5, 1.5, 0.55, [{ id: 'radioCall', from: 2.0, to: 4.6, dur: 2.5 }]);
+  if (!ok || !av?.rightHand) return ok;
+  const hand = av.rightHand;
+  const radio = radioProp();
+  av.root.updateMatrixWorld(true);
+  const hs = hand.getWorldScale(new THREE.Vector3()).x / Math.max(1e-6, av.root.getWorldScale(new THREE.Vector3()).x);
+  radio.scale.setScalar(1 / hs);
+  radio.position.set(0.02 / hs, 0.06 / hs, 0.03 / hs);
+  const showRadio = () => {
+    hand.add(radio);
+    op.gun.visible = false;
+  };
+  const done = () => {
+    radio.removeFromParent();
+    op.gun.visible = true;
+  };
+  setTimeout(showRadio, 420);
+  setTimeout(done, 3050);
+  return ok;
+}
+/** Full-body Mixamo action for ability casts and heavy hits (no-op on avatars without clips). */
+export function operativeAction(op: OperativeVisual, kind: OperativeActionKind): boolean {
+  const an = (op as OperativeVisual & { vrm?: VrmAvatarHandle }).vrm?.animator;
+  if (!an || !op.alive) return false;
+  switch (kind) {
+    case 'throw':
+      return an.playAction('castThrow', 0.85, 2.45, 0.78);
+    case 'shout':
+      return an.playAction('castShout', 0.05, 1.8, 1.05);
+    case 'shove':
+      return an.playAction('castShove', 0.95, 2.3, 0.7);
+    case 'kick':
+      return an.playAction('castKick', 0.6, 2.35, 0.85);
+    case 'deploy':
+      return an.playAction('kneelDown', 0, 0.93, 0.38, [{ id: 'kneelUp', from: 0, to: 1.23, dur: 0.55 }]);
+    case 'impact':
+      if (an.acting > 0.3) return false;
+      return an.playAction('impactBig', 0.05, 1.5, 0.75);
+    case 'knockdown':
+      return an.playAction('knockdown', 0.25, 2.5, 1.4);
+    case 'roll':
+      return an.playAction('castRoll', 0.15, 1.9, 0.62);
+    case 'radio':
+      return radioCall(op, an);
+    case 'shock':
+      if (an.acting > 0.3) return false;
+      return an.playAction('electrocuted', 0.1, 1.6, 1.0);
+  }
 }
 
 export type OperativeAnimEvent = 'shot' | 'hit' | 'ability' | 'dash' | 'cast';
@@ -1197,6 +1474,22 @@ export function updateOperativeVrm(
     fireKick: Math.min(1, op.recoil * 2.2),
     anim: avatar.animator ? operativeAnimInput(op, dt) : undefined,
   });
+  const isRig = (avatar.vrm as unknown as { isHumanoidRig?: boolean }).isHumanoidRig === true;
+  if (isRig && op.gun.userData.vrmBound && !op.weapon.melee) {
+    // proxies → raw bones, then seat the gun and pull the support hand onto it
+    avatar.vrm.update(0);
+    op.gun.userData.rigHeld = true;
+    const ud = op.gun.userData as { ikW?: number };
+    const free = avatar.animator?.freeHand ?? 0;
+    const want = reloading || !op.alive ? 0 : 1 - free;
+    ud.ikW = THREE.MathUtils.damp(ud.ikW ?? want, want, 12, dt);
+    const pitch = reloading ? 0.55 + reloadProgress * 0.3 : 0.06 + op.recoil * 0.25;
+    const rg = op.gun.userData.rigGrip as THREE.Vector3 | undefined;
+    if (rg) op.gun.position.copy(rg);
+    holdGun(avatar.vrm as unknown as HumanoidRig, op.root, op.gun, pitch, ud.ikW);
+    return;
+  }
+  op.gun.userData.rigHeld = false;
   alignGunToAim(op, op.recoil, reloading ? reloadProgress : -1);
   // Second pass lets VRM humanoid push normalized pose → raw skeleton after gun align
   avatar.vrm.update(0);

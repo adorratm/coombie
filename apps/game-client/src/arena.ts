@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ensureWeaponEnvironment } from './weaponAssets';
 import { castAbility, createAbilityRuntime } from './abilities';
 import {
   alignGunToAim,
@@ -8,7 +9,14 @@ import {
   disposeZombieVrm,
   requestZombieVrm,
   preloadAvatars,
+  createVrmAvatar,
+  operativeAction,
+  poolZombieAvatar,
 } from './avatars';
+import { ZOMBIE_LOOKS } from './zombieLook';
+import { PowerUps, POWER_DEFS, type IndicatorSrc } from './powerups';
+import { createHookerModel, tickHooks, clearHooks } from './hooker';
+import { allAvatarUrls } from './roster';
 import { rosterById } from './roster';
 import { currentRunLoadout, type AbilitySlot, type RunLoadout } from './loadout';
 import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
@@ -23,7 +31,6 @@ import {
   createZombie,
   flashZombieHurt,
   setOperativeWeapon,
-  setOperativeWeaponById,
   tickReload,
   updateZombieHurtFlash,
   type OperativeVisual,
@@ -41,13 +48,14 @@ import {
   moanChanceFor,
   pickWaveSpawnKind,
 } from './zombieKinds';
-import { resolveCircleAabbs } from './collision';
+import { nearbyBoxes, resolveCircleAabbs } from './collision';
 import { billboardHealthBars, createCombatFx, type HealthBar } from './fx';
 import { createInput } from './input';
 import { faceToward, sanitizeObject3D } from './look';
 import { createInventory, addItem, consumeItem, type InventoryState } from './inventory';
 import {
   createWorldItem,
+  buildSampleModel,
   rollItemDrop,
   updateWorldItem,
   ITEM_DEFS,
@@ -55,7 +63,11 @@ import {
   type WorldItem,
 } from './items';
 import { bloodMap, disposeMaterialTextures } from './materials';
-import { ARENA_BOUND, buildWorldMap } from './map';
+import { buildGameMap } from './gameMap';
+import { MAPS } from './mapDefs';
+import { DIFFICULTIES, ModeRuntime, type MissionSelection, type RunOutcome } from './gameModes';
+import type { RunStats } from './achievements';
+import { ALLY_TEMPLATES } from './rescue';
 import { applyMetaRunBonuses, loadMetaSave, type RunSummary } from './metaSave';
 import {
   createMissionRuntime,
@@ -102,22 +114,49 @@ import {
 } from './skilltree';
 import type { WeaponId } from './weapons';
 import {
-  applyZombieSkillImpact,
   beginZombieAttack,
+  bloaterExplode,
+  tickZombiePassive,
+  zombieDeathEffects,
+  hookTelegraph,
+  breakGrab,
   chooseZombieSkill,
-  skillAttackDuration,
-  skillCooldownAfter,
-  skillImpactAt,
   fireRateDebuffMul,
+  frenzyMul,
+  operativePinned,
+  rangedSkillFor,
   telegraphZombieSkill,
+  tickAcidSpits,
   tickOperativeSlow,
+  tickZombieAttack,
+  ZombieHazards,
   type AcidSpit,
+  type ZombieCombatCtx,
 } from './zombieCombat';
+import { SkillFx } from './skillFx';
+import { createRunSkillState, HERO_START_SKILL, RUN_SKILLS, RunSkillRuntime, type RunSkillId } from './runSkills';
+import { queueZombieAnim, setOperativeDead, spawnZombieCorpse, tickZombieCorpses, type ZombieCorpse } from './avatars';
 
 export interface ArenaHudState {
   heroId: string;
+  /** recent loot pickups (newest last) — name + what it does */
+  pickups?: Array<{ name: string; desc: string; age: number }>;
+  /** off-screen / on-screen markers for important things */
+  /** owned radio fire-support (H key) */
+  support?: { icon: string; name: string; cd: number; max: number } | null;
+  /** radio chatter subtitles */
+  subtitle?: { text: string; who: 'me' | 'radio' } | null;
+  indicators?: Array<{ x: number; y: number; ang: number; on: boolean; color: string; icon: string; label: string; timer?: number; urgent?: boolean; dist: number }>;
+  /** active timed power-ups */
+  buffs?: Array<{ icon: string; name: string; left: number; color: string }>;
   heroAbilities: Array<{ slot: string; name: string; icon: string; color: number; cooldown: number; maxCooldown: number; level: number }>;
-  weaponSlots: Array<{ name: string; active: boolean; tier: number }>;
+  /** set when the mission is won / lost (sim is frozen) */
+  runOver?: RunOutcome | null;
+  revivesLeft?: number;
+  runStats?: RunStats;
+  /** YAZS run skills + passives (optional for older HUD consumers) */
+  runSkills?: Array<{ id: string; icon: string; name: string; level: number; evo: boolean; passive: boolean }>;
+  weaponSlots: Array<{ name: string; active: boolean; tier: number; variant: string }>;
   weapon: string;
   weaponId: WeaponId;
   className: string;
@@ -216,7 +255,7 @@ export interface ArenaHandle {
 }
 
 type Decal = { mesh: THREE.Mesh; life: number };
-type Gem = { mesh: THREE.Mesh; life: number; xp: number };
+type Gem = { mesh: THREE.Object3D; life: number; xp: number };
 type MuzzleFlash = { mesh: THREE.Mesh; life: number };
 type Bullet = {
   mesh: THREE.Mesh;
@@ -231,63 +270,87 @@ type Bullet = {
 const PLAYER_RADIUS = 0.55;
 const ZOMBIE_RADIUS = 0.5;
 /** Soft cap — raised with spatial hash + VRM LOD; still far below design aspirational counts. */
-const MAX_ZOMBIES = 48;
+const MAX_ZOMBIES_BASE = 48;
 const ZOMBIE_HIT_QUERY_R = 1.5;
 const CAM_ZOOM_MIN = 0.55;
 const CAM_ZOOM_MAX = 1.85;
 
+/** dev: ?god=1 — player takes 2 % damage (testing) */
+const DEV_GOD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('god') === '1';
+
 export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout } = {}): ArenaHandle {
   const loadout = opts.loadout ?? currentRunLoadout();
+  const mission: MissionSelection = loadout.mission ?? { map: 'city', mode: 'survival', difficulty: 'normal' };
+  const mapDef = MAPS[mission.map] ?? MAPS.city;
+  const diff = DIFFICULTIES[mission.difficulty] ?? DIFFICULTIES.normal;
+  const LT = mapDef.lighting;
   const scene = new THREE.Scene();
-  // Cinematic dark gritty apocalyptic atmosphere (YAZS style)
-  scene.background = new THREE.Color(0x06080b);
-  scene.fog = new THREE.FogExp2(0x07090d, 0.015);
+  scene.background = new THREE.Color(LT.bg);
+  scene.fog = new THREE.FogExp2(LT.fog, LT.fogDensity * 0.6);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 500);
   camera.position.set(0, 22, 16);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  ensureWeaponEnvironment(renderer);
+  // ---- adaptive quality: 0 high · 1 medium · 2 low · 3 very low --------------
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  let quality = (() => {
+    try {
+      const q = Number(localStorage.getItem('protocol-z-quality'));
+      if (Number.isFinite(q) && q >= 0 && q <= 3) return q;
+    } catch {
+      /* ignore */
+    }
+    return coarse ? 2 : 1;
+  })();
+  const QUALITY_DPR = [1.5, 1.15, 0.9, 0.75];
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY_DPR[quality]!));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.autoUpdate = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = quality < 2;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.35;
+  renderer.toneMappingExposure = LT.exposure;
   container.appendChild(renderer.domElement);
   renderer.domElement.tabIndex = 0;
   renderer.domElement.style.outline = 'none';
   renderer.domElement.focus();
 
   // Dramatic apocalyptic lighting: Cool ambient fill, warm harsh directional key light, and rim kick
-  scene.add(new THREE.AmbientLight(0x1e2733, 0.65));
-  scene.add(new THREE.HemisphereLight(0x475569, 0x0f172a, 0.85));
+  scene.add(new THREE.AmbientLight(LT.ambient[0], LT.ambient[1] * 1.6));
+  scene.add(new THREE.HemisphereLight(LT.hemi[0], LT.hemi[1], LT.hemi[2] * 1.5));
 
-  const sun = new THREE.DirectionalLight(0xffedd5, 2.2);
-  sun.position.set(28, 42, 22);
+  const sun = new THREE.DirectionalLight(LT.sun[0], LT.sun[1] * 1.25);
+  const sunOff = new THREE.Vector3(...LT.sunDir);
+  sun.position.copy(sunOff);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.setScalar(quality === 0 ? 2048 : 1024);
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0.04;
   sun.shadow.camera.near = 5;
   sun.shadow.camera.far = 130;
-  sun.shadow.camera.left = -40;
-  sun.shadow.camera.right = 40;
-  sun.shadow.camera.top = 40;
-  sun.shadow.camera.bottom = -40;
+  sun.shadow.camera.left = -32;
+  sun.shadow.camera.right = 32;
+  sun.shadow.camera.top = 32;
+  sun.shadow.camera.bottom = -32;
   scene.add(sun);
   scene.add(sun.target);
 
   // Cinematic blue rim backlight
-  const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.85);
+  const rimLight = new THREE.DirectionalLight(LT.rim[0], LT.rim[1]);
   rimLight.position.set(-25, 20, -18);
   scene.add(rimLight);
   renderer.shadowMap.needsUpdate = true;
 
-  const map = buildWorldMap(scene);
+  const map = buildGameMap(scene, mission.map, renderer);
+  const ARENA_BOUND = map.bound;
   const colliders = map.colliders;
   const audio = createGameAudio();
   const fx = createCombatFx(scene);
+  const skillFx = new SkillFx(scene);
+  const powerUps = new PowerUps(scene, skillFx);
+  skillFx.setCamera(camera);
   const abilityRuntime = createAbilityRuntime(scene);
   const bloodTex = bloodMap();
   const healthBars: HealthBar[] = [];
@@ -316,7 +379,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
   // Hide neon proxy until VRM arrives — avoids placeholder flash on boot
   player.proxy.visible = false;
-  player.root.position.set(0, 0, 8);
+  player.root.position.copy(map.anchors.spawn);
   scene.add(player.root);
   healthBars.push(player.healthBar);
   const squad: OperativeVisual[] = [player];
@@ -338,7 +401,18 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   for (const w of ALL_WEAPONS) progress.unlockedWeapons.add(w.id);
   let heroRt: HeroAbilityRuntime | null = null;
   const NO_BUFF: HeroBuffs = { damage: 1, fireRate: 1, move: 1, armor: 0, crit: 0 };
-  const heroBuffs = (op: OperativeVisual): HeroBuffs => (heroRt ? heroRt.buffsFor(op, simTime) : NO_BUFF);
+  const heroBuffs = (op: OperativeVisual): HeroBuffs => {
+    const b = heroRt ? heroRt.buffsFor(op, simTime) : NO_BUFF;
+    if (!op.isPlayer) return b;
+    const pu = powerUps;
+    const dmg = pu.isActive('damage', simTime) ? 1.6 : 1;
+    const fr = pu.isActive('firerate', simTime) ? 1.5 : 1;
+    const mv = pu.isActive('speed', simTime) ? 1.45 : 1;
+    if (dmg === 1 && fr === 1 && mv === 1) return b;
+    return { ...b, damage: b.damage * dmg, fireRate: b.fireRate * fr, move: b.move * mv };
+  };
+  let magnetAllUntil = 0;
+  let subtitle: { text: string; who: 'me' | 'radio'; until: number } | null = null;
   applyMetaRunBonuses(progress, player, metaAtBoot);
   void (async () => {
     await preloadAvatars();
@@ -369,58 +443,194 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     justRescued: false,
   });
 
+  const MAX_ZOMBIES = Math.round(MAX_ZOMBIES_BASE * Math.min(1.35, diff.count));
   const zombies: ZombieVisual[] = [];
   const zombieHash = new SpatialHash2D<ZombieVisual>(4);
   const zombieQuery: ZombieVisual[] = [];
   let lodFrame = 0;
-  const spawnZombie = (kind: ZombieVisual['kind'] = 'grunt', nearPlayer = true) => {
-    if (zombies.length >= MAX_ZOMBIES) return;
+  const shieldMat = new THREE.MeshStandardMaterial({ color: 0x2a3036, roughness: 0.25, metalness: 0.2, transparent: true, opacity: 0.72 });
+  const shieldRimMat = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.7 });
+  const shieldGeo = new THREE.BoxGeometry(0.75, 1.15, 0.05);
+  const shieldRimGeo = new THREE.BoxGeometry(0.8, 0.1, 0.08);
+  const addRiotShield = (z: ZombieVisual) => {
+    const g = new THREE.Group();
+    const plate = new THREE.Mesh(shieldGeo, shieldMat);
+    plate.castShadow = true;
+    const top = new THREE.Mesh(shieldRimGeo, shieldRimMat);
+    top.position.y = 0.58;
+    const bot = top.clone();
+    bot.position.y = -0.58;
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.09, 0.055), new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.6 }));
+    band.position.set(0, 0.25, 0.01);
+    g.add(plate, top, bot, band);
+    g.position.set(0.12, 1.05, 0.55);
+    g.rotation.y = -0.15;
+    z.root.add(g);
+    z.root.userData.shield = g;
+  };
+  const spawnZombie = (
+    kind: ZombieVisual['kind'] = 'grunt',
+    nearPlayer = true,
+    at?: { x: number; z: number; emerge?: boolean },
+  ) => {
+    if (zombies.length >= MAX_ZOMBIES && kind !== 'boss') return null;
     const z = createZombie(kind);
     z.proxy.visible = true;
     const waveMul = 1 + (wave - 1) * 0.12;
-    z.maxHp = Math.ceil(z.maxHp * waveMul);
+    z.maxHp = Math.ceil(z.maxHp * waveMul * diff.hp);
     z.hp = z.maxHp;
-    z.attackDamage = Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06));
+    z.attackDamage = Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg);
+    z.speed *= diff.speed;
+    z.baseSpeed = z.speed;
     z.healthBar.setRatio(1);
 
     const ang = Math.random() * Math.PI * 2;
     const dist = nearPlayer ? 20 + Math.random() * 26 : 50 + Math.random() * 70;
     const cx = nearPlayer ? player.root.position.x : 0;
     const cz = nearPlayer ? player.root.position.z : 0;
-    let x = THREE.MathUtils.clamp(cx + Math.cos(ang) * dist, -ARENA_BOUND, ARENA_BOUND);
-    let zz = THREE.MathUtils.clamp(cz + Math.sin(ang) * dist, -ARENA_BOUND, ARENA_BOUND);
+    const x = THREE.MathUtils.clamp(at ? at.x : cx + Math.cos(ang) * dist, -ARENA_BOUND, ARENA_BOUND);
+    const zz = THREE.MathUtils.clamp(at ? at.z : cz + Math.sin(ang) * dist, -ARENA_BOUND, ARENA_BOUND);
     const resolved = resolveCircleAabbs(x, zz, ZOMBIE_RADIUS, colliders);
     z.root.position.set(resolved.x, 0, resolved.z);
     scene.add(z.root);
     zombies.push(z);
     healthBars.push(z.healthBar);
+    // some of the horde claws its way out of the ground
+    if (kind === 'riot') addRiotShield(z);
+    const emerge = kind !== 'hooker' && (at?.emerge ?? (z.kind !== 'boss' && z.kind !== 'crawler' && Math.random() < 0.35));
+    if (emerge) {
+      z.root.userData.spawnUntil = simTime + 2.1;
+      queueZombieAnim(z, { kind: 'spawn', dur: 2.1 });
+      fx.spawnBloodBurst(z.root.position, 0.8, 0x3b2a1a);
+    }
+    return z;
   };
 
-  for (let i = 0; i < 16; i++) {
-    spawnZombie(i === 0 ? 'boss' : i % 6 === 0 ? 'acid' : 'grunt', true);
+  if (new URLSearchParams(location.search).get('pu') === '1') {
+    powerUps.spawn('speed', player.root.position.x + 26, player.root.position.z + 4);
+    powerUps.spawn('damage', player.root.position.x - 6, player.root.position.z + 5);
+  }
+  // dev: ?zk=hooker,riot spawns those kinds near the player
+  for (const k of (new URLSearchParams(location.search).get('zk') ?? '').split(',').filter(Boolean)) {
+    const a = Math.random() * Math.PI * 2;
+    spawnZombie(k as ZombieVisual['kind'], true, { x: player.root.position.x + Math.cos(a) * 9, z: player.root.position.z + Math.sin(a) * 9, emerge: false });
+  }
+  for (let i = 0; i < Math.round(12 * diff.count); i++) {
+    spawnZombie(i % 6 === 0 ? 'acid' : i % 4 === 0 ? 'runner' : 'grunt', true);
   }
 
   let camZoom = 1;
-  let shadowFrame = 0;
 
   const bloodDecals: Decal[] = [];
   const gems: Gem[] = [];
   const flashes: MuzzleFlash[] = [];
   const bullets: Bullet[] = [];
   const acidSpits: AcidSpit[] = [];
+  const hazards = new ZombieHazards(scene);
+  hazards.vfx = skillFx;
+  const corpses: ZombieCorpse[] = [];
+  let nowSec = performance.now() / 1000;
+  const zombieCtx: ZombieCombatCtx = {
+    scene,
+    vfx: skillFx,
+    squad,
+    zombies,
+    spits: acidSpits,
+    hazards,
+    fx,
+    nowSec,
+    damageOperative: (op, amount, from) => damageOperative(op, amount, from),
+    damageZombie: (z, amount, from) => {
+      const dir = z.root.position.clone().sub(from).setY(0).normalize();
+      damageZombie(z, amount, z.root.position.clone().setY(1.2), dir, { fromPlayer: false });
+    },
+    spawnZombieAt: (kind, x, zz) => spawnZombie(kind, true, { x, z: zz, emerge: true }),
+    move: (obj, dx, dz, r) => applyMoveWithCollision(obj, dx, dz, r),
+    shake: (v) => {
+      shake = Math.max(shake, v);
+    },
+    playSfx: (z, ev) => audio.playZombie(z.kind, ev),
+  };
+
+  // ---- game mode / objectives -------------------------------------------
+  const runStats: RunStats = {
+    map: mission.map,
+    mode: mission.mode,
+    difficulty: mission.difficulty,
+    won: false,
+    kills: 0,
+    kindKills: {},
+    level: 1,
+    maxCombo: 0,
+    evolutions: 0,
+    skills: 0,
+    timeSec: 0,
+    downs: 0,
+    rescued: 0,
+    fuel: 0,
+    coreHp: 100,
+  };
+  const recruitAt = (pos: THREE.Vector3) => {
+    runStats.rescued += 1;
+    if (squad.length >= 8) return;
+    const used = new Set(squad.map((o) => o.root.userData.rosterId));
+    const t = ALLY_TEMPLATES.find((a) => !used.has(a.id)) ?? ALLY_TEMPLATES[0]!;
+    const ally = createOperative({
+      color: t.accent,
+      scale: t.scale,
+      isPlayer: false,
+      moveSpeed: t.speed,
+      weaponIndex: t.weaponIndex,
+      name: t.name,
+      maxHp: t.hp,
+      gender: t.gender,
+      avatarUrl: t.avatarUrl,
+      rosterId: t.id,
+      classId: t.classId,
+    });
+    ally.root.userData.rosterId = t.id;
+    ally.root.position.copy(pos);
+    scene.add(ally.root);
+    healthBars.push(ally.healthBar);
+    squad.push(ally);
+    fx.spawnHitRing(pos, 0x38bdf8);
+    void attachVrmToOperative(ally, t.gender).then((avatar) => {
+      if (!avatar) ally.proxy.visible = true;
+    });
+  };
+  const modeRt = new ModeRuntime(mission, {
+    scene,
+    map,
+    player,
+    squad,
+    zombies,
+    spawnZombieAt: (kind, x, zz) => spawnZombie(kind, true, { x, z: zz, emerge: false }) ?? null,
+    recruitAt,
+    warn: (pos, r, color, dur) => fx.spawnWarnRing(pos, r, color, dur),
+    sfx: (kind) => {
+      if (kind === 'pickup') audio.playLevelUp();
+      else if (kind === 'alarm') audio.playAbility();
+      else audio.playLevelUp();
+    },
+  });
+  let runOver: RunOutcome | null = null;
+  const snapshotRunStats = (): RunStats => {
+    runStats.kills = kills;
+    runStats.level = progress.level;
+    runStats.maxCombo = Math.max(runStats.maxCombo, combo);
+    runStats.evolutions = progress.runSkills.evolved.size;
+    runStats.skills = progress.runSkills.skills.size;
+    runStats.timeSec = simTime;
+    runStats.coreHp = modeRt.coreHp;
+    runStats.fuel = modeRt.fuelTaken;
+    return { ...runStats, kindKills: { ...runStats.kindKills } };
+  };
 
   const bloodMat = new THREE.MeshBasicMaterial({
     map: bloodTex,
     transparent: true,
     opacity: 0.85,
     depthWrite: false,
-  });
-  const gemMat = new THREE.MeshStandardMaterial({
-    color: 0x60a5fa,
-    emissive: 0x2563eb,
-    emissiveIntensity: 0.9,
-    metalness: 0.3,
-    roughness: 0.25,
   });
   const flashMat = new THREE.MeshBasicMaterial({
     color: 0xffe29a,
@@ -467,9 +677,20 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
   };
 
+  // pickup feed shown in the HUD so every drop explains itself
+  const pickupLog: { name: string; desc: string; at: number }[] = [];
+  let sampleHintShown = false;
+  const notePickup = (name: string, desc: string) => {
+    const now = performance.now();
+    const same = pickupLog.find((p) => p.name === name && now - p.at < 3500);
+    if (same) same.at = now;
+    else pickupLog.push({ name, desc, at: now });
+    while (pickupLog.length > 4) pickupLog.shift();
+  };
   const spawnGem = (x: number, z: number, value: number) => {
-    const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.2 + Math.min(0.2, value * 0.01), 0), gemMat);
-    mesh.position.set(x, 0.45, z);
+    const mesh = buildSampleModel(value);
+    mesh.position.set(x + (Math.random() - 0.5) * 0.4, 0.3, z + (Math.random() - 0.5) * 0.4);
+    mesh.rotation.y = Math.random() * Math.PI * 2;
     scene.add(mesh);
     gems.push({ mesh, life: 16, xp: value });
   };
@@ -561,6 +782,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     audio.playZombie(z.kind, 'death');
     audio.playKill();
     kills += 1;
+    runStats.kindKills[z.kind] = (runStats.kindKills[z.kind] ?? 0) + 1;
+    modeRt.onZombieKilled(z);
     combo += 1;
     comboTimer = 2.5;
     pendingMissionKill = true;
@@ -568,7 +791,11 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     const barIdx = healthBars.indexOf(z.healthBar);
     if (barIdx >= 0) healthBars.splice(barIdx, 1);
     z.healthBar.dispose();
-    disposeZombieVrm(z);
+    if (z.kind === 'bloater') bloaterExplode(z, zombieCtx, 0.8);
+    zombieDeathEffects(z, zombieCtx);
+    z.hurtFlash = 0.001;
+    updateZombieHurtFlash(z, 1);
+    if (!spawnZombieCorpse(z, scene, corpses)) disposeZombieVrm(z);
     if (z.roleMarker) {
       z.roleMarker.geometry.dispose();
       (z.roleMarker.material as THREE.Material).dispose();
@@ -591,7 +818,16 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     const stats = getCombatStats(weaponId);
     const hb = fromPlayer ? heroBuffs(player) : NO_BUFF;
     const crit = Math.random() < stats.critChance + hb.crit;
-    const dmg = rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
+    let dmg = rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
+    // riot shield: hits from the front are mostly stopped
+    if (z.kind === 'riot' && z.root.userData.shield && knockDir.lengthSq() > 0.01) {
+      const fy = z.root.rotation.y;
+      const facing = knockDir.x * Math.sin(fy) + knockDir.z * Math.cos(fy);
+      if (facing < -0.3) {
+        dmg *= 0.2;
+        skillFx.sparks(hitPos, 4, 0xfff0c0, 3);
+      }
+    }
     z.hp -= dmg;
     z.healthBar.setRatio(z.hp / z.maxHp);
     z.healthBar.setVisible(true);
@@ -634,8 +870,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (z.hp <= 0) killZombie(z);
   };
 
-  const damageOperative = (op: OperativeVisual, amount: number, from: THREE.Vector3): boolean => {
-    if (!op.alive || op.invuln > 0) return false;
+  const damageOperative = (op: OperativeVisual, amount: number, from: THREE.Vector3, dot = false): boolean => {
+    if (!op.alive || (op.invuln > 0 && !dot)) return false;
+    if (DEV_GOD && op.isPlayer) amount *= 0.02;
     const armor = op.isPlayer ? runtimeMods().armorFlat : 0;
     let reduced = Math.max(1, amount * (1 - Math.min(0.55, armor / 120)) * (1 - heroBuffs(op).armor));
     if (op.isPlayer && skills.shield > 0) {
@@ -649,6 +886,18 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     }
     op.hp -= reduced;
+    if (dot) {
+      op.healthBar.setRatio(Math.max(0, op.hp) / Math.max(1, op.maxHp));
+      op.healthBar.setVisible(true);
+      fx.spawnDamageNumber(op.root.position, reduced, { style: 'player' });
+      if (op.hp <= 0) {
+        op.hp = 0;
+        op.alive = false;
+        setOperativeDead(op, true);
+        op.healthBar.setVisible(false);
+      }
+      return true;
+    }
     op.invuln = 0.7;
     bumpOperativeAnim(op, 'hit');
     const maxHp = Math.max(1, op.maxHp);
@@ -679,7 +928,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (op.hp <= 0) {
       op.hp = 0;
       op.alive = false;
-      op.root.visible = false;
+      setOperativeDead(op, true);
+      breakGrab(op);
+      if (op.isPlayer) runStats.downs += 1;
       op.healthBar.setVisible(false);
     }
     return true;
@@ -713,8 +964,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       addItem(inventory, item.defId, 1);
     }
     scene.remove(item.mesh);
-    item.mesh.geometry.dispose();
-    (item.mesh.material as THREE.Material).dispose();
+    notePickup(def.name, def.description);
     audio.playGem();
   };
 
@@ -758,18 +1008,6 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     return best;
   };
 
-  const unlockedList = () => listUnlockedWeaponDefs(progress);
-
-  const equipUnlockedByStep = (delta: number) => {
-    const list = unlockedList();
-    if (list.length === 0) return;
-    const idx = list.findIndex((w) => w.id === player.weapon.id);
-    const next = list[(idx + delta + list.length) % list.length]!;
-    setOperativeWeaponById(player, next.id);
-    setActiveClassForWeapon(progress, next.id);
-    audio.playWeaponSwitch();
-  };
-
   const equipSlot = (i: number) => {
     if (i < 0 || i >= weaponSlots.length || !player.alive) return;
     if (i === activeSlot && weaponVariantId(player.weapon) === weaponSlots[i]) return;
@@ -782,13 +1020,6 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const cycleSlot = (delta: number) => {
     if (weaponSlots.length < 2) return;
     equipSlot((activeSlot + delta + weaponSlots.length) % weaponSlots.length);
-  };
-
-  const equipWeaponId = (id: WeaponId) => {
-    if (!progress.unlockedWeapons.has(id)) return;
-    setOperativeWeaponById(player, id);
-    setActiveClassForWeapon(progress, id);
-    audio.playWeaponSwitch();
   };
 
   // ---- weapon impact effects (per-variant fx) ----
@@ -1029,7 +1260,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     revive: (op) => {
       op.alive = true;
       op.hp = op.maxHp * 0.5;
-      op.root.visible = true;
+      setOperativeDead(op, false);
       op.invuln = 1.5;
       op.healthBar.setVisible(true);
       op.healthBar.setRatio(op.hp / op.maxHp);
@@ -1043,14 +1274,59 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     },
     anim: (op, kind) => bumpOperativeAnim(op, kind),
     sfx: (kind) => {
-      if (kind === 'boom') audio.playGunshot('shotgun', 0);
+      if (kind === 'boom') audio.playSample('s_explosion', { gain: 0.75, rate: 0.9 + Math.random() * 0.25 });
       else if (kind === 'zap') audio.playHit('crit');
       else if (kind === 'throw') audio.playWeaponSwitch();
       else audio.playAbility();
     },
+    vfx: skillFx,
     powerMult: () => progress.abilityPowerMult,
     aoeMult: () => progress.mods.aoeRadiusMult,
     cdrMult: () => 1 - Math.min(0.6, progress.mods.abilityCdr),
+  });
+
+  // YAZS run skills (auto-cast, picked on level-up)
+  progress.runSkills = createRunSkillState(HERO_START_SKILL[hero.id]);
+  progress.runSkills.hero = hero.id;
+  {
+    // dev: ?skills=saws:5,laser:3,meteor:5e  (e = evolved)
+    const dev = new URLSearchParams(location.search).get('skills');
+    if (dev) {
+      for (const part of dev.split(',')) {
+        const [id, lv] = part.split(':');
+        if (!id || !(id in RUN_SKILLS)) continue;
+        progress.runSkills.skills.set(id as RunSkillId, Math.min(5, parseInt(lv ?? '1', 10) || 1));
+        if (lv?.endsWith('e')) progress.runSkills.evolved.add(id as RunSkillId);
+      }
+    }
+  }
+  const runSkills = new RunSkillRuntime({
+    scene,
+    fx: skillFx,
+    player,
+    zombies,
+    state: progress.runSkills,
+    damageZombie: (z, dmg, at, dir) => damageZombie(z, dmg, at, dir, { weaponId: player.weapon.id, fromPlayer: true }),
+    shake: (a) => {
+      shake = Math.max(shake, a);
+    },
+    sfx: (kind) => {
+      if (kind === 'boom') audio.playSample('s_explosion', { gain: 0.75, rate: 0.9 + Math.random() * 0.25 });
+      else if (kind === 'zap') audio.playHit('crit');
+      else if (kind === 'throw') audio.playWeaponSwitch();
+      else if (kind === 'shot') audio.playGunshot('smg', 0);
+    },
+    powerMult: () => progress.abilityPowerMult,
+    sample: (key, o) => audio.playSample(key, o),
+    radio: () => operativeAction(player, 'radio'),
+    say: (text, who) => {
+      subtitle = { text, who, until: performance.now() + 3200 };
+    },
+    supplyLanded: (at) => {
+      powerUps.spawn('heal', at.x, at.z);
+      const extra = (['damage', 'firerate', 'speed'] as const)[Math.floor(Math.random() * 3)]!;
+      powerUps.spawn(extra, at.x + 1.6, at.z + 0.8);
+    },
   });
 
   const castHero = (slot: AbilitySlot) => {
@@ -1180,6 +1456,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (input.keys.KeyG && !prevKeys.KeyG) {
       if (beginReload(player)) audio.playReload();
     }
+    // H: radio fire support on the cursor
+    if (input.keys.KeyH && !prevKeys.KeyH && player.alive) {
+      const r = runSkills.callSupport(mouseAim);
+      if (r === 'cooldown') notePickup('Destek hazır değil', 'Telsiz hattı meşgul — süre dolunca tekrar dene');
+      else if (r === 'notarget') notePickup('Hedef yok', 'İmleci zombilerin üstüne getirip H tuşuna bas');
+    }
+    prevKeys.KeyH = !!input.keys.KeyH;
     if (input.keys.KeyT && !prevKeys.KeyT) showSkillTree = !showSkillTree;
     if (input.keys.KeyI && !prevKeys.KeyI) showInventory = !showInventory;
     // Quick-use: Z medkit, X shield, C rage stim
@@ -1209,12 +1492,68 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
   setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
 
+  // Stop Ctrl+W (zoom is on Ctrl+wheel) from closing the tab mid-run: the browser
+  // asks first, and in fullscreen the Keyboard Lock API swallows the shortcut.
+  const onBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (runOver) return;
+    e.preventDefault();
+    e.returnValue = '';
+  };
+  window.addEventListener('beforeunload', onBeforeUnload);
+  const kb = (navigator as Navigator & { keyboard?: { lock?: (k?: string[]) => Promise<void>; unlock?: () => void } }).keyboard;
+  const onFsChange = () => {
+    if (document.fullscreenElement) void kb?.lock?.(['KeyW', 'KeyT', 'KeyN', 'KeyQ', 'KeyR', 'Tab']).catch(() => undefined);
+    else kb?.unlock?.();
+  };
+  document.addEventListener('fullscreenchange', onFsChange);
+  onFsChange();
+  const _ind = new THREE.Vector3();
   const getHudState = (): ArenaHudState => {
     const cls = getActiveClass(progress);
     const cdr = Math.min(0.6, progress.mods.abilityCdr);
     const maxCd = cls.ability.cooldown * (1 - cdr);
+    const nowMs = performance.now();
+    // ---- indicators
+    const srcs: IndicatorSrc[] = [];
+    for (const sl of rescueSlots) {
+      if (sl.status === 'active' && sl.captive) srcs.push({ pos: sl.captive.root.position, color: 0x3cff6a, icon: '✚', label: sl.template.name, timer: sl.timer, urgent: sl.timer < 12 });
+    }
+    srcs.push(...modeRt.indicators(), ...powerUps.indicators());
+    const cw = renderer.domElement.clientWidth || 1;
+    const ch = renderer.domElement.clientHeight || 1;
+    const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
+    const indicators = srcs.map((src) => {
+      _ind.copy(src.pos).setY(1.4).project(camera);
+      let x = (_ind.x * 0.5 + 0.5) * cw;
+      let y = (-_ind.y * 0.5 + 0.5) * ch;
+      if (_ind.z > 1) {
+        x = cw - x;
+        y = ch - y;
+      }
+      const m = 46;
+      const on = _ind.z <= 1 && x > m && x < cw - m && y > m + 40 && y < ch - m - 110;
+      const cx = cw / 2;
+      const cy = ch / 2;
+      const ang = Math.atan2(y - cy, x - cx);
+      if (!on) {
+        const dx = x - cx;
+        const dy = y - cy;
+        const k = Math.min((cw / 2 - m) / Math.max(1e-3, Math.abs(dx)), (ch / 2 - m - 50) / Math.max(1e-3, Math.abs(dy)));
+        x = cx + dx * k;
+        y = cy + dy * k;
+      }
+      const dist = Math.hypot(src.pos.x - player.root.position.x, src.pos.z - player.root.position.z);
+      return { x, y, ang, on, color: hex(src.color), icon: src.icon, label: src.label, timer: src.timer, urgent: src.urgent, dist };
+    });
+    const buffs = powerUps.activeList(simTime).map((b) => ({ icon: b.def.icon, name: b.def.name, left: b.left, color: hex(b.def.color) }));
     return {
+      support: runSkills.supportHud(),
+      subtitle: subtitle && subtitle.until > nowMs ? { text: subtitle.text, who: subtitle.who } : null,
+      indicators,
+      buffs,
+      pickups: pickupLog.filter((p) => nowMs - p.at < 3500).map((p) => ({ name: p.name, desc: p.desc, age: (nowMs - p.at) / 1000 })),
       heroId: hero.id,
+      runSkills: runSkills.hud(),
       heroAbilities: heroRt
         ? (['q', 'e', 'r'] as AbilitySlot[]).map((sl) => ({
             slot: sl.toUpperCase(),
@@ -1228,7 +1567,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         : [],
       weaponSlots: weaponSlots.map((v, i) => {
         const w = weaponByVariant(v);
-        return { name: w.name, active: i === activeSlot, tier: w.tier ?? 1 };
+        return { name: w.name, active: i === activeSlot, tier: w.tier ?? 1, variant: v };
       }),
       weapon: player.weapon.variant ? player.weapon.name : weaponDisplayName(progress, player.weapon.id),
       weaponId: player.weapon.id,
@@ -1249,7 +1588,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       pausedForUpgrade: progress.pendingPicks > 0,
       paused: userPaused && progress.pendingPicks <= 0 && player.alive,
       choices: [...progress.choices],
-      unlockedWeapons: unlockedList().map((w) => ({ id: w.id, label: weaponUnlockLabel(w.id) })),
+      unlockedWeapons: listUnlockedWeaponDefs(progress).map((w) => ({ id: w.id, label: weaponUnlockLabel(w.id) })),
       modsSummary: [
         `DMG x${progress.mods.damageMult.toFixed(2)}`,
         `FR x${progress.mods.fireRateMult.toFixed(2)}`,
@@ -1303,7 +1642,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       reloadProgress: player.reloading
         ? 1 - player.reloadTimer / Math.max(0.01, player.weapon.reloadTime)
         : 1,
-      mission: missionHud,
+      mission: modeRt.hud(missionHud),
+      runOver,
+      revivesLeft: modeRt.revivesLeft,
+      runStats: snapshotRunStats(),
       maxSquad: MAX_SQUAD_SIZE,
       rerolls: progress.rerolls,
       lockdowns: progress.lockdowns,
@@ -1317,12 +1659,196 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     };
   };
 
+  let frameEma = 16;
+  let slowFor = 0;
+  let fastFor = 0;
+  let frameNo = 0;
+  const applyQuality = (q: number) => {
+    quality = q;
+    try {
+      localStorage.setItem('protocol-z-quality', String(q));
+    } catch {
+      /* ignore */
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY_DPR[q]!));
+    setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
+    renderer.shadowMap.autoUpdate = q < 2;
+    // keep shadows enabled (toggling recompiles every material); just make them cheap
+    const size = q === 0 ? 2048 : q >= 3 ? 512 : 1024;
+    if (sun.shadow.mapSize.x !== size) {
+      sun.shadow.mapSize.setScalar(size);
+      sun.shadow.map?.dispose();
+      sun.shadow.map = null;
+    }
+  };
+  const tuneQuality = (frameMs: number) => {
+    frameEma += (Math.min(100, frameMs) - frameEma) * 0.05;
+    if (frameEma > 24) {
+      slowFor += frameMs / 1000;
+      fastFor = 0;
+      if (slowFor > 2.5 && quality < 3) {
+        applyQuality(quality + 1);
+        slowFor = 0;
+        frameEma = 18;
+      }
+    } else if (frameEma < 11) {
+      fastFor += frameMs / 1000;
+      slowFor = 0;
+      if (fastFor > 10 && quality > 1) {
+        applyQuality(quality - 1);
+        fastFor = 0;
+      }
+    } else {
+      slowFor = Math.max(0, slowFor - frameMs / 2000);
+      fastFor = 0;
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Warm-up: compile every shader, upload every texture/geometry and build the
+  // shadow programs behind a loading screen, so nothing hitches the first time
+  // a new area, zombie type, mutant, objective or effect shows up.
+  // -------------------------------------------------------------------------
+  let warming = true;
+  const warmEl = document.createElement('div');
+  warmEl.className = 'pzWarm';
+  warmEl.innerHTML = '<div><b>BÖLGE HAZIRLANIYOR</b><small>Grafikler önbelleğe alınıyor…</small><i></i></div>';
+  container.appendChild(warmEl);
+  const warmZombies: Array<[string, Awaited<ReturnType<typeof createVrmAvatar>>]> = [];
+  const warmKeep = new THREE.Group();
+  warmKeep.name = 'warmKeep';
+  scene.add(warmKeep);
+  const initAllTextures = (root: THREE.Object3D) => {
+    const seen = new Set<THREE.Texture>();
+    root.traverse((o) => {
+      const mats = (o as THREE.Mesh).material;
+      if (!mats) return;
+      for (const m of Array.isArray(mats) ? mats : [mats]) {
+        for (const v of Object.values(m as unknown as Record<string, unknown>)) {
+          if (v instanceof THREE.Texture && !seen.has(v)) {
+            seen.add(v);
+            try {
+              renderer.initTexture(v);
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      }
+    });
+  };
+  const overviewRender = () => {
+    // one frame that sees the whole map: uploads all geometry and shadow programs
+    const B = ARENA_BOUND + 10;
+    const ortho = new THREE.OrthographicCamera(-B, B, B, -B, 1, 400);
+    ortho.position.set(0, 150, 0.01);
+    ortho.lookAt(0, 0, 0);
+    renderer.shadowMap.needsUpdate = true;
+    renderer.render(scene, ortho);
+  };
+  void (async () => {
+    const t0 = performance.now();
+    try {
+      await Promise.race([map.ready, new Promise((r) => setTimeout(r, 15000))]);
+      await preloadAvatars();
+      // one live instance of every zombie model + type (kept hidden afterwards so
+      // their GPU programs/textures stay resident)
+      const jobs: Promise<unknown>[] = [];
+      let k = 0;
+      // two of each kind so the first spawns reuse ready-made avatars
+      for (const [kind, look] of Object.entries(ZOMBIE_LOOKS)) {
+        for (const id of [...look.pool, ...look.pool].slice(0, Math.max(2, look.pool.length))) {
+          const i = k++;
+          jobs.push(
+            createVrmAvatar({ url: `/avatars/rb/zombie_${id}.glb`, accentColor: 0x6b3f2a, style: 'zombie', targetHeight: 2, showRing: false, zombieKind: kind as ZombieVisual['kind'] })
+              .then((a) => {
+                a.root.position.set(player.root.position.x + (i % 6) * 1.5 - 4, 0, player.root.position.z + Math.floor(i / 6) * 1.5 + 3);
+                warmKeep.add(a.root);
+                warmZombies.push([kind, a]);
+              })
+              .catch(() => undefined),
+          );
+        }
+      }
+      // squad / captive operatives (rescue objectives)
+      allAvatarUrls().forEach((url, i) => {
+        jobs.push(
+          createVrmAvatar({ url, accentColor: 0x888888, style: 'operative', showRing: false })
+            .then((a) => {
+              a.root.position.set(player.root.position.x + i * 1.2 - 4, 0, player.root.position.z - 3);
+              warmKeep.add(a.root);
+            })
+            .catch(() => undefined),
+        );
+      });
+      jobs.push(
+        createHookerModel(2.75)
+          .then((h) => {
+            h.root.position.set(player.root.position.x + 5, 0, player.root.position.z + 5);
+            h.anim.update(0.1, 0);
+            warmKeep.add(h.root);
+          })
+          .catch(() => undefined),
+      );
+      await Promise.all(jobs);
+      // effects: fire each primitive once so their materials exist
+      const at = player.root.position.clone().add(new THREE.Vector3(0, 0, 4));
+      skillFx.explosion(at, 2);
+      skillFx.gas(at.x, at.z, 1);
+      skillFx.vapor(at, 1);
+      skillFx.dustRing(at, 2);
+      skillFx.debris(at, 4, 1);
+      skillFx.tracer(player.root.position.clone().setY(1.3), at.clone().setY(1));
+      skillFx.bolt(player.root.position.clone().setY(1.3), at.clone().setY(1), 0xd8e6ff, 0.06, 0.1, 6);
+      skillFx.flame(at.x, at.z, 1);
+      fx.spawnBloodBurst(at, 1, 0x7a1010);
+      fx.spawnHitRing(at, 0x9a2a1e, 0.1);
+      fx.spawnWarnRing(at, 2, 0x9a2a1e, 0.5);
+      for (const m of runSkills.warmMaterials()) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01), m);
+        mesh.position.copy(at);
+        warmKeep.add(mesh);
+      }
+      await renderer.compileAsync(scene, camera);
+      initAllTextures(scene);
+      overviewRender();
+      renderer.render(scene, camera);
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+    } catch (err) {
+      console.warn('[arena] warm-up failed', err);
+    } finally {
+      // flush the test effects, hide the warm instances
+      skillFx.update(20);
+      fx.update(20);
+      for (const c of warmKeep.children) c.visible = false;
+      for (const [kind, a] of warmZombies) {
+        a.root.position.set(0, 0, 0);
+        poolZombieAvatar(kind, a);
+      }
+      warmZombies.length = 0;
+      warming = false;
+      warmEl.classList.add('off');
+      setTimeout(() => warmEl.remove(), 600);
+      lastT = performance.now();
+      console.info(`[arena] warm-up ${(performance.now() - t0).toFixed(0)} ms`);
+    }
+  })();
+
   const animate = (now: number) => {
-    const rawDt = Math.min(0.05, (now - lastT) / 1000);
+    if (warming) {
+      lastT = now;
+      return;
+    }
+    const frameMs = now - lastT;
+    const rawDt = Math.min(0.05, frameMs / 1000);
     lastT = now;
+    frameNo++;
+    if (!document.hidden && frameMs > 0 && frameMs < 500) tuneQuality(frameMs);
+    // low quality: refresh the sun shadow map every other frame
+    if (quality >= 2) renderer.shadowMap.needsUpdate = frameNo % 2 === 0;
     const upgrading = progress.pendingPicks > 0;
     if (upgrading || !player.alive) userPaused = false;
-    const frozen = upgrading || userPaused;
+    const frozen = upgrading || userPaused || !!runOver;
     const dt = frozen ? 0 : rawDt;
     if (!frozen) simTime += dt;
     const t = simTime;
@@ -1380,7 +1906,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (waveTimer > 45) {
       waveTimer = 0;
       wave += 1;
-      spawnBudget = clientWaveSpawnBudget(wave);
+      spawnBudget = Math.round(clientWaveSpawnBudget(wave) * diff.count * modeRt.spawnMul);
       shake = Math.max(shake, 0.3);
       const wk = waveKindForLevel(wave);
       if (wk === 'horde') {
@@ -1396,12 +1922,44 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
     if (spawnBudget > 0 && zombies.length < MAX_ZOMBIES) {
       spawnBudget -= 1;
-      spawnZombie(pickWaveSpawnKind(wave, spawnBudget));
+      const kind = pickWaveSpawnKind(wave, spawnBudget);
+      if (mission.mode === 'defense' && Math.random() < 0.45) {
+        const a = Math.random() * Math.PI * 2;
+        const c = map.anchors.core;
+        spawnZombie(kind, true, { x: c.x + Math.cos(a) * 32, z: c.z + Math.sin(a) * 32 });
+      } else spawnZombie(kind);
+    }
+    modeRt.update(dt, kills);
+    for (const kind of powerUps.update(dt, simTime, player.root.position, () => {
+      for (let tries = 0; tries < 8; tries++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = 14 + Math.random() * 16;
+        const x = THREE.MathUtils.clamp(player.root.position.x + Math.cos(a) * d, -ARENA_BOUND + 4, ARENA_BOUND - 4);
+        const z = THREE.MathUtils.clamp(player.root.position.z + Math.sin(a) * d, -ARENA_BOUND + 4, ARENA_BOUND - 4);
+        const r = resolveCircleAabbs(x, z, 1.2, colliders);
+        if (Math.abs(r.x - x) + Math.abs(r.z - z) < 0.05) return { x, z };
+      }
+      return null;
+    })) {
+      const def = POWER_DEFS[kind];
+      notePickup(def.name, def.desc);
+      audio.playLevelUp();
+      if (kind === 'heal') {
+        for (const op of squad) {
+          if (!op.alive) continue;
+          op.hp = op.maxHp;
+          op.healthBar.setRatio(1);
+        }
+      } else if (kind === 'magnet') magnetAllUntil = simTime + 4;
+    }
+    if (modeRt.outcome && !runOver) {
+      runOver = modeRt.outcome;
+      runStats.won = runOver.won;
     }
 
     lodFrame += 1;
     beginZombieLodFrame(12);
-    beginZombieVrmAttachBudget(2);
+    beginZombieVrmAttachBudget(1);
     rebuildZombieHash();
 
     for (const op of squad) {
@@ -1419,7 +1977,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           ally.hp = Math.min(ally.maxHp, ally.hp + dt * 25);
           if (ally.hp >= ally.maxHp * 0.35) {
             ally.alive = true;
-            ally.root.visible = true;
+            setOperativeDead(ally, false);
             ally.invuln = 1.2;
             ally.healthBar.setVisible(true);
           }
@@ -1427,11 +1985,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     } else {
       reviveTimer += dt;
-      if (reviveTimer > 4) {
+      if (reviveTimer > 4 && !runOver && !modeRt.tryRevive()) {
+        modeRt.fail('Tüm dirilme hakların bitti.');
+      } else if (reviveTimer > 4 && !runOver) {
         reviveTimer = 0;
         player.alive = true;
         player.hp = player.maxHp * 0.45;
-        player.root.visible = true;
+        setOperativeDead(player, false);
         player.invuln = 2;
         player.healthBar.setVisible(true);
         player.healthBar.setRatio(player.hp / player.maxHp);
@@ -1440,7 +2000,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
 
     const moveMul = runtimeMods().moveSpeedMult * (isRaging(skills, simTime) ? 1.12 : 1) * heroBuffs(player).move;
     const axis = input.moveAxis();
-    const moving = player.alive && Math.hypot(axis.x, axis.z) > 0.01;
+    const moving = player.alive && Math.hypot(axis.x, axis.z) > 0.01 && !operativePinned(player, nowSec);
     if (moving) {
       applyMoveWithCollision(
         player.root,
@@ -1470,8 +2030,6 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
       if (item.life <= 0) {
         scene.remove(item.mesh);
-        item.mesh.geometry.dispose();
-        (item.mesh.material as THREE.Material).dispose();
         worldItems.splice(i, 1);
       }
     }
@@ -1528,7 +2086,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       tryAutoFire(ally, null);
     }
 
-    const nowSec = performance.now() / 1000;
+    nowSec = performance.now() / 1000;
+    zombieCtx.nowSec = nowSec;
     for (const op of squad) tickOperativeSlow(op, nowSec);
 
     const statusKills: ZombieVisual[] = [];
@@ -1570,6 +2129,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         continue;
       }
 
+      tickZombiePassive(z, dt, bestD, zombieCtx);
       tmp.copy(targetOp.root.position).sub(z.root.position);
       tmp.y = 0;
       let dist = tmp.length();
@@ -1586,86 +2146,66 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
 
       const engageRange = engageRangeFor(z.kind);
-      const chasing = dist > engageRange && z.attackAnim <= 0;
+      const spawning = ((z.root.userData.spawnUntil as number | undefined) ?? 0) > simTime;
       const zPan = Math.max(-1, Math.min(1, (z.root.position.x - player.root.position.x) / 24));
-
-      if (chasing) {
-        tmp.normalize();
-        applyMoveWithCollision(z.root, tmp.x * z.speed * dt, tmp.z * z.speed * dt, ZOMBIE_RADIUS);
-        faceToward(z.root, targetOp.root.position.x, targetOp.root.position.z);
-        if (Math.random() < dt * moanChanceFor(z.kind)) audio.playZombie(z.kind, 'idle', zPan);
-      } else if (z.attackAnim <= 0 && z.attackCooldown <= 0) {
-        faceToward(z.root, targetOp.root.position.x, targetOp.root.position.z);
-        const skill = chooseZombieSkill(z);
-        beginZombieAttack(z, skill);
-        z.attackDuration = skillAttackDuration(skill);
-        z.attackCooldown = skillAttackDuration(skill) + 0.15;
-        z.skillCooldown = skillCooldownAfter(skill, z.kind);
+      const startAttack = (skill: ReturnType<typeof chooseZombieSkill>) => {
+        faceToward(z.root, targetOp!.root.position.x, targetOp!.root.position.z);
+        const seg = beginZombieAttack(z, skill, targetOp!.root.position);
+        queueZombieAnim(z, { kind: 'act', seg, dur: z.attackDuration, priority: 2 });
         telegraphZombieSkill(z, fx);
+        if (skill === 'hook') hookTelegraph(z, scene);
         audio.playZombie(z.kind, 'attack', zPan);
+      };
+      let chasing = false;
+      if (spawning) {
+        // climbing out of the ground
+      } else if (z.attackAnim <= 0) {
+        const ranged = rangedSkillFor(z, dist);
+        if (ranged) startAttack(ranged);
+        else if (dist > engageRange) {
+          chasing = true;
+          tmp.normalize();
+          const sp = z.speed * frenzyMul(z, nowSec);
+          applyMoveWithCollision(z.root, tmp.x * sp * dt, tmp.z * sp * dt, ZOMBIE_RADIUS);
+          faceToward(z.root, targetOp.root.position.x, targetOp.root.position.z);
+          if (Math.random() < dt * moanChanceFor(z.kind)) audio.playZombie(z.kind, 'idle', zPan);
+        } else if (z.attackCooldown <= 0) startAttack(chooseZombieSkill(z));
       }
-
-      // Impact frame mid-animation
-      if (z.attackAnim > 0 && !z.attackImpactDone && z.attackAnim >= skillImpactAt(z.activeSkill)) {
-        z.attackImpactDone = true;
-        applyZombieSkillImpact({
-          z,
-          target: targetOp,
-          squad,
-          scene,
-          spits: acidSpits,
-          fx,
-          damageOperative,
-        });
-        if (z.activeSkill === 'slam') {
-          shake = Math.max(shake, z.kind === 'boss' ? 0.55 : 0.38);
-        } else if (z.activeSkill === 'roar') {
-          shake = Math.max(shake, 0.3);
-        } else if (z.activeSkill === 'shriek') {
-          shake = Math.max(shake, 0.34);
+      if (z.attackAnim > 0) {
+        if (z.activeSkill !== 'charge' && z.activeSkill !== 'leap' && z.attackAnim < 0.4) {
+          faceToward(z.root, targetOp.root.position.x, targetOp.root.position.z);
+        }
+        tickZombieAttack(z, targetOp, dt, zombieCtx);
+        if (z.hp <= 0) {
+          statusKills.push(z);
+          continue;
         }
       }
 
       sanitizeObject3D(z.root);
       const lod = zombieVrmLod(z, player.root.position.x, player.root.position.z, lodFrame);
       if (lod === 'full' || lod === 'reduced') requestZombieVrm(z);
-      animateZombieWalk(z, t, dt, chasing || z.activeSkill === 'lunge', lod);
+      animateZombieWalk(z, t, dt, chasing, lod);
     }
     for (const z of statusKills) killZombie(z);
 
     rebuildZombieHash();
 
-    for (let i = acidSpits.length - 1; i >= 0; i--) {
-      const spit = acidSpits[i]!;
-      spit.life -= dt;
-      spit.mesh.position.addScaledVector(spit.vel, dt);
-      spit.mesh.position.y = Math.max(0.35, spit.mesh.position.y - dt * 2.5);
-      let hit = false;
-      for (const op of squad) {
-        if (!op.alive) continue;
-        if (spit.mesh.position.distanceToSquared(tmp.copy(op.root.position).setY(1.1)) < 0.55 * 0.55) {
-          damageOperative(op, spit.damage, spit.mesh.position);
-          fx.spawnHitRing(op.root.position, 0x84cc16);
-          hit = true;
-          break;
-        }
-      }
-      if (hit || spit.life <= 0 || spit.mesh.position.y <= 0.4) {
-        if (!hit && spit.mesh.position.y <= 0.45) {
-          // Acid puddle tick on ground
-          fx.spawnHitRing(spit.mesh.position, 0x65a30d);
-          for (const op of squad) {
-            if (!op.alive) continue;
-            if (op.root.position.distanceTo(spit.mesh.position) < 1.6) {
-              damageOperative(op, spit.damage * 0.45, spit.mesh.position);
-            }
-          }
-        }
-        scene.remove(spit.mesh);
-        (spit.mesh.material as THREE.Material).dispose();
-        acidSpits.splice(i, 1);
-      }
-    }
+    tickAcidSpits(acidSpits, dt, squad, hazards, (op, amount, from) => void damageOperative(op, amount, from), fx);
+    hazards.tick(dt, squad, (op, amount) => void damageOperative(op, amount, op.root.position, true), nowSec);
+    tickHooks(dt, {
+      scene,
+      squad,
+      damageOperative: (op, amount, from) => damageOperative(op, amount, from),
+      move: applyMoveWithCollision,
+      onHooked: (op) => {
+        operativeAction(op, 'knockdown');
+        breakGrab(op);
+        if (op.isPlayer) shake = Math.max(shake, 0.4);
+      },
+      blood: (p) => fx.spawnBloodBurst(p, 1, 0x991111),
+    });
+    tickZombieCorpses(corpses, dt);
 
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i]!;
@@ -1689,7 +2229,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
 
       const blocked =
         b.pierce <= 0 &&
-        colliders.some((box) => {
+        nearbyBoxes(b.mesh.position.x, b.mesh.position.z, 0.5, colliders).some((box) => {
           const p = b.mesh.position;
           return p.x >= box.minX && p.x <= box.maxX && p.z >= box.minZ && p.z <= box.maxZ && p.y < 3.5;
         });
@@ -1718,6 +2258,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
 
     abilityRuntime.update(dt, zombies, damageZombie);
     heroRt?.update(dt, simTime);
+    runSkills.update(dt, moving);
     for (let i = beams.length - 1; i >= 0; i--) {
       const bm = beams[i]!;
       bm.life -= dt;
@@ -1731,14 +2272,17 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     for (let i = gems.length - 1; i >= 0; i--) {
       const gem = gems[i]!;
       gem.life -= dt;
-      gem.mesh.rotation.y += dt * 3.5;
-      gem.mesh.position.y = 0.45 + Math.sin(t * 4 + i) * 0.12;
+      gem.mesh.rotation.y += dt * 0.6;
+      gem.mesh.position.y = 0.3;
+      if (gem.life < 4) gem.mesh.visible = Math.sin(gem.life * 12) > -0.3;
       if (player.alive) {
         const d = gem.mesh.position.distanceTo(player.root.position);
-        if (d < 5 && d > 0.05) {
+        const vac = magnetAllUntil > simTime;
+        if ((d < 5 || vac) && d > 0.05) {
+          if (vac) gem.life = Math.max(gem.life, 5);
           tmp.copy(player.root.position).sub(gem.mesh.position);
           if (tmp.lengthSq() > 1e-6) {
-            tmp.normalize().multiplyScalar(dt * (8 + (5 - d) * 3));
+            tmp.normalize().multiplyScalar(dt * (vac ? 30 : 8 + (5 - d) * 3));
             gem.mesh.position.add(tmp);
           }
         }
@@ -1746,14 +2290,16 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           gainXp(gem.xp * (1 + Math.min(combo, 10) * 0.05));
           audio.playGem();
           scene.remove(gem.mesh);
-          gem.mesh.geometry.dispose();
+          if (!sampleHintShown) {
+            sampleHintShown = true;
+            notePickup('Zombi Numunesi', 'Tecrübe verir · bar dolunca seviye atlar, yeni yetenek seçersin');
+          }
           gems.splice(i, 1);
           continue;
         }
       }
       if (gem.life <= 0) {
         scene.remove(gem.mesh);
-        gem.mesh.geometry.dispose();
         gems.splice(i, 1);
       }
     }
@@ -1783,8 +2329,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
 
     fx.update(dt);
+    skillFx.update(dt);
     billboardHealthBars(healthBars, camera);
 
+    map.update(dt, t, player.root.position);
     map.core.rotation.y += dt * 0.65;
     map.ring.rotation.z += dt * 0.45;
     map.ring2.rotation.z -= dt * 0.3;
@@ -1806,7 +2354,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     pendingMissionKill = false;
     pendingMissionRescue = false;
 
-    sun.position.set(player.root.position.x + 28, 42, player.root.position.z + 22);
+    sun.position.set(player.root.position.x + sunOff.x, sunOff.y, player.root.position.z + sunOff.z);
     sun.target.position.copy(player.root.position);
     sun.target.updateMatrixWorld();
     renderer.shadowMap.needsUpdate = true;
@@ -1825,7 +2373,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     camera.lookAt(camTarget);
 
     // Soft cap ambient spawns — avoid hitch spikes
-    const targetZ = 16 + Math.min(20, wave * 2);
+    const targetZ = Math.round((16 + Math.min(20, wave * 2)) * diff.count * Math.min(1.8, modeRt.spawnMul));
     if (zombies.length < targetZ && Math.random() < dt * 0.9) {
       const r = Math.random();
       spawnZombie(
@@ -1890,6 +2438,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       audio.setBusLevel(bus, value);
     },
     dispose: () => {
+      clearHooks();
+      powerUps.dispose();
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('fullscreenchange', onFsChange);
       for (const z of zombies) disposeZombieVrm(z);
       zombies.length = 0;
       input.dispose();
@@ -1897,6 +2449,12 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       fx.dispose();
       abilityRuntime.dispose();
       heroRt?.dispose();
+      runSkills.dispose();
+      modeRt.dispose();
+      map.dispose();
+      skillFx.dispose();
+      hazards.dispose();
+      for (const c of corpses) c.avatar.dispose();
       container.removeEventListener('pointerdown', onClick);
       disposeMaterialTextures();
       renderer.dispose();

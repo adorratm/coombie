@@ -1,4 +1,4 @@
-/** Mission chapters, map sectors, and run objectives for PROTOCOL-Z. */
+/** Mission chapters, map sectors, and run objectives for COOMBIE. */
 
 export interface MissionSector {
   id: string;

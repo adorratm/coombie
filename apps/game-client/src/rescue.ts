@@ -74,9 +74,7 @@ function makeBeacon(color: number): THREE.Group {
   pulse.rotation.x = -Math.PI / 2;
   pulse.position.y = 0.07;
   pulse.name = 'pulse';
-  const light = new THREE.PointLight(color, 2.2, 16);
-  light.position.y = 2.2;
-  g.add(ring, pulse, light);
+  g.add(ring, pulse);
   return g;
 }
 

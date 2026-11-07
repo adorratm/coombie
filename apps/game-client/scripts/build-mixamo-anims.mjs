@@ -51,7 +51,28 @@ const CLIP_IDS = {
 };
 
 /** Clips the game plays once (no loop, no root strip of vertical motion). */
-const ONE_SHOT = new Set(['fire', 'reload', 'hit', 'ability', 'jump', 'turnLeft', 'turnRight', 'attack', 'scream', 'death', 'slam']);
+const ONE_SHOT = new Set(['fire', 'reload', 'hit', 'ability', 'jump', 'turnLeft', 'turnRight', 'attack', 'scream', 'death', 'slam',
+  'deathA', 'deathB', 'deathC', 'death2', 'bite', 'neckBite', 'punch', 'headbutt', 'kick', 'hit2', 'stumble', 'standUp', 'mSwipe', 'mJump', 'mRoar', 'mDeath',
+  'castThrow', 'castMelee', 'castShove', 'castRoll', 'kneelDown', 'kneelUp', 'impactBig', 'knockdown', 'deathD', 'deathE', 'castKick', 'castShout', 'radioCall', 'pointFwd', 'electrocuted', 'pocket']);
+
+/** Long source clips: keep only [start, end] seconds. */
+const TRIM = { radioCall: [1.0, 7.0], electrocuted: [0, 3.2], pocket: [0, 3.0] };
+
+function trimClip(c, start, end) {
+  const cut = (times, vals, stride) => {
+    const t2 = [];
+    const v2 = [];
+    for (let i = 0; i < times.length; i++) {
+      if (times[i] < start - 1e-4 || times[i] > end + 1e-4) continue;
+      t2.push(Math.round((times[i] - start) * 1e3) / 1e3);
+      for (let k = 0; k < stride; k++) v2.push(vals[i * stride + k]);
+    }
+    return [t2, v2];
+  };
+  for (const tr of Object.values(c.tracks)) [tr.t, tr.q] = cut(tr.t, tr.q, 4);
+  if (c.hipsPos) [c.hipsPos.t, c.hipsPos.v] = cut(c.hipsPos.t, c.hipsPos.v, 3);
+  c.duration = end - start;
+}
 
 const MIXAMO_TO_VRM = {
   mixamorigHips: 'hips',
@@ -120,6 +141,16 @@ function convertFile(file) {
   const asset = new FBXLoader().parse(ab, '');
   const clip = asset.animations.find((c) => c.name === 'mixamo.com') ?? asset.animations[0];
   if (!clip) throw new Error(`no animation in ${file}`);
+  // some libraries re-export Mixamo clips without the "mixamorig" prefix
+  if (!asset.getObjectByName('mixamorigHips') && asset.getObjectByName('Hips')) {
+    asset.traverse((o) => {
+      if (MIXAMO_TO_VRM[`mixamorig${o.name}`]) o.name = `mixamorig${o.name}`;
+    });
+    for (const t of clip.tracks) {
+      const [n, p] = t.name.split('.');
+      if (MIXAMO_TO_VRM[`mixamorig${n}`]) t.name = `mixamorig${n}.${p}`;
+    }
+  }
   asset.updateMatrixWorld(true);
 
   const hipsNode = asset.getObjectByName('mixamorigHips');
@@ -177,7 +208,7 @@ function main() {
       console.log(`skip  ${f} (character mesh, not an animation)`);
       continue;
     }
-    const id = CLIP_IDS[key] ?? slug(base);
+    const id = CLIP_IDS[key] ?? (/^[A-Za-z0-9]+$/.test(base) ? base : slug(base));
     let c;
     try {
       c = convertFile(path.join(inDir, f));
@@ -185,6 +216,7 @@ function main() {
       console.warn(`fail  ${f}: ${err.message}`);
       continue;
     }
+    if (TRIM[id]) trimClip(c, TRIM[id][0], Math.min(TRIM[id][1], c.duration));
     let speed = 0;
     if (c.hipsPos) {
       const v = c.hipsPos.v;

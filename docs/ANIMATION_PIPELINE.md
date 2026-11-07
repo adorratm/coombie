@@ -35,3 +35,26 @@ takılan "Unknown property type" hatası için tek satırlık yama (top-level nu
 - Zombi şablonu URL başına bir kez yüklenir; her zombi `SkeletonUtils.clone` kopyasıdır (geometri/doku paylaşılır).
 - Eski VRM'ler (`public/avatars/*.vrm`) artık yüklenmiyor; silinebilir (~200 MB).
 - İnceleme: `/anim-lab.html?zombies=1` (6 zombi türü), `?zombies=1&only=boss,acid`, `?grid=1` (8 operatör).
+
+## Zombie clip set (`public/anims/zombie.anim.json`)
+
+Built from `apps/game-client/assets-src/mixamo/zombie/*.fbx` (Mixamo "Scary Zombie Pack",
+"Not So Scary Zombie Pack" and "Creature NPC Pack"; files renamed to their clip ids):
+
+```
+node scripts/build-mixamo-anims.mjs assets-src/mixamo/zombie public/anims/zombie.anim.json
+```
+
+| Clip | Use |
+|---|---|
+| idle, idle2, walk, walk2, run, run2, crawl, crawlRun | locomotion (rate matched to ground speed) |
+| attack, punch, kick, headbutt, neckBite | claw / lunge / spit / grab one-shots |
+| scream | shriek, bloater swell |
+| hit, hit2 | hit reactions (low priority) |
+| standUp | climbing out of the ground on spawn |
+| death, death2, stumble | deaths (corpse lingers, then sinks) |
+| mIdle, mWalk, mRun, mSwipe, mJump, mRoar, mDeath | tank / boss (mutant) |
+
+`src/zombieAnim.ts` (`ZombieAnimator`) plays a base layer (idle ↔ locomotion) plus one
+full-body action slot; clip slices + hit frames are in `SEG`, and `zombieCombat.ts`
+lands damage on those frames. Operator deaths (`deathA`, `deathC`) are in the operator set.

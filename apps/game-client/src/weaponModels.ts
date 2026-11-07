@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { WeaponLook } from './weapons';
-import { metalMap, stdMat } from './materials';
+import { addSupportPoint, weaponMaterial } from './weaponAssets';
 
 /**
  * Procedural weapon models from a small `WeaponLook` recipe so 30 guns read as
@@ -27,17 +27,11 @@ const cyl = (r: number, len: number, seg = 10, r2 = r) => {
   return g;
 };
 
-const matCache = new Map<string, THREE.Material>();
 function mat(color: number, kind: 'metal' | 'poly' | 'glow' | 'glass'): THREE.Material {
-  const k = `${kind}${color}`;
-  let m = matCache.get(k);
-  if (m) return m;
-  if (kind === 'metal') m = stdMat(metalMap(), color, { metalness: 0.75, roughness: 0.34 });
-  else if (kind === 'poly') m = stdMat(null, color, { metalness: 0.1, roughness: 0.7 });
-  else if (kind === 'glass') m = stdMat(null, 0x0a1a22, { metalness: 0.9, roughness: 0.08, emissive: 0x3aa0ff, emissiveIntensity: 0.25 });
-  else m = new THREE.MeshBasicMaterial({ color, toneMapped: false });
-  matCache.set(k, m);
-  return m;
+  if (kind === 'metal') return weaponMaterial('metal', color, false);
+  if (kind === 'poly') return weaponMaterial('polymer', color, false);
+  if (kind === 'glass') return weaponMaterial('brass', 0xffffff);
+  return weaponMaterial('glow', color);
 }
 
 export function buildWeaponModel(look: WeaponLook, s: number): { group: THREE.Group; tip: THREE.Object3D } {
@@ -198,5 +192,7 @@ export function buildWeaponModel(look: WeaponLook, s: number): { group: THREE.Gr
 
   tip.position.set(0, 0.045 * s, muzzleZ * s);
   g.add(tip);
+  const melee = look.body === 'blade' || look.body === 'machete' || look.body === 'club' || look.body === 'axe';
+  if (!melee) addSupportPoint(g, tip.position, look.body === 'pistol' || look.body === 'revolver' ? 0 : look.body === 'minigun' ? 0.3 : 0.5, s);
   return { group: g, tip };
 }

@@ -9,6 +9,14 @@ export function createInput(target: Window | HTMLElement = window) {
 
   const onKeyDown = (e: KeyboardEvent) => {
     keys[e.code] = true;
+    // F11 → real (API) fullscreen so Keyboard Lock can catch Ctrl+W
+    if (e.code === 'F11') {
+      e.preventDefault();
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+      else void document.documentElement.requestFullscreen?.().catch(() => undefined);
+    }
+    // best effort: browsers that let pages cancel it won't close the tab
+    if (e.ctrlKey && (e.code === 'KeyW' || e.code === 'KeyQ')) e.preventDefault();
     if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+' || e.key === '=') {
       zoomDelta -= 0.12;
       e.preventDefault();

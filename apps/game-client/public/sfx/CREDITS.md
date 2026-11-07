@@ -5,9 +5,12 @@ No attribution is legally required; credits kept here for provenance.
 
 ## Weapons (field recordings)
 
-- **Source:** [Gunshot Sounds](https://opengameart.org/content/gunshot-sounds) by Tabasco  
-- **License:** CC0  
-- Files trimmed/normalized into `weapons/*.ogg` (pistol/rifle/smg/shotgun/sniper/lmg)
+- **Source:** [The Free Firearm Sound Library](https://opengameart.org/content/the-free-firearm-sound-library) (CC0), via github.com/petroulacl/fps-asset-kit
+- **License:** CC0
+- Trimmed to the first shot, mono, limited/normalized into `weapons/*.ogg`:
+  rifle = AR-15 (D_32P), smg = Carl Gustav M45 (G_31P), shotgun = Benelli Nova (O_21P),
+  sniper = Savage 10 .300 Blackout (T_27P), lmg = AK-47 (C_28P), pistol = Walther PPQ (X_39P)
+- Previous set: [Gunshot Sounds](https://opengameart.org/content/gunshot-sounds) by Tabasco (CC0)
 
 ## Melee whooshes
 

@@ -1,0 +1,145 @@
+{
+  "Zombie_Hooker.glb": {
+    "animations": [
+      "Idle",
+      "Walk",
+      "AttackMelee",
+      "HookWindup",
+      "HookCast",
+      "HookRecover",
+      "Hit",
+      "Death"
+    ],
+    "skins": 1,
+    "triangles": 13671,
+    "embedded_bytes": 2363260,
+    "vertex_colors": true
+  },
+  "Zombie_Hooker_LOD1.glb": {
+    "animations": [
+      "Idle",
+      "Walk",
+      "AttackMelee",
+      "HookWindup",
+      "HookCast",
+      "HookRecover",
+      "Hit",
+      "Death"
+    ],
+    "skins": 1,
+    "triangles": 5979,
+    "embedded_bytes": 1163292,
+    "vertex_colors": true
+  },
+  "HookTip.glb": {
+    "animations": [],
+    "skins": 0,
+    "triangles": 366,
+    "embedded_bytes": 35832,
+    "vertex_colors": true
+  },
+  "HookTether_Segment.glb": {
+    "animations": [],
+    "skins": 0,
+    "triangles": 206,
+    "embedded_bytes": 20988,
+    "vertex_colors": true
+  },
+  "HookWarning.glb": {
+    "animations": [],
+    "skins": 0,
+    "triangles": 164,
+    "embedded_bytes": 6640,
+    "vertex_colors": true
+  },
+  "blend_reopen": "PASS",
+  "import_bones": 24,
+  "import_skinned_meshes": 3,
+  "unweighted_vertices": 0,
+  "roundtrip_animations": {
+    "Death": {
+      "frame_range": [
+        0.8000000715255737,
+        44.0
+      ],
+      "motion_m": 3.50359,
+      "minimum_z_all_frames": 0.00894,
+      "loop_seam_m": null,
+      "passed": true
+    },
+    "Hit": {
+      "frame_range": [
+        0.8000000715255737,
+        15.199999809265137
+      ],
+      "motion_m": 0.5942,
+      "minimum_z_all_frames": 0.009,
+      "loop_seam_m": null,
+      "passed": true
+    },
+    "HookRecover": {
+      "frame_range": [
+        0.8000000715255737,
+        22.399999618530273
+      ],
+      "motion_m": 4.68163,
+      "minimum_z_all_frames": 0.009,
+      "loop_seam_m": null,
+      "passed": true
+    },
+    "HookCast": {
+      "frame_range": [
+        0.8000000715255737,
+        17.600000381469727
+      ],
+      "motion_m": 7.21513,
+      "minimum_z_all_frames": -0.00317,
+      "loop_seam_m": null,
+      "passed": true
+    },
+    "HookWindup": {
+      "frame_range": [
+        0.8000000715255737,
+        20.0
+      ],
+      "motion_m": 2.79996,
+      "minimum_z_all_frames": 0.00822,
+      "loop_seam_m": null,
+      "passed": true
+    },
+    "AttackMelee": {
+      "frame_range": [
+        0.8000000715255737,
+        24.799999237060547
+      ],
+      "motion_m": 2.05305,
+      "minimum_z_all_frames": 0.009,
+      "loop_seam_m": null,
+      "passed": true
+    },
+    "Walk": {
+      "frame_range": [
+        0.8000000715255737,
+        32.79999923706055
+      ],
+      "motion_m": 0.57238,
+      "minimum_z_all_frames": 0.00857,
+      "loop_seam_m": 0.0,
+      "passed": true
+    },
+    "Idle": {
+      "frame_range": [
+        0.8000000715255737,
+        48.79999923706055
+      ],
+      "motion_m": 0.12766,
+      "minimum_z_all_frames": 0.009,
+      "loop_seam_m": 0.0,
+      "passed": true
+    }
+  },
+  "ability_transition_max_vertex_gap_m": {
+    "HookWindup -> HookCast": 0.0,
+    "HookCast -> HookRecover": 0.0
+  }
+}

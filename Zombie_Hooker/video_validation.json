@@ -1,0 +1,15 @@
+{
+  "frames": 290,
+  "fps": 30,
+  "duration_seconds": 9.666666666666666,
+  "resolution": [
+    960,
+    720
+  ],
+  "decode_test_frames": [
+    15,
+    175,
+    282
+  ],
+  "passed": true
+}

@@ -195,7 +195,11 @@ export class OperativeAnimator {
   private cyclePhase = 0;
   private aimW = 0;
   private aimHold = 0;
+  /** 0..1 how much the upper body is busy with reload / ability / jump (support hand off the gun) */
+  freeHand = 0;
   private last = { shot: 0, hit: 0, ability: 0, dash: 0, cast: 0 };
+  private death: THREE.AnimationAction | null = null;
+  private deathW = 0;
 
   constructor(root: THREE.Object3D, clips: RetargetedSet) {
     this.mixer = new THREE.AnimationMixer(root);
@@ -300,7 +304,9 @@ export class OperativeAnimator {
     if (inp.shotSerial !== this.last.shot) {
       this.last.shot = inp.shotSerial;
       this.aimHold = 1.1;
-      if (inp.melee) this.trigger('ability', 3.2, 1);
+      if (inp.melee) {
+        if (!this.playAction('castMelee', 0.3, 1.6, 0.5)) this.trigger('ability', 3.2, 1);
+      }
       else if (!inp.reloading) this.trigger('fire', 1.6, 0.55);
     }
     const reload = this.overlays.get('reload');
@@ -328,7 +334,7 @@ export class OperativeAnimator {
     }
     if ((inp.dashSerial ?? 0) !== this.last.dash) {
       this.last.dash = inp.dashSerial ?? 0;
-      this.trigger('jump', 1.8, 1);
+      if (!this.playAction('castRoll', 0.15, 1.9, 0.62)) this.trigger('jump', 1.8, 1);
     }
 
     // --- overlay weights (priority: reload > ability > hit > fire > aim) -------
@@ -351,6 +357,7 @@ export class OperativeAnimator {
       budget -= take;
     }
     const locoUpperScale = budget; // what the overlays left for the locomotion upper half
+    this.freeHand = Math.min(1, (want[0]![1] ?? 0) + (want[1]![1] ?? 0) + (want[2]![1] ?? 0));
 
     const setLoco = (ids: readonly string[], layerW: number) => {
       ids.forEach((id, i) => {
@@ -374,12 +381,129 @@ export class OperativeAnimator {
       idleUp.setEffectiveWeight((1 - this.moveBlend) * locoUpperScale);
     }
 
+    this.applyAction(dt);
+    this.applyDeath(dt);
     this.mixer.update(dt);
   }
 
   private ov(id: string, fi: number, fo: number): number {
     const o = this.overlays.get(id);
     return o ? this.envelope(o, fi, fo) * o.peak : 0;
+  }
+
+  /** Full-body death (random variant); holds the last frame until revive(). */
+  die(): void {
+    if (this.death) return;
+    const ids = ['deathA', 'deathC', 'deathD', 'deathE'].filter((id) => this.clips.has(id));
+    if (!ids.length) return;
+    const rc = this.clips.get(ids[Math.floor(Math.random() * ids.length)]!)!;
+    const a = this.mixer.clipAction(rc.clip);
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;
+    a.reset();
+    a.setEffectiveTimeScale(1.1);
+    a.setEffectiveWeight(0);
+    a.play();
+    this.death = a;
+    this.deathW = 0;
+  }
+
+  get dying(): boolean {
+    return !!this.death;
+  }
+
+  revive(): void {
+    if (!this.death) return;
+    this.death.stop();
+    this.death.setEffectiveWeight(0);
+    this.death = null;
+    this.deathW = 0;
+  }
+
+  // ---- full-body actions (ability casts, rolls, knock-downs) -------------
+  private act: THREE.AnimationAction | null = null;
+  private actW = 0;
+  private actEnd = 0;
+  private actQueue: Array<{ id: string; from: number; to: number; dur: number }> = [];
+
+  /** Full-body one-shot: clip slice [from,to] played over `dur` game seconds; `then` chains more. */
+  playAction(id: string, from: number, to: number, dur: number, then: Array<{ id: string; from: number; to: number; dur: number }> = []): boolean {
+    if (this.death) return false;
+    const rc = this.clips.get(id);
+    if (!rc) return false;
+    let a = this.actionCache.get(id);
+    if (!a) {
+      a = this.mixer.clipAction(rc.clip);
+      a.setLoop(THREE.LoopOnce, 1);
+      a.clampWhenFinished = true;
+      this.actionCache.set(id, a);
+    }
+    if (this.act && this.act !== a) {
+      // hand the weight over to the new clip
+      this.act.stop();
+      this.act.setEffectiveWeight(0);
+    }
+    const end = Math.min(to, rc.clip.duration);
+    a.reset();
+    a.time = Math.max(0, from);
+    a.setEffectiveTimeScale(Math.max(0.05, end - from) / Math.max(0.05, dur));
+    a.setEffectiveWeight(this.actW);
+    a.play();
+    this.act = a;
+    this.actEnd = end;
+    this.actQueue = then;
+    return true;
+  }
+
+  get acting(): number {
+    return this.actW;
+  }
+
+  private readonly actionCache = new Map<string, THREE.AnimationAction>();
+
+  private applyAction(dt: number): void {
+    if (!this.act && this.actW <= 0) return;
+    if (this.act) {
+      const ending = this.act.time >= this.actEnd - 0.12 * this.act.getEffectiveTimeScale();
+      if (ending && this.actQueue.length) {
+        const n = this.actQueue.shift()!;
+        const rest = this.actQueue;
+        this.playAction(n.id, n.from, n.to, n.dur, rest);
+      } else if (this.act.time >= this.actEnd) {
+        this.act.paused = true;
+      }
+      const target = ending && !this.actQueue.length ? 0 : 1;
+      this.actW = THREE.MathUtils.damp(this.actW, target, target ? 16 : 9, dt);
+      if (target === 0 && this.actW < 0.02) {
+        this.act.stop();
+        this.act.setEffectiveWeight(0);
+        this.act = null;
+        this.actW = 0;
+        return;
+      }
+    }
+    const keep = 1 - this.actW;
+    for (const a of [...this.lower.values(), ...this.upper.values(), ...[...this.overlays.values()].map((o) => o.action)]) {
+      a.setEffectiveWeight(a.getEffectiveWeight() * keep);
+    }
+    this.act?.setEffectiveWeight(this.actW);
+    this.freeHand = Math.max(this.freeHand, this.actW);
+  }
+
+  /** Scale every other action down while the death clip fades in (weights keep summing to 1). */
+  private applyDeath(dt: number): void {
+    if (!this.death) return;
+    if (this.act) {
+      this.act.stop();
+      this.act = null;
+      this.actW = 0;
+    }
+    this.deathW = THREE.MathUtils.damp(this.deathW, 1, 12, dt);
+    const keep = 1 - this.deathW;
+    for (const a of [...this.lower.values(), ...this.upper.values(), ...[...this.overlays.values()].map((o) => o.action)]) {
+      a.setEffectiveWeight(a.getEffectiveWeight() * keep);
+    }
+    this.death.setEffectiveWeight(this.deathW);
   }
 
   dispose(): void {

@@ -42,6 +42,8 @@ export interface GameAudio {
   playEmptyClick: () => void;
   playFootstep: () => void;
   playGem: () => void;
+  /** Any manifest sample, played in full (voice lines, vehicles, explosions). */
+  playSample: (key: string, opts?: { gain?: number; pan?: number; rate?: number; bus?: Exclude<AudioBusId, 'master'> }) => void;
   getBusLevels: () => AudioBusLevels;
   setBusLevel: (bus: AudioBusId, value: number) => void;
   dispose: () => void;
@@ -81,6 +83,21 @@ const MANIFEST: Record<string, string[]> = {
   boss_hurt: ['/sfx/zombie/boss_hurt.ogg'],
   boss_attack: ['/sfx/zombie/boss_attack.ogg', '/sfx/zombie/boss_roar.ogg'],
   boss_death: ['/sfx/zombie/boss_death.ogg'],
+  v_jet_call: ['/sfx/voice/jet_call.ogg'],
+  v_jet_reply: ['/sfx/voice/jet_reply.ogg'],
+  v_heli_call: ['/sfx/voice/heli_call.ogg'],
+  v_heli_reply: ['/sfx/voice/heli_reply.ogg'],
+  v_artillery_call: ['/sfx/voice/artillery_call.ogg'],
+  v_artillery_reply: ['/sfx/voice/artillery_reply.ogg'],
+  v_siha_call: ['/sfx/voice/siha_call.ogg'],
+  v_siha_reply: ['/sfx/voice/siha_reply.ogg'],
+  v_supply_call: ['/sfx/voice/supply_call.ogg'],
+  v_supply_reply: ['/sfx/voice/supply_reply.ogg'],
+  s_jet: ['/sfx/support/jet.ogg'],
+  s_heli: ['/sfx/support/heli.ogg'],
+  s_whistle: ['/sfx/support/whistle.ogg'],
+  s_missile: ['/sfx/support/missile.ogg'],
+  s_explosion: ['/sfx/support/explosion.ogg'],
 };
 
 /** Relative bus gains — combat/weapons sit above zombie ambience. */
@@ -402,6 +419,24 @@ export function createGameAudio(): GameAudio {
       stepGate = now;
       resume();
       playOrSoft('footstep', 'player', { gain: 0.28, rateJitter: 0.1 }, { freq: 60, dur: 0.04, gain: 0.05 });
+    },
+    playSample: (key, opts = {}) => {
+      resume();
+      const c = ensure();
+      const dest = busNode(opts.bus ?? 'combat');
+      const buf = buffers.get(key)?.[0];
+      if (!c || !dest || !buf) return;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = opts.rate ?? 1;
+      const g = c.createGain();
+      g.gain.value = opts.gain ?? 0.9;
+      const panner = c.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, opts.pan ?? 0));
+      src.connect(g);
+      g.connect(panner);
+      panner.connect(dest);
+      src.start();
     },
     playGem: () => {
       resume();

@@ -1,3 +1,4 @@
+import { thumbImg, weaponThumb } from './thumbs';
 import { createArena, type ArenaHandle, type ArenaHudState } from './arena';
 import { createLobby } from './lobby';
 import { currentRunLoadout, loadProfile } from './loadout';
@@ -11,6 +12,9 @@ import {
   type RunCommitResult,
 } from './metaSave';
 import { cardStatLines, rarityTierLabel, type UpgradeCardDef } from './progression';
+import { checkLive, commitRun, type AchievementDef } from './achievements';
+import { DIFFICULTIES } from './gameModes';
+import { writeMetaSave } from './metaSave';
 
 const BUS_LABELS: Array<{ id: AudioBusId; label: string }> = [
   { id: 'master', label: 'MASTER' },
@@ -50,6 +54,8 @@ const el = {
   abilityBar: document.getElementById('abilityBar')!,
   downed: document.getElementById('downed')!,
   results: document.getElementById('results')!,
+  resultsTitle: document.getElementById('resultsTitle')!,
+  resultsSub: document.getElementById('resultsSub')!,
   resultsStats: document.getElementById('resultsStats')!,
   resultsCredits: document.getElementById('resultsCredits')!,
   metaShop: document.getElementById('metaShop')!,
@@ -78,13 +84,18 @@ const el = {
   embers: document.getElementById('embers')!,
   heroSkills: document.getElementById('heroSkills')!,
   slotBar: document.getElementById('slotBar')!,
+  runSkillBar: document.getElementById('runSkillBar'),
 };
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 const renderHeroSkills = (hud: ArenaHudState) => {
-  if (el.heroSkills.childElementCount !== hud.heroAbilities.length) {
+  const sup = hud.support;
+  const list = sup
+    ? [...hud.heroAbilities, { slot: 'H', name: `${sup.name} (imlecin olduğu yere)`, icon: sup.icon, color: 0xc8a868, level: 0, cooldown: sup.cd, maxCooldown: sup.max }]
+    : hud.heroAbilities;
+  if (el.heroSkills.childElementCount !== list.length) {
     el.heroSkills.replaceChildren(
-      ...hud.heroAbilities.map(() => {
+      ...list.map(() => {
         const d = document.createElement('div');
         d.className = 'skill';
         d.innerHTML = '<span class="ico"></span><div class="cd"></div><div class="cdt"></div><span class="key"></span><span class="lv"></span>';
@@ -92,28 +103,62 @@ const renderHeroSkills = (hud: ArenaHudState) => {
       }),
     );
   }
-  hud.heroAbilities.forEach((a, i) => {
+  list.forEach((a, i) => {
     const d = el.heroSkills.children[i] as HTMLElement;
+    d.classList.toggle('radio', a.slot === 'H');
     const ready = a.cooldown <= 0.01;
     d.classList.toggle('ready', ready);
     d.style.setProperty('--sk', hex(a.color));
     d.title = `${a.slot} · ${a.name} (Sv ${a.level})`;
     (d.querySelector('.ico') as HTMLElement).textContent = a.icon;
     (d.querySelector('.key') as HTMLElement).textContent = a.slot;
-    (d.querySelector('.lv') as HTMLElement).textContent = `Sv${a.level}`;
+    (d.querySelector('.lv') as HTMLElement).textContent = a.slot === 'H' ? '📻' : `Sv${a.level}`;
     (d.querySelector('.cd') as HTMLElement).style.height = ready ? '0%' : `${Math.min(100, (a.cooldown / Math.max(0.01, a.maxCooldown)) * 100)}%`;
     (d.querySelector('.cdt') as HTMLElement).textContent = ready ? '' : a.cooldown >= 1 ? String(Math.ceil(a.cooldown)) : a.cooldown.toFixed(1);
   });
 };
+let runSkillKey = '';
+const renderRunSkills = (hud: ArenaHudState) => {
+  const bar = el.runSkillBar;
+  const list = hud.runSkills ?? [];
+  if (!bar) return;
+  const key = list.map((r) => `${r.id}${r.level}${r.evo ? 'e' : ''}`).join('|');
+  if (key === runSkillKey) return;
+  runSkillKey = key;
+  bar.replaceChildren(
+    ...list.map((r) => {
+      const d = document.createElement('div');
+      d.className = `rsk${r.passive ? ' pas' : ''}${r.evo ? ' evo' : ''}`;
+      d.title = `${r.name} · Sv ${r.evo ? 'EVRİM' : r.level}`;
+      d.innerHTML = `<span class="i">${r.icon}</span><span class="pips">${r.evo ? '★' : '▮'.repeat(r.level)}</span>`;
+      return d;
+    }),
+  );
+};
+let slotKey = '';
+let weaponPicVariant = '';
 const renderSlots = (hud: ArenaHudState) => {
+  const key = hud.weaponSlots.map((w) => `${w.variant}${w.active ? '*' : ''}`).join(',');
+  if (key === slotKey) return;
+  slotKey = key;
   el.slotBar.replaceChildren(
     ...hud.weaponSlots.map((w, i) => {
       const d = document.createElement('div');
       d.className = `slot${w.active ? ' on' : ''} t${w.tier}`;
-      d.innerHTML = `<span class="n">${i + 1}</span>${w.name}`;
+      d.innerHTML = `<span class="n">${i + 1}</span><span class="nm">${w.name}</span>`;
+      d.prepend(thumbImg(weaponThumb(w.variant), 'sth'));
       return d;
     }),
   );
+  const act = hud.weaponSlots.find((w) => w.active);
+  const pic = document.getElementById('weaponPic') as HTMLImageElement | null;
+  if (act && pic && act.variant !== weaponPicVariant) {
+    weaponPicVariant = act.variant;
+    const want = act.variant;
+    void weaponThumb(want).then((u) => {
+      if (weaponPicVariant === want) pic.src = u;
+    });
+  }
 };
 
 let focusIndex = 0;
@@ -231,7 +276,7 @@ const renderUpgradeCards = (hud: ArenaHudState) => {
     const lines = cardStatLines(card);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = `pcard ${card.rarity}${i === focusIndex ? ' focus' : ''}${
+    btn.className = `pcard ${card.rarity}${card.runSkill ? ` rs rs-${card.runSkill.kind}` : ''}${i === focusIndex ? ' focus' : ''}${
       hud.lockedChoiceIndex === i ? ' locked' : ''
     }`;
     btn.innerHTML = `
@@ -326,6 +371,7 @@ const ensurePauseBuses = () => {
 
 const renderHud = (hud: ArenaHudState) => {
   renderHeroSkills(hud);
+  renderRunSkills(hud);
   renderSlots(hud);
   const m = hud.mission;
   const upgrading = hud.pausedForUpgrade && hud.choices.length > 0;
@@ -336,10 +382,8 @@ const renderHud = (hud: ArenaHudState) => {
   el.lvl.textContent = String(hud.level);
   el.wave.textContent = String(hud.wave);
 
-  el.objTitle.textContent = `HEDEF · BÖLÜM ${m.chapterIndex}`;
-  el.objText.textContent = `${m.objectiveLabel}  ${m.objectiveProgress}/${m.objectiveTarget}${
-    m.objectiveComplete ? ' ✓' : ''
-  }`;
+  el.objTitle.textContent = `${m.chapterTitle} · ${m.chapterCodename}`;
+  el.objText.textContent = `${m.objectiveLabel}${m.objectiveComplete ? ' ✓' : ''}`;
   setBar(el.objBar, m.objectiveProgress, m.objectiveTarget);
   el.sector.textContent = `${m.sectorCode}  ${m.sectorName}`;
 
@@ -368,7 +412,10 @@ const renderHud = (hud: ArenaHudState) => {
   renderDiamonds(el.upMods, hud);
   renderTeam(el.upTeam, hud);
 
-  el.downed.classList.toggle('on', !hud.alive && !runCommitted);
+  const over = hud.runOver ?? null;
+  el.downed.classList.toggle('on', !hud.alive && !over);
+  const downedBox = el.downed.querySelector('.box');
+  if (downedBox) downedBox.textContent = hud.revivesLeft === undefined || hud.revivesLeft === Infinity ? 'YERE SERİLDİN' : hud.revivesLeft > 0 ? `YERE SERİLDİN · ${hud.revivesLeft} dirilme hakkı` : 'YERE SERİLDİN · SON HAK';
   el.hud.classList.toggle('hidden', upgrading || runCommitted || paused);
 
   if (paused) {
@@ -378,18 +425,94 @@ const renderHud = (hud: ArenaHudState) => {
     el.pause.classList.remove('on');
   }
 
-  if (!hud.alive) {
+  if (over) {
     if (!runCommitted) {
       runCommitted = true;
       lastCommit = commitRunResults(arena.getRunSummary(), meta);
-      meta = lastCommit.meta;
+      const d = DIFFICULTIES[hud.runStats?.difficulty ?? 'normal'];
+      const bonus = Math.round(lastCommit.creditsEarned * (d.reward - 1) + (over.won ? 150 * d.reward : 0));
+      if (bonus) {
+        lastCommit.meta.credits += bonus;
+        writeMetaSave(lastCommit.meta);
+        lastCommit = { ...lastCommit, creditsEarned: lastCommit.creditsEarned + bonus };
+      }
+      runAchievements = hud.runStats ? commitRun(hud.runStats, lastCommit.creditsEarned) : [];
+      meta = loadMetaSave();
+      lastCommit = { ...lastCommit, meta };
     }
+    el.resultsTitle.textContent = over.title;
+    el.resultsTitle.className = over.won ? 'won' : 'lost';
+    el.resultsSub.textContent = over.subtitle;
     renderResults(hud);
     el.results.classList.add('on');
   } else {
     el.results.classList.remove('on');
+    if (hud.runStats && performance.now() - lastAchCheck > 2000) {
+      lastAchCheck = performance.now();
+      for (const a of checkLive(hud.runStats)) achToast(a);
+    }
   }
 
+  // ---- off-screen / on-screen markers
+  const ind = document.getElementById('indic');
+  if (ind) {
+    const list = hud.indicators ?? [];
+    while (ind.children.length < list.length) {
+      const d = document.createElement('div');
+      d.className = 'ind';
+      d.innerHTML = '<i class="ar"></i><span class="ic"></span><span class="tx"></span>';
+      ind.append(d);
+    }
+    for (let i = 0; i < ind.children.length; i++) {
+      const d = ind.children[i] as HTMLElement;
+      const it = list[i];
+      if (!it) {
+        d.style.display = 'none';
+        continue;
+      }
+      d.style.display = '';
+      d.style.setProperty('--c', it.color);
+      d.style.transform = `translate(${it.x.toFixed(0)}px, ${it.y.toFixed(0)}px)`;
+      const cls = `ind${it.on ? ' on' : ''}${it.urgent ? ' urg' : ''}`;
+      if (d.className !== cls) d.className = cls;
+      (d.children[0] as HTMLElement).style.transform = `rotate(${it.ang.toFixed(3)}rad)`;
+      d.children[1]!.textContent = it.icon;
+      const t = it.timer !== undefined ? `${Math.ceil(it.timer)} sn` : `${Math.round(it.dist)} m`;
+      d.children[2]!.textContent = it.on ? t : `${it.label} · ${t}`;
+    }
+  }
+  const sub = document.getElementById('subtitle');
+  if (sub) {
+    const st = hud.subtitle;
+    const key = st ? `${st.who}|${st.text}` : '';
+    if (sub.dataset.key !== key) {
+      sub.dataset.key = key;
+      sub.className = st ? `on ${st.who}` : '';
+      sub.innerHTML = st ? `<span>${st.who === 'me' ? '📻 SEN' : '📻 TELSİZ'}</span>${st.text}` : '';
+    }
+  }
+  const bf = document.getElementById('buffBar');
+  if (bf) {
+    const list = hud.buffs ?? [];
+    const html = list.map((b) => `<div style="--c:${b.color}"><span>${b.icon}</span><b>${b.name}</b><i>${Math.ceil(b.left)}</i></div>`).join('');
+    if (bf.dataset.h !== html) {
+      bf.dataset.h = html;
+      bf.innerHTML = html;
+    }
+  }
+  const feed = document.getElementById('pickFeed');
+  if (feed) {
+    const list = hud.pickups ?? [];
+    const key = list.map((p) => p.name).join('|');
+    if (feed.dataset.key !== key) {
+      feed.dataset.key = key;
+      feed.innerHTML = list.map((p) => `<div><b>+ ${p.name}</b><small>${p.desc}</small></div>`).join('');
+    }
+    list.forEach((p, i) => {
+      const d = feed.children[i] as HTMLElement | undefined;
+      if (d) d.style.opacity = String(Math.max(0, Math.min(1, (3.5 - p.age) / 0.6)));
+    });
+  }
   if (m.banner) {
     el.banner.textContent = m.banner;
     el.banner.classList.add('on');
@@ -441,6 +564,31 @@ const renderMetaShop = () => {
   }
 };
 
+let runAchievements: AchievementDef[] = [];
+let lastAchCheck = 0;
+const achQueue: AchievementDef[] = [];
+let achBusy = false;
+const achToast = (a: AchievementDef) => {
+  achQueue.push(a);
+  if (achBusy) return;
+  const next = () => {
+    const d = achQueue.shift();
+    const box = document.getElementById('achToast');
+    if (!d || !box) {
+      achBusy = false;
+      return;
+    }
+    achBusy = true;
+    box.innerHTML = `<span class="i">${d.icon}</span><div><b>BAŞARIM: ${d.name}</b><small>${d.desc} · +${d.reward} CR</small></div>`;
+    box.classList.add('on');
+    setTimeout(() => {
+      box.classList.remove('on');
+      setTimeout(next, 450);
+    }, 3200);
+  };
+  next();
+};
+
 const renderResults = (hud: ArenaHudState) => {
   const commit = lastCommit;
   const credits = commit?.creditsEarned ?? 0;
@@ -452,17 +600,14 @@ const renderResults = (hud: ArenaHudState) => {
     ['Dalga', String(hud.wave)],
     ['Seviye', String(hud.level)],
     ['Süre', formatTime(hud.runTimeSec)],
-    ['Koşular', String(meta.totalRuns)],
-    ['En iyi dalga', String(meta.bestWave)],
+    ['Zorluk', DIFFICULTIES[hud.runStats?.difficulty ?? 'normal'].name],
+    ['Yere düşme', String(hud.runStats?.downs ?? 0)],
   ]
     .map(([k, v]) => `<div><span>${k}</span><br/><b>${v}</b></div>`)
     .join('');
-  el.resultsCredits.textContent = [
-    `+${credits} kredi · Toplam ${meta.credits} CR`,
-    badges.length ? badges.join(' · ') : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  el.resultsCredits.innerHTML =
+    [`+${credits} kredi · Toplam ${meta.credits} CR`, badges.length ? badges.join(' · ') : null].filter(Boolean).join(' · ') +
+    (runAchievements.length ? `<div class="achRow">${runAchievements.map((a) => `<span title="${a.desc}">${a.icon} ${a.name} +${a.reward}</span>`).join('')}</div>` : '');
   renderMetaShop();
 };
 
@@ -475,9 +620,11 @@ const restartRun = () => {
   lobby.hide();
   el.hud.style.display = '';
   arena = createArena(root, { loadout: currentRunLoadout() });
+  (window as unknown as { __pzArena?: ArenaHandle }).__pzArena = arena;
   running = true;
   runCommitted = false;
   lastCommit = null;
+  runAchievements = [];
   meta = loadMetaSave();
   pauseBusesBuilt = false;
   el.results.classList.remove('on');
@@ -534,7 +681,7 @@ document.getElementById('btnPauseMenu')?.addEventListener('click', toMenu);
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Escape' || !running) return;
   const hud = arena.getHudState();
-  if (!hud.alive || runCommitted || hud.pausedForUpgrade) return;
+  if (!hud.alive || runCommitted || hud.runOver || hud.pausedForUpgrade) return;
   e.preventDefault();
   arena.togglePause();
   lastSig = '';
@@ -584,6 +731,9 @@ const loop = (t: number) => {
         hud.weaponSlots.findIndex((w) => w.active),
         runCommitted ? 1 : 0,
         meta.credits,
+        hud.runOver ? 1 : 0,
+        hud.revivesLeft ?? -1,
+        Math.floor(hud.runTimeSec / 2),
       ].join(';');
       if (sig !== lastSig) {
         lastSig = sig;

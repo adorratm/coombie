@@ -1,6 +1,7 @@
 import type { StatusId } from './statusEffects';
 import type { WeaponId } from './weapons';
 import { WEAPONS, weaponById } from './weapons';
+import { applyRunSkillCard, createRunSkillState, runSkillCards, type RunSkillCard, type RunSkillState , RUN_SKILLS} from './runSkills';
 
 /** Extensible combat modifier bag — add keys freely; consumers read with defaults. */
 export interface PlayerMods {
@@ -74,7 +75,8 @@ export type UpgradeKind =
   | 'weapon_mastery'
   | 'evolution'
   | 'status'
-  | 'synergy';
+  | 'synergy'
+  | 'skill';
 
 export interface UpgradeCardDef {
   id: string;
@@ -106,6 +108,8 @@ export interface UpgradeCardDef {
   requiresStatus?: StatusId;
   /** +1 run level to the hero's Q / E / R ability (max +3 per run) */
   heroRank?: 'q' | 'e' | 'r';
+  /** YAZS run skill / passive / evolution */
+  runSkill?: { kind: RunSkillCard['kind']; id: string; level: number };
 }
 
 export const DEFAULT_MODS: PlayerMods = {
@@ -402,7 +406,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   {
     id: 'unlock_sniper',
     name: 'Authorize Ghost Kit',
-    description: 'Unlock Coil Rifle class',
+    description: 'Unlock Coil Marksman class',
     rarity: 'epic',
     kind: 'unlock_weapon',
     unlockWeapon: 'sniper',
@@ -796,6 +800,8 @@ export interface ProgressState {
   lockedChoiceIndex: number | null;
   banishedIds: Set<string>;
   heroRankBonus: { q: number; e: number; r: number };
+  /** YAZS run skills / passives / evolutions */
+  runSkills: RunSkillState;
 }
 
 export function xpForLevel(level: number): number {
@@ -848,6 +854,7 @@ export function createProgressState(startClass: ClassId = 'assaulter'): Progress
     lockedChoiceIndex: null,
     banishedIds: new Set(),
     heroRankBonus: { q: 0, e: 0, r: 0 },
+    runSkills: createRunSkillState(),
   };
 }
 
@@ -875,6 +882,10 @@ function applyPassive(mods: PlayerMods, passive: Partial<PlayerMods>): void {
 
 export function applyUpgradeCard(state: ProgressState, card: UpgradeCardDef): void {
   state.pickedIds.push(card.id);
+  if (card.runSkill) {
+    applyRunSkillCard(state.runSkills, card.runSkill.kind, card.runSkill.id);
+    return;
+  }
   if (card.heroRank) state.heroRankBonus[card.heroRank] = Math.min(3, state.heroRankBonus[card.heroRank] + 1);
 
   if (card.mods) {
@@ -940,8 +951,22 @@ function rarityWeight(rarity: UpgradeCardDef['rarity']): number {
   return 1;
 }
 
+function runSkillUpgradeCards(state: ProgressState): UpgradeCardDef[] {
+  return runSkillCards(state.runSkills).map((c) => ({
+    id: `rs:${c.kind}:${c.id}:${c.level}`,
+    name: c.name,
+    description: c.description,
+    rarity: c.rarity,
+    kind: 'skill' as const,
+    icon: c.icon,
+    // hero-exclusive radio support shows up almost immediately once
+    weight: c.kind === 'evo' ? 70 : c.kind === 'skill' ? (RUN_SKILLS[c.id as keyof typeof RUN_SKILLS]?.heroes ? (c.level === 1 ? 60 : 12) : c.level === 1 ? 8 : 11) : 6,
+    runSkill: { kind: c.kind, id: c.id, level: c.level },
+  }));
+}
+
 export function rollUpgradeChoices(state: ProgressState, count = 4): UpgradeCardDef[] {
-  const pool = UPGRADE_CARDS.filter((card) => {
+  const pool = [...runSkillUpgradeCards(state), ...UPGRADE_CARDS.filter((card) => {
     if (state.banishedIds.has(card.id)) return false;
     if (state.pickedIds.includes(card.id) && (card.classId || card.kind === 'evolution' || card.kind === 'synergy' || card.kind === 'status')) {
       return false;
@@ -960,7 +985,7 @@ export function rollUpgradeChoices(state: ProgressState, count = 4): UpgradeCard
     if (card.requiresStatus && !hasStatusChance(state, card.requiresStatus)) return false;
     if (card.heroRank && state.heroRankBonus[card.heroRank] >= 3) return false;
     return true;
-  });
+  }).map((c) => ({ ...c, weight: (c.weight ?? 5) * 0.55 }))];
 
   const picks: UpgradeCardDef[] = [];
   const used = new Set<string>();

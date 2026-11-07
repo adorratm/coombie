@@ -5,6 +5,7 @@
  *   &steps=40        advance N fixed 1/60 steps then freeze (deterministic screenshots)
  *   &grid=1          show all 8 operatives side by side
  */
+import { SEG, type SegId } from '../zombieAnim';
 import * as THREE from 'three';
 import { createVrmAvatar, type VrmAvatarHandle } from '../avatars';
 import { OPERATIVE_ROSTER } from '../roster';
@@ -19,7 +20,7 @@ let mode: Mode = (MODES as readonly string[]).includes(qs.get('mode') ?? '') ? (
 const fixedSteps = qs.has('steps') ? Number(qs.get('steps')) : -1;
 const grid = qs.get('grid') === '1';
 const zombiesMode = qs.get('zombies') === '1';
-const ZKINDS = (Object.keys(ZOMBIE_LOOKS) as ZombieKind[]).filter((k) => !qs.get('only') || qs.get('only')!.split(',').includes(k));
+const ZKINDS = (Object.keys(ZOMBIE_LOOKS) as ZombieKind[]).filter((k) => !qs.get('only') || qs.get('only')!.split(',').includes(k)).filter((k) => k !== 'hooker');
 let opId = qs.get('op') ?? 'ironclad';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -60,6 +61,7 @@ interface Actor {
   t: number;
 }
 let actors: Actor[] = [];
+const segParam = new URLSearchParams(location.search).get('seg');
 
 function inputFor(a: Actor, dt: number): OperativeAnimInput {
   a.t += dt;
@@ -89,7 +91,7 @@ function inputFor(a: Actor, dt: number): OperativeAnimInput {
 async function spawn(): Promise<void> {
   for (const a of actors) a.handle.dispose();
   actors = [];
-  const heights: Record<ZombieKind, number> = { grunt: 1.9, runner: 1.75, tank: 2.35, acid: 2.05, screamer: 2.2, boss: 2.85 };
+  const heights: Record<ZombieKind, number> = { grunt: 1.9, runner: 1.75, tank: 2.35, acid: 2.05, screamer: 2.2, boss: 2.85, crawler: 1.9, bloater: 2.1, stalker: 1.8, burner: 1.9, riot: 2.0, hive: 2.1, volt: 1.9, hooker: 2.75 };
   const made: Array<{ h: VrmAvatarHandle; zkind?: ZombieKind }> = zombiesMode
     ? await Promise.all(
         ZKINDS.map(async (k) => ({
@@ -114,6 +116,18 @@ async function spawn(): Promise<void> {
 
 function step(dt: number): void {
   for (const a of actors) {
+    if (a.zkind && a.handle.zombieAnim) {
+      const za = a.handle.zombieAnim;
+      if (a.t === 0 && segParam) {
+        if (segParam === 'death') za.die();
+        else if (segParam === 'spawn') za.standUp(2.1);
+        else if (segParam in SEG) za.play(SEG[segParam as SegId], 1.1, 2);
+      }
+      a.t += dt;
+      const sp = mode === 'walkF' ? 1.2 : mode === 'runF' ? 4.2 : 0;
+      a.handle.update(dt, sp > 0, false, 0, 0, false, 0, undefined, { speed: sp, kind: a.zkind });
+      continue;
+    }
     if (a.zkind) {
       a.t += dt;
       const attacking = mode === 'fire' || mode === 'hit';

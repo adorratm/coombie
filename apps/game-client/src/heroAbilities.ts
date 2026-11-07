@@ -4,6 +4,8 @@ import type { CombatFx } from './fx';
 import type { OperativeId } from './roster';
 import type { AbilitySlot } from './loadout';
 import { applyStatus, type StatusId } from './statusEffects';
+import type { SkillFx } from './skillFx';
+import { operativeAction, type OperativeActionKind } from './avatars';
 
 /**
  * Per-hero Q / E / R abilities (8 heroes × 3 = 24), data-driven on a handful of
@@ -123,6 +125,8 @@ export interface HeroAbilityContext {
   powerMult: () => number;
   aoeMult: () => number;
   cdrMult: () => number;
+  /** shared particle / explosion FX (optional) */
+  vfx?: SkillFx;
 }
 
 export interface HeroBuffs {
@@ -228,10 +232,12 @@ export function createHeroAbilityRuntime(
   const fragGeo = new THREE.SphereGeometry(0.11, 10, 8);
   const bottleGeo = new THREE.CylinderGeometry(0.05, 0.07, 0.26, 8);
   const flaskGeo = new THREE.SphereGeometry(0.12, 10, 8);
+  // muted, lit-scene friendly overlays (no additive neon)
+  const DUST = new THREE.Color(0x6a6052);
   const addMat = (color: number, opacity: number) =>
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(color).lerp(DUST, 0.55), transparent: true, opacity: opacity * 0.45, depthWrite: false, side: THREE.DoubleSide });
   const solid = (color: number, emissive = 0) =>
-    new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.4, emissive, emissiveIntensity: emissive ? 1.2 : 0 });
+    new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.4, emissive, emissiveIntensity: emissive ? 0.35 : 0 });
   const owned: THREE.Material[] = [];
   const keep = <T extends THREE.Material>(m: T) => (owned.push(m), m);
 
@@ -250,6 +256,10 @@ export function createHeroAbilityRuntime(
   };
 
   const shockRing = (at: THREE.Vector3, radius: number, color: number, life = 0.45) => {
+    if (ctx.vfx) {
+      ctx.vfx.dustRing(at, radius);
+      return;
+    }
     const mesh = new THREE.Mesh(ringGeo, keep(addMat(color, 0.9)));
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(at.x, 0.12, at.z);
@@ -264,10 +274,38 @@ export function createHeroAbilityRuntime(
     rings.push({ mesh: disc, life: life * 0.8, max: life * 0.8, radius: radius * 0.9 });
   };
 
-  const explode = (at: THREE.Vector3, radius: number, damage: number, color: number, status?: StatusId, statusPower = 2, knock = 0.8) => {
-    shockRing(at, radius, color);
-    fx.spawnHitRing(at.clone().setY(0.2), color, 0.2);
-    fx.spawnBloodBurst(at.clone().setY(0.8), 1.8, color);
+  const explode = (at: THREE.Vector3, radius: number, damage: number, color: number, status?: StatusId, statusPower = 2, knock = 0.8, style: 'blast' | 'kinetic' = 'blast') => {
+    const v = ctx.vfx;
+    if (!v) {
+      shockRing(at, radius, color);
+      fx.spawnHitRing(at.clone().setY(0.2), color, 0.2);
+      fx.spawnBloodBurst(at.clone().setY(0.8), 1.8, color);
+    } else if (status === 'toxin') {
+      // ruptured canister: thick olive gas, no fireball
+      v.dustRing(at, radius * 0.8, 0x5a5a3a);
+      for (let i = 0; i < 6; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * radius * 0.6;
+        v.gas(at.x + Math.cos(a) * r, at.z + Math.sin(a) * r, 1.3);
+      }
+    } else if (status === 'chill') {
+      if (color === 0xfff6c0) {
+        // flashbang: blinding white pop + grey smoke
+        v.emit('flash', at.x, 1, at.z, { life: 0.12, s0: radius * 0.9, s1: radius * 1.4, color: 0xffffff, spin: 0, a: 0.9 });
+        v.flashLight(at, 0xffffff, 40, 0.15);
+        v.sparks(at, 6, 0xfff1d0, 5);
+        for (let i = 0; i < 6; i++) v.emit('smoke', at.x + (Math.random() - 0.5), 0.6, at.z + (Math.random() - 0.5), { vy: 0.7, life: 2.2, s0: 0.8, s1: 2.6, color: 0xb4b2ae, a: 0.4 });
+      } else v.vapor(at, radius * 0.6);
+    } else if (style === 'kinetic') {
+      // concussive shove: dust wave + kicked-up debris
+      v.dustRing(at, radius);
+      v.debris(at, 10, radius * 0.5);
+      for (let i = 0; i < 10; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = radius * (0.5 + Math.random() * 0.5);
+        v.emit('smoke', at.x + Math.cos(a) * r, 0.3, at.z + Math.sin(a) * r, { vx: Math.cos(a) * 2, vz: Math.sin(a) * 2, vy: 0.5, life: 1.1, s0: 0.5, s1: 1.6, color: 0x7a6e5c, a: 0.4, drag: 2 });
+      }
+    } else v.explosion(at, Math.max(1.2, radius * 0.7), 0xffa050);
     ctx.sfx('boom');
     ctx.shake(Math.min(0.5, 0.12 + radius * 0.04));
     forEachZombieIn(at, radius, (z, d) => {
@@ -288,9 +326,11 @@ export function createHeroAbilityRuntime(
     mesh.position.set(at.x, 0.08, at.z);
     const radius = spec.radius * size * ctx.aoeMult();
     mesh.scale.setScalar(radius);
-    const edge = new THREE.Mesh(ringGeo, keep(addMat(color, 0.75)));
-    edge.position.z = 0.01;
-    mesh.add(edge);
+    if (!ctx.vfx) {
+      const edge = new THREE.Mesh(ringGeo, keep(addMat(color, 0.75)));
+      edge.position.z = 0.01;
+      mesh.add(edge);
+    }
     scene.add(mesh);
     const dur = spec.dur * size;
     zones.push({ kind: spec.kind, mesh, radius, dps: spec.dps * power, life: dur, max: dur, tick: 0, follow });
@@ -322,6 +362,10 @@ export function createHeroAbilityRuntime(
   };
 
   const zap = (from: THREE.Vector3, to: THREE.Vector3, color: number) => {
+    if (ctx.vfx) {
+      ctx.vfx.bolt(from, to, new THREE.Color(color).lerp(new THREE.Color(0xe8f0ff), 0.75).getHex(), 0.06, 0.1, 9);
+      return;
+    }
     const pts: THREE.Vector3[] = [];
     const seg = 7;
     for (let i = 0; i <= seg; i++) {
@@ -355,7 +399,7 @@ export function createHeroAbilityRuntime(
       const dir = to.clone().sub(cur).setY(0).normalize();
       ctx.damageZombie(best, damage * (1 - i * 0.08), to, dir);
       applyStatus(best, status ?? 'chill', 1.2);
-      fx.spawnHitRing(to, color, 1.1);
+      if (!ctx.vfx) fx.spawnHitRing(to, color, 1.1);
       cur = to;
       range = Math.max(5, range * 0.85);
     }
@@ -409,7 +453,7 @@ export function createHeroAbilityRuntime(
       crit: (eff.crit ?? 0) * power,
     });
     for (const t of targets) fx.spawnHitRing(t.root.position, color, 0.15);
-    if (eff.nova) explode(ctx.player.root.position, eff.nova * size, 2 * power, color, undefined, 2, 2.2);
+    if (eff.nova) explode(ctx.player.root.position, eff.nova * size, 2 * power, color, undefined, 2, 2.2, 'kinetic');
     if (eff.armor) {
       if (!shieldBubble) {
         shieldBubble = new THREE.Mesh(sphereGeo, keep(addMat(color, 0.18)));
@@ -431,7 +475,10 @@ export function createHeroAbilityRuntime(
     const eff = def.effect;
     cooldowns[slot] = maxCooldown(slot);
 
-    ctx.anim(p, def.anim === 'throw' ? 'ability' : def.anim === 'dash' ? 'dash' : 'cast');
+    const e = def.effect.type;
+    const act: OperativeActionKind | null =
+      def.anim === 'throw' ? 'throw' : def.anim === 'dash' ? 'roll' : e === 'turret' || e === 'heal' ? 'deploy' : e === 'nova' ? 'shove' : e === 'volley' ? null : 'shout';
+    if (!act || !operativeAction(p, act)) ctx.anim(p, def.anim === 'throw' ? 'ability' : def.anim === 'dash' ? 'dash' : 'cast');
 
     switch (eff.type) {
       case 'grenade': {
@@ -440,10 +487,7 @@ export function createHeroAbilityRuntime(
           explode(at, eff.radius * size * ctx.aoeMult(), eff.damage * power, def.color, eff.status, (eff.statusPower ?? 2) * power, eff.mesh === 'flash' ? 0.2 : 1);
           if (eff.zone) addZone(at, eff.zone, power, size, null);
           if (eff.mesh === 'flash') {
-            const flash = new THREE.PointLight(0xffffff, 60, 14, 2);
-            flash.position.copy(at).setY(2);
-            scene.add(flash);
-            pending.push({ at: clock + 0.12, run: () => scene.remove(flash) });
+            ctx.vfx?.flashLight(at, 0xffffff, 40, 0.15);
           }
         };
         throwTo(target, eff.mesh ?? 'frag', def.color, land);
@@ -451,7 +495,7 @@ export function createHeroAbilityRuntime(
       }
       case 'nova': {
         const r = eff.radius * size * ctx.aoeMult();
-        explode(p.root.position, r, eff.damage * power, def.color, eff.status, (eff.statusPower ?? 2) * power, eff.knock);
+        explode(p.root.position, r, eff.damage * power, def.color, eff.status, (eff.statusPower ?? 2) * power, eff.knock, 'kinetic');
         pending.push({ at: clock + 0.12, run: () => shockRing(p.root.position, r * 1.08, def.color, 0.55) });
         break;
       }
@@ -496,7 +540,15 @@ export function createHeroAbilityRuntime(
         // afterimage trail
         for (let i = 0; i < 5; i++) {
           const at = start.clone().lerp(end, i / 5);
-          pending.push({ at: clock + i * 0.02, run: () => shockRing(at, 0.9, def.color, 0.3) });
+          if (!ctx.vfx) pending.push({ at: clock + i * 0.02, run: () => shockRing(at, 0.9, def.color, 0.3) });
+        }
+        if (ctx.vfx) {
+          // boots kicking up dirt along the path
+          for (let i = 0; i < 14; i++) {
+            const at = start.clone().lerp(end, Math.random());
+            ctx.vfx.emit('smoke', at.x, 0.2, at.z, { vx: -dir.x * 1.5, vz: -dir.z * 1.5, vy: 0.4, life: 0.9, s0: 0.35, s1: 1.1, color: 0x7a6e5c, a: 0.35, drag: 2 });
+          }
+          ctx.vfx.debris(end, 4, 0.5);
         }
         if (eff.damage > 0) {
           const seg = end.clone().sub(start);
@@ -595,8 +647,22 @@ export function createHeroAbilityRuntime(
       z.tick -= dt;
       if (z.follow) z.mesh.position.set(z.follow.root.position.x, 0.08, z.follow.root.position.z);
       const fade = Math.min(1, z.life / 0.6, (z.max - z.life) / 0.25 + 0.2);
-      (z.mesh.material as THREE.MeshBasicMaterial).opacity = 0.3 * fade + Math.sin(clock * 6 + i) * 0.04;
+      (z.mesh.material as THREE.MeshBasicMaterial).opacity = (z.kind === 'fire' ? 0.16 : 0.08) * fade;
       z.mesh.rotation.z += dt * 0.6;
+      if (ctx.vfx) {
+        const at = z.mesh.position;
+        const n = z.kind === 'toxin' ? (Math.random() < dt * z.radius * 2.2 ? 1 : 0) : Math.ceil(z.radius * z.radius * dt * 60 * (z.kind === 'heal' ? 0.03 : 0.1));
+        for (let k = 0; k < n; k++) {
+          const a = Math.random() * Math.PI * 2;
+          const r = Math.sqrt(Math.random()) * z.radius;
+          const x = at.x + Math.cos(a) * r;
+          const zz = at.z + Math.sin(a) * r;
+          if (z.kind === 'fire') ctx.vfx.flame(x, zz, 0.9);
+          else if (z.kind === 'toxin') ctx.vfx.gas(x, zz, 1);
+          else if (z.kind === 'cryo') ctx.vfx.emit('smoke', x, 0.15, zz, { vy: 0.15, life: 1.6, s0: 0.6, s1: 1.8, color: 0xd6dde2, a: 0.28 });
+          else ctx.vfx.emit('smoke', x, 0.1, zz, { vy: 0.5, life: 1.2, s0: 0.3, s1: 0.9, color: 0xdfe8dc, a: 0.18 });
+        }
+      }
       if (z.tick <= 0) {
         z.tick = 0.4;
         const at = z.mesh.position;
@@ -614,7 +680,7 @@ export function createHeroAbilityRuntime(
             if (status) applyStatus(enemy, status, 1.4);
           });
         }
-        if (Math.random() < 0.7) {
+        if (!ctx.vfx && Math.random() < 0.7) {
           const a = Math.random() * Math.PI * 2;
           const r = Math.random() * z.radius;
           fx.spawnBloodBurst(new THREE.Vector3(at.x + Math.cos(a) * r, 0.5, at.z + Math.sin(a) * r), 0.5, ZONE_COLOR[z.kind]);

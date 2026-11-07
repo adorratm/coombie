@@ -13,8 +13,8 @@
     "typecheck": "node -e \"console.log('desktop: no TS sources')\""
   },
   "devDependencies": {
-    "electron": "45.2.1",
-    "electron-builder": "24.13.3"
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "com.protocolz.game",

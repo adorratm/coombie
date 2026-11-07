@@ -1,0 +1,180 @@
+{
+  "asset": "Çengelci Zombi / Hooker Zombie",
+  "blender": "5.2.3 LTS",
+  "units": "meters",
+  "source_axes": {
+    "up": "+Z",
+    "forward": "+Y"
+  },
+  "gltf_axes": "standard glTF +Y up; Blender importer restores Z-up",
+  "bones": 24,
+  "clips": {
+    "Idle": {
+      "frames": [
+        1,
+        61
+      ],
+      "duration_seconds": 2.0,
+      "max_midpoint_motion_m": 0.01258,
+      "minimum_z_samples": [
+        0.006000041961669922,
+        0.006000041961669922,
+        0.006000041961669922
+      ],
+      "passed": true,
+      "markers": {}
+    },
+    "Walk": {
+      "frames": [
+        1,
+        41
+      ],
+      "duration_seconds": 1.3333333333333333,
+      "max_midpoint_motion_m": 0.20524,
+      "minimum_z_samples": [
+        0.006000041961669922,
+        0.006000041961669922,
+        0.006000041961669922
+      ],
+      "passed": true,
+      "markers": {}
+    },
+    "AttackMelee": {
+      "frames": [
+        1,
+        31
+      ],
+      "duration_seconds": 1.0,
+      "max_midpoint_motion_m": 0.42441,
+      "minimum_z_samples": [
+        0.006000041961669922,
+        0.006000041961669922,
+        0.006000041961669922
+      ],
+      "passed": true,
+      "markers": {
+        "MeleeHit": 17
+      }
+    },
+    "HookWindup": {
+      "frames": [
+        1,
+        25
+      ],
+      "duration_seconds": 0.8,
+      "max_midpoint_motion_m": 1.28788,
+      "minimum_z_samples": [
+        0.006000041961669922,
+        0.006000041961669922,
+        0.006000161170959473
+      ],
+      "passed": true,
+      "markers": {
+        "WarningOn": 1,
+        "HookReady": 25
+      }
+    },
+    "HookCast": {
+      "frames": [
+        1,
+        22
+      ],
+      "duration_seconds": 0.7,
+      "max_midpoint_motion_m": 4.86832,
+      "minimum_z_samples": [
+        0.006000161170959473,
+        0.006000041961669922,
+        0.006000041961669922
+      ],
+      "passed": true,
+      "markers": {
+        "SpawnProjectile": 6,
+        "MaxReach": 22
+      }
+    },
+    "HookRecover": {
+      "frames": [
+        1,
+        28
+      ],
+      "duration_seconds": 0.9,
+      "max_midpoint_motion_m": 2.30038,
+      "minimum_z_samples": [
+        0.006000041961669922,
+        0.006000041961669922,
+        0.006000041961669922
+      ],
+      "passed": true,
+      "markers": {
+        "Retract": 1,
+        "WarningOff": 28
+      }
+    },
+    "Hit": {
+      "frames": [
+        1,
+        19
+      ],
+      "duration_seconds": 0.6,
+      "max_midpoint_motion_m": 0.62901,
+      "minimum_z_samples": [
+        0.006000041961669922,
+        0.006000041961669922,
+        0.006000041961669922
+      ],
+      "passed": true,
+      "markers": {}
+    },
+    "Death": {
+      "frames": [
+        1,
+        55
+      ],
+      "duration_seconds": 1.8,
+      "max_midpoint_motion_m": 1.77315,
+      "minimum_z_samples": [
+        0.006000041961669922,
+        0.10523796081542969,
+        0.006000041961669922
+      ],
+      "passed": true,
+      "markers": {
+        "DisableCollision": 21,
+        "DespawnReady": 55
+      }
+    }
+  },
+  "geometry": {
+    "Hooker_Body": {
+      "vertices": 6879,
+      "triangles": 13261,
+      "materials": 7,
+      "uv_layers": 1
+    },
+    "HookTip": {
+      "vertices": 195,
+      "triangles": 366,
+      "materials": 3,
+      "uv_layers": 1
+    },
+    "HookTether_Animated": {
+      "vertices": 24,
+      "triangles": 44,
+      "materials": 1,
+      "uv_layers": 1
+    },
+    "HookTether_Segment": {
+      "vertices": 115,
+      "triangles": 206,
+      "materials": 2,
+      "uv_layers": 1
+    },
+    "HookWarning": {
+      "vertices": 176,
+      "triangles": 164,
+      "materials": 1,
+      "uv_layers": 0
+    }
+  },
+  "unweighted_vertices": 0
+}

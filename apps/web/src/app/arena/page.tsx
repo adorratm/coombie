@@ -28,6 +28,10 @@ const emptyMission = {
 };
 
 const emptyHud: ArenaHudState = {
+  heroId: 'ironclad',
+  heroAbilities: [],
+  weaponSlots: [],
+  paused: false,
   weapon: 'Assault Rifle',
   weaponId: 'rifle',
   className: 'Assaulter',

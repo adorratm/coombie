@@ -245,9 +245,9 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
     const mesh = new THREE.Mesh(
       ringGeo,
       new THREE.MeshBasicMaterial({
-        color,
+        color: new THREE.Color(color).lerp(new THREE.Color(0x5a5048), 0.5),
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.35,
         side: THREE.DoubleSide,
         depthWrite: false,
       }),
@@ -269,9 +269,9 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
     const mesh = new THREE.Mesh(
       warnRingGeo,
       new THREE.MeshBasicMaterial({
-        color,
+        color: new THREE.Color(color).lerp(new THREE.Color(0x4a1610), 0.45),
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.3,
         side: THREE.DoubleSide,
         depthWrite: false,
       }),
@@ -329,7 +329,7 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
       r.life -= dt;
       const s = 1 + (0.35 - r.life) * 6;
       r.mesh.scale.set(s, s, s);
-      (r.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, r.life / 0.35) * 0.75;
+      (r.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, r.life / 0.35) * 0.35;
       if (r.life <= 0) {
         scene.remove(r.mesh);
         (r.mesh.material as THREE.Material).dispose();
@@ -344,7 +344,7 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
       const scale = THREE.MathUtils.lerp(w.endScale * 0.28, w.endScale, t * t);
       w.mesh.scale.setScalar(scale);
       const pulse = 0.35 + Math.sin(t * Math.PI * 4) * 0.12;
-      (w.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (1 - t) * 0.65 + pulse * (1 - t));
+      (w.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, ((1 - t) * 0.65 + pulse * (1 - t)) * 0.45);
       if (w.life <= 0) {
         scene.remove(w.mesh);
         (w.mesh.material as THREE.Material).dispose();
