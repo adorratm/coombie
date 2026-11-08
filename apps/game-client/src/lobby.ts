@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { ensureWeaponEnvironment } from './weaponAssets';
 import { holdGun, orientGun, type BoneSource } from './gunHold';
 import { MAPS, MAP_ORDER } from './mapDefs';
-import { DIFFICULTIES, DIFFICULTY_ORDER, MODES } from './gameModes';
+import { DEFAULT_RUN_MINUTES, DIFFICULTIES, DIFFICULTY_ORDER, HORDE_WAVES, MODES, RUN_MINUTES, TIMED_MODES } from './gameModes';
+import { HERO_LEVEL_MAX, TREE_NODES, TREE_TOTAL_RANKS, availablePoints, heroXpForLevel, loadHeroProgress, resetTree, spentPoints, unlockBlock, unlockTreeNode, type TreeBranch } from './heroProgress';
 import { achievementCounts, listAchievements } from './achievements';
 import { createVrmAvatar, type VrmAvatarHandle } from './avatars';
 import { HERO_ABILITIES, levelCd, levelPower } from './heroAbilities';
@@ -38,7 +39,7 @@ import { accessoryThumb, backpackThumb, costumeSwatch, heroPortrait, thumbImg, w
  * Yetenekler (permanent Q/E/R levels). Everything is bought with run credits.
  */
 
-type StepId = 'map' | 'mode' | 'costume' | 'gear' | 'weapons' | 'skills' | 'ready';
+type StepId = 'map' | 'mode' | 'costume' | 'gear' | 'weapons' | 'skills' | 'tree' | 'ready';
 const STEPS: Array<{ id: StepId; group: string; icon: string; title: string; hint: string }> = [
   { id: 'map', group: 'GÖREV', icon: '🗺', title: 'Bölge Seç', hint: 'Operasyonun geçeceği haritayı seç.' },
   { id: 'mode', group: 'GÖREV', icon: '🎯', title: 'Mod ve Zorluk', hint: 'Görev tipini ve zorluğu belirle — zorluk ödülü artırır.' },
@@ -46,6 +47,7 @@ const STEPS: Array<{ id: StepId; group: string; icon: string; title: string; hin
   { id: 'gear', group: 'DOLAP', icon: '🎒', title: 'Çanta ve Teçhizat', hint: 'Çanta ek silah slotu açar; kask ve yelekler görünümü değiştirir.' },
   { id: 'weapons', group: 'SİLAHLAR', icon: '🔫', title: 'Cephanelik', hint: 'Slot seç, silaha tıkla, alttaki düğmeyle tak.' },
   { id: 'skills', group: 'YETENEK', icon: '⚡', title: 'Yetenekler', hint: 'Q / E / R yeteneklerini kalıcı olarak geliştir.' },
+  { id: 'tree', group: 'YETENEK', icon: '🌳', title: 'Yetenek Ağacı', hint: 'Operatör seviyesi (maks 75) her seviyede 1 puan verir. Pasif, aktif ve silah özelliklerini aç.' },
   { id: 'ready', group: 'HAZIR', icon: '✔', title: 'Göreve Hazır', hint: 'Son kontrol — her şey tamamsa başla.' },
 ];
 
@@ -143,6 +145,26 @@ const CSS = /* css */ `
 #lobby .lskill .ic { width: 52px; height: 52px; display: grid; place-items: center; font-size: 24px; border: 1px solid var(--line-strong); position: relative; }
 #lobby .lskill .ic .k { position: absolute; top: 1px; left: 4px; font: 700 12px var(--display); }
 #lobby .lskill b { font: 700 16px var(--display); }
+#lobby .tlv { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); background: rgba(14,18,22,0.8); margin-bottom: 10px; }
+#lobby .tlv .big { font: 700 30px var(--display); color: var(--gold); min-width: 64px; text-align: center; }
+#lobby .tlv .bar { height: 6px; background: rgba(255,255,255,0.08); margin-top: 6px; }
+#lobby .tlv .bar i { display: block; height: 100%; background: var(--gold); }
+#lobby .tcols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+#lobby .tcol h4 { margin: 0 0 6px; font: 700 13px var(--display); letter-spacing: .08em; color: var(--dim); }
+#lobby .tnode { display: grid; grid-template-columns: 30px 1fr; gap: 8px; width: 100%; text-align: left; padding: 8px; margin-bottom: 6px; border: 1px solid var(--line); background: rgba(14,18,22,0.8); color: inherit; cursor: pointer; font: inherit; }
+#lobby .tnode .ti { font-size: 20px; line-height: 30px; text-align: center; }
+#lobby .tnode b { font: 700 13px var(--display); display: block; }
+#lobby .tnode small { display: block; color: var(--dim); font-size: 11px; line-height: 1.3; }
+#lobby .tnode .tr { font: 700 11px var(--display); color: var(--gold); }
+#lobby .tnode .tt { font: 700 9.5px var(--display); letter-spacing: .08em; color: var(--dim); }
+#lobby .tnode.can { border-color: #00ff87; }
+#lobby .tnode.full { border-color: var(--gold); }
+#lobby .tnode.lock { opacity: .4; cursor: default; }
+#lobby .tnode:disabled { cursor: default; }
+#lobby .durs { display: flex; gap: 6px; flex-wrap: wrap; }
+#lobby .durs button { flex: 1 1 0; padding: 10px 6px; border: 1px solid var(--line-strong); background: rgba(14,18,22,0.8); color: inherit; font: 700 14px var(--display); cursor: pointer; }
+#lobby .durs button.on { border-color: #00ff87; color: #00ff87; }
+@media (max-width: 760px) { #lobby .tcols { grid-template-columns: 1fr; } }
 #lobby .pips { display: flex; gap: 3px; margin: 6px 0; }
 #lobby .pips i { width: 22px; height: 5px; background: #222a31; }
 #lobby .pips i.on { background: #00ff87; }
@@ -564,7 +586,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
         por.append(thumbImg(heroPortrait(`${h.id}:${hl.costume}:${hl.accessories.join('+')}`, h.avatarUrl, h.gender, cos)));
         por.insertAdjacentHTML('beforeend', `<span class="ini">${h.icon}</span>`);
         const info = document.createElement('div');
-        info.innerHTML = `<div class="nm">${h.name}</div><div class="rl">${h.role} · ${h.gender === 'male' ? 'Erkek' : 'Kadın'}</div>
+        info.innerHTML = `<div class="nm">${h.name} <small style="color:var(--gold);font-size:11px">Sv ${loadHeroProgress(h.id).level}</small></div><div class="rl">${h.role} · ${h.gender === 'male' ? 'Erkek' : 'Kadın'}</div>
           <div class="hs"><span>CAN</span><span class="b"><i style="width:${Math.round((h.hp / 140) * 100)}%"></i></span><span>HIZ</span><span class="b"><i style="width:${Math.round((h.speed / 8) * 100)}%"></i></span></div>`;
         b.append(por, info);
         b.insertAdjacentHTML('beforeend', `<span class="ab" title="Q · E · R">${ab.q.icon}${ab.e.icon}${ab.r.icon}</span>`);
@@ -882,6 +904,61 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     }
   };
 
+  const BRANCH_LABEL: Record<TreeBranch, string> = { attack: 'SALDIRI', defense: 'DAYANIKLILIK', tactic: 'TAKTİK' };
+  const TYPE_LABEL = { passive: 'PASİF', active: 'AKTİF', weapon: 'SİLAH' } as const;
+  const renderTree = (panel: HTMLElement) => {
+    const heroId = loadProfile().hero;
+    const hero = rosterById(heroId);
+    const prog = loadHeroProgress(heroId);
+    const pts = availablePoints(prog);
+    const spent = spentPoints(prog);
+    const maxed = prog.level >= HERO_LEVEL_MAX;
+    const need = heroXpForLevel(prog.level);
+    const head = document.createElement('div');
+    head.className = 'tlv';
+    head.innerHTML = `<div class="big">${prog.level}</div><div style="flex:1"><b style="font:700 16px var(--display);color:${hexc(hero.accent)}">${hero.name}</b> <small style="color:var(--dim)">Operatör seviyesi · maks ${HERO_LEVEL_MAX}</small>
+      <div style="font-size:12px;color:var(--dim);margin-top:2px">${maxed ? 'Maksimum seviye' : `${Math.floor(prog.xp).toLocaleString('tr-TR')} / ${need.toLocaleString('tr-TR')} XP`} · Puan: <b style="color:#00ff87">${pts}</b> · Harcanan ${spent}/${TREE_TOTAL_RANKS}</div>
+      <div class="bar"><i style="width:${maxed ? 100 : Math.min(100, (prog.xp / need) * 100)}%"></i></div>
+      <div style="font-size:11px;color:var(--dim);margin-top:4px">Koşuda toplanan her XP kaydedilir. Takımdaki yardımcılar da %60 XP kazanır.</div></div>`;
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'btn';
+    reset.textContent = 'SIFIRLA';
+    reset.title = 'Tüm puanları ücretsiz geri al';
+    reset.disabled = spent === 0;
+    reset.onclick = () => {
+      resetTree(heroId);
+      toast('Puanlar iade edildi', true);
+      renderAll();
+    };
+    head.append(reset);
+    panel.append(head);
+    const cols = Object.assign(document.createElement('div'), { className: 'tcols' });
+    for (const br of ['attack', 'defense', 'tactic'] as TreeBranch[]) {
+      const col = Object.assign(document.createElement('div'), { className: 'tcol' });
+      col.append(Object.assign(document.createElement('h4'), { textContent: BRANCH_LABEL[br] }));
+      for (const n of TREE_NODES.filter((x) => x.branch === br)) {
+        const r = prog.ranks[n.id] ?? 0;
+        const block = unlockBlock(prog, n.id);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `tnode${block === null ? ' can' : ''}${block === 'max' ? ' full' : ''}${block === 'level' || block === 'requires' ? ' lock' : ''}`;
+        const why = block === 'level' ? `Operatör Sv ${n.reqLevel} gerekir` : block === 'requires' ? `Önce: ${TREE_NODES.find((x) => x.id === n.requires)?.name ?? ''}` : '';
+        b.innerHTML = `<span class="ti">${n.icon}</span><span><span class="tt">${TYPE_LABEL[n.type]} · Sv ${n.reqLevel}+</span><b>${n.name} <span class="tr">${r}/${n.maxRank}</span></b><small>${n.desc}</small>${why ? `<small style="color:var(--danger)">${why}</small>` : ''}</span>`;
+        b.disabled = block !== null;
+        b.onclick = () => {
+          if (unlockTreeNode(heroId, n.id)) {
+            toast(`${n.name} → ${r + 1}/${n.maxRank}`, true);
+            renderAll();
+          }
+        };
+        col.append(b);
+      }
+      cols.append(col);
+    }
+    panel.append(cols);
+  };
+
   const renderMission = (panel: HTMLElement) => {
     const ms = currentMission();
     const sec = (t: string) => Object.assign(document.createElement('h3'), { textContent: t });
@@ -914,6 +991,22 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
       modes.append(b);
     }
     panel.append(modes);
+    if (TIMED_MODES.includes(ms.mode)) {
+      panel.append(sec('Görev süresi'));
+      const durs = Object.assign(document.createElement('div'), { className: 'durs' });
+      const cur = ms.minutes ?? DEFAULT_RUN_MINUTES;
+      for (const m of RUN_MINUTES) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = cur === m ? 'on' : '';
+        b.textContent = `${m} dk`;
+        b.onclick = () => (setMission({ ...ms, minutes: m }), renderAll());
+        durs.append(b);
+      }
+      panel.append(durs);
+    } else if (ms.mode === 'horde') {
+      panel.append(Object.assign(document.createElement('h3'), { textContent: `${HORDE_WAVES} sürü · süre sınırı yok` }));
+    }
     panel.append(sec('Zorluk'));
     const diffs = Object.assign(document.createElement('div'), { className: 'diffs' });
     for (const id of DIFFICULTY_ORDER) {
@@ -952,7 +1045,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     const ab = HERO_ABILITIES[p.hero];
     const d = document.createElement('div');
     d.className = 'ready';
-    d.innerHTML = `<div class="rmap" style="background-image:url(/ui/maps/${ms.map}.jpg)"><div><b>${MAPS[ms.map].name}</b><span>${MODES[ms.mode].icon} ${MODES[ms.mode].name} · <span style="color:${hexc(DIFFICULTIES[ms.difficulty].color)}">${DIFFICULTIES[ms.difficulty].name}</span> · Ödül ×${DIFFICULTIES[ms.difficulty].reward}</span></div></div>
+    d.innerHTML = `<div class="rmap" style="background-image:url(/ui/maps/${ms.map}.jpg)"><div><b>${MAPS[ms.map].name}</b><span>${MODES[ms.mode].icon} ${MODES[ms.mode].name}${TIMED_MODES.includes(ms.mode) ? ` · ${ms.minutes ?? DEFAULT_RUN_MINUTES} dk` : ms.mode === 'horde' ? ` · ${HORDE_WAVES} sürü` : ''} · <span style="color:${hexc(DIFFICULTIES[ms.difficulty].color)}">${DIFFICULTIES[ms.difficulty].name}</span> · Ödül ×${DIFFICULTIES[ms.difficulty].reward}</span></div></div>
       <div class="row"><span>OPERATÖR</span><div><b style="font:700 18px var(--display);color:${hexc(hero.accent)}">${hero.name}</b> <small style="color:var(--dim)">${hero.role} · ${COSTUMES.find((c) => c.id === h.costume)?.name ?? 'Standart'} · ${slotCapacity(p.hero)} slot</small></div></div>
       <div class="row"><span>SİLAHLAR</span><div class="guns" id="rdGuns"></div></div>
       <div class="row"><span>YETENEKLER</span><div class="abil">${(['q', 'e', 'r'] as const).map((k) => `<div><span class="k">${k.toUpperCase()}</span><i>${ab[k].icon}</i>${ab[k].name} <small style="color:var(--dim)">Sv ${h.abilities[k]}</small></div>`).join('')}</div></div>`;
@@ -1037,6 +1130,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     else if (id === 'gear') (renderLocker(panel), keep(2, 99));
     else if (id === 'weapons') renderArmory(panel);
     else if (id === 'skills') renderSkills(panel);
+    else if (id === 'tree') renderTree(panel);
     else renderReady(panel);
     panel.scrollTop = scroll;
     const costume = COSTUMES.find((c) => c.id === h.costume)?.name ?? 'Standart';

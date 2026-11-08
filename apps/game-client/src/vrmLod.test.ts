@@ -37,4 +37,13 @@ describe('zombieVrmLod', () => {
     const lod = zombieVrmLod(attacker, 0, 0, 0);
     expect(lod === 'full' || lod === 'reduced').toBe(true);
   });
+
+  it('never flips mid-far zombies to proxy between cheap ticks (no VRM/proxy flicker)', () => {
+    const z = fakeZombie({ x: 31, z: 0 });
+    for (let frame = 0; frame < 8; frame++) {
+      beginZombieLodFrame(12);
+      const lod = zombieVrmLod(z, 0, 0, frame);
+      expect(lod === 'reduced' || lod === 'skip').toBe(true);
+    }
+  });
 });

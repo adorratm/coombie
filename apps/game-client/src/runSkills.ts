@@ -7,8 +7,12 @@ import { SupportCalls, type SupportKind } from './support';
 
 /**
  * YAZS-style run skills: auto-firing abilities picked on level-up (max 6), each with
- * 5 levels, plus passive items (max 6) that scale every skill. A level-5 skill
- * paired with its passive can EVOLVE into a stronger form (offered as an epic card).
+ * 4 levels, plus passive items (max 6) that scale every skill. A level-4 skill
+ * EVOLVES into one of 2-3 branches the player picks (epic cards):
+ *  - signature: the skill's hand-made evolution (needs its passive, or the hero-tree perk)
+ *  - power ("Yıkım"): ×1.9 damage
+ *  - rapid ("Seri"): −45 % cooldown, ×1.15 damage
+ * Every evolved branch also grants the old level-5 bonus.
  */
 
 export type RunSkillId =
@@ -36,7 +40,9 @@ export type RunSkillId =
 
 export type PassiveId = 'core' | 'area' | 'cooldown' | 'amount' | 'duration' | 'velocity' | 'capacitor' | 'fuel';
 
-export const SKILL_MAX = 5;
+export const SKILL_MAX = 4;
+/** internal level an evolved skill counts as (keeps the old Sv5 bonuses) */
+const EVOLVED_LEVEL = 5;
 export const PASSIVE_MAX = 5;
 export const MAX_SKILLS = 6;
 export const MAX_PASSIVES = 6;
@@ -47,7 +53,7 @@ export interface RunSkillDef {
   icon: string;
   color: number;
   desc: string;
-  /** what each level adds (index 0 = level 1) */
+  /** what each level adds (index 0 = level 1; index 4 = bonus granted by evolving) */
   levels: [string, string, string, string, string];
   evo: { passive: PassiveId; name: string; desc: string };
   /** hero-exclusive (radio fire support) */
@@ -118,23 +124,70 @@ export const HERO_START_SKILL: Record<OperativeId, RunSkillId> = {
   havoc: 'rockets',
 };
 
+export type EvoBranch = 'signature' | 'power' | 'rapid';
+
+export const EVO_BRANCH_INFO: Record<Exclude<EvoBranch, 'signature'>, { name: string; desc: string }> = {
+  power: { name: 'Yıkım', desc: '×1.9 hasar' },
+  rapid: { name: 'Seri Ateş', desc: '−%45 bekleme süresi, ×1.15 hasar' },
+};
+
 export interface RunSkillState {
   /** owning hero (gates hero-exclusive skills) */
   hero?: OperativeId;
   skills: Map<RunSkillId, number>;
   passives: Map<PassiveId, number>;
-  evolved: Set<RunSkillId>;
+  evolved: Map<RunSkillId, EvoBranch>;
+  /** active skill slots (hero tree can add one) */
+  maxSkills: number;
+  /** hero tree perk: the signature evolution never needs its passive */
+  evoAnyBranch: boolean;
 }
 
 export function createRunSkillState(start?: RunSkillId): RunSkillState {
-  const s: RunSkillState = { skills: new Map(), passives: new Map(), evolved: new Set() };
+  const s: RunSkillState = { skills: new Map(), passives: new Map(), evolved: new Map(), maxSkills: MAX_SKILLS, evoAnyBranch: false };
   if (start) s.skills.set(start, 1);
   return s;
 }
 
+/** Display name of a skill, including its evolution branch. */
+export function runSkillName(st: RunSkillState, id: RunSkillId): string {
+  const d = RUN_SKILLS[id];
+  const b = st.evolved.get(id);
+  if (!b) return d.name;
+  if (b === 'signature') return d.evo.name;
+  return `${d.name} · ${EVO_BRANCH_INFO[b].name}`;
+}
+
+/** Skill that reached max level and still waits for its evolution pick. */
+export function pendingEvolution(st: RunSkillState): RunSkillId | null {
+  for (const [id, lv] of st.skills) if (lv >= SKILL_MAX && !st.evolved.has(id)) return id;
+  return null;
+}
+
+/** The 2-3 evolution branches offered for a max-level skill. */
+export function evolutionCards(st: RunSkillState, id: RunSkillId): RunSkillCard[] {
+  const def = RUN_SKILLS[id];
+  const bonus = def.levels[4];
+  const out: RunSkillCard[] = [];
+  if (st.evoAnyBranch || (st.passives.get(def.evo.passive) ?? 0) > 0) {
+    out.push({ kind: 'evo', id: `${id}:signature`, name: `EVRİM: ${def.evo.name}`, description: `${def.evo.desc} (+ ${bonus})`, icon: def.icon, level: 5, rarity: 'epic' });
+  }
+  // supply drops deal no damage: no "power" branch for them
+  if (id !== 'supplyDrop') {
+    out.push({ kind: 'evo', id: `${id}:power`, name: `EVRİM: ${def.name} — ${EVO_BRANCH_INFO.power.name}`, description: `${EVO_BRANCH_INFO.power.desc} (+ ${bonus})`, icon: def.icon, level: 5, rarity: 'epic' });
+  }
+  out.push({ kind: 'evo', id: `${id}:rapid`, name: `EVRİM: ${def.name} — ${EVO_BRANCH_INFO.rapid.name}`, description: `${EVO_BRANCH_INFO.rapid.desc} (+ ${bonus})`, icon: def.icon, level: 5, rarity: 'epic' });
+  if (out.length < 2) {
+    // only possible for supplyDrop without its passive: always give a real choice
+    out.unshift({ kind: 'evo', id: `${id}:signature`, name: `EVRİM: ${def.evo.name}`, description: `${def.evo.desc} (+ ${bonus})`, icon: def.icon, level: 5, rarity: 'epic' });
+  }
+  return out;
+}
+
 export interface RunSkillCard {
   kind: 'skill' | 'passive' | 'evo';
-  id: RunSkillId | PassiveId;
+  /** skill / passive id; evo cards use `${skillId}:${branch}` */
+  id: RunSkillId | PassiveId | string;
   name: string;
   description: string;
   icon: string;
@@ -150,12 +203,10 @@ export function runSkillCards(st: RunSkillState): RunSkillCard[] {
     if (st.evolved.has(def.id)) continue;
     if (def.heroes && (!st.hero || !def.heroes.includes(st.hero))) continue;
     if (lv >= SKILL_MAX) {
-      if ((st.passives.get(def.evo.passive) ?? 0) > 0) {
-        out.push({ kind: 'evo', id: def.id, name: `EVRİM: ${def.evo.name}`, description: def.evo.desc, icon: def.icon, level: 6, rarity: 'epic' });
-      }
+      out.push(...evolutionCards(st, def.id));
       continue;
     }
-    if (lv === 0 && st.skills.size >= MAX_SKILLS) continue;
+    if (lv === 0 && st.skills.size >= st.maxSkills) continue;
     out.push({
       kind: 'skill',
       id: def.id,
@@ -187,7 +238,10 @@ export function runSkillCards(st: RunSkillState): RunSkillCard[] {
 export function applyRunSkillCard(st: RunSkillState, kind: RunSkillCard['kind'], id: string): void {
   if (kind === 'skill') st.skills.set(id as RunSkillId, Math.min(SKILL_MAX, (st.skills.get(id as RunSkillId) ?? 0) + 1));
   else if (kind === 'passive') st.passives.set(id as PassiveId, Math.min(PASSIVE_MAX, (st.passives.get(id as PassiveId) ?? 0) + 1));
-  else st.evolved.add(id as RunSkillId);
+  else {
+    const [sid, branch] = id.split(':') as [RunSkillId, EvoBranch | undefined];
+    if ((st.skills.get(sid) ?? 0) >= SKILL_MAX && !st.evolved.has(sid)) st.evolved.set(sid, branch ?? 'signature');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -401,10 +455,19 @@ export class RunSkillRuntime {
 
   // ------------------------------------------------------------ scaling
   private lv(id: RunSkillId): number {
+    if (this.ctx.state.evolved.has(id)) return EVOLVED_LEVEL;
     return this.ctx.state.skills.get(id) ?? 0;
   }
+  /** signature evolution (the hand-made evolved behaviour) */
   private evo(id: RunSkillId): boolean {
-    return this.ctx.state.evolved.has(id);
+    return this.ctx.state.evolved.get(id) === 'signature';
+  }
+  private branchDmg(id: RunSkillId): number {
+    const b = this.ctx.state.evolved.get(id);
+    return b === 'power' ? 1.9 : b === 'rapid' ? 1.15 : 1;
+  }
+  private branchCd(id: RunSkillId): number {
+    return this.ctx.state.evolved.get(id) === 'rapid' ? 0.55 : 1;
   }
   private pv(id: PassiveId): number {
     return this.ctx.state.passives.get(id) ?? 0;
@@ -433,7 +496,7 @@ export class RunSkillRuntime {
   }
   /** level damage curve: +30 % per level after 1 */
   private lvMul(id: RunSkillId): number {
-    return 1 + 0.3 * (this.lv(id) - 1);
+    return (1 + 0.3 * (this.lv(id) - 1)) * this.branchDmg(id);
   }
   private hit(z: ZombieVisual, dmg: number, at: THREE.Vector3, from?: THREE.Vector3): void {
     if (z.hp <= 0) return;
@@ -499,8 +562,8 @@ export class RunSkillRuntime {
       .filter((z) => z.hp > 0 && z.root.position.distanceToSquared(t) < 12 * 12)
       .sort((a, b) => b.hp - a.hp)
       .slice(0, 8);
-    if (!this.support.call(kind, lvl, this.evo(id), 1, t, near)) return 'notarget';
-    const cd = base * (lvl >= 5 ? 0.8 : 1) * (id === 'supplyDrop' ? 1 - 0.08 * (lvl - 1) : 1);
+    if (!this.support.call(kind, lvl, this.evo(id), this.branchDmg(id), t, near)) return 'notarget';
+    const cd = base * (lvl >= 5 ? 0.8 : 1) * (id === 'supplyDrop' ? 1 - 0.08 * (lvl - 1) : 1) * this.branchCd(id);
     this.supportCd = cd;
     this.supportMax = cd;
     return 'ok';
@@ -529,7 +592,7 @@ export class RunSkillRuntime {
       this.cd.set(id, c);
       return false;
     }
-    this.cd.set(id, base * this.cdMul());
+    this.cd.set(id, base * this.cdMul() * this.branchCd(id));
     return true;
   }
 
@@ -1374,13 +1437,18 @@ export class RunSkillRuntime {
     return Object.values(this.m);
   }
 
+  /** Support-vehicle meshes for the loading-screen shader warm-up. */
+  warmObjects(): THREE.Object3D[] {
+    return this.support.warmObjects();
+  }
+
   /** HUD summary */
   hud(): Array<{ id: string; icon: string; name: string; level: number; evo: boolean; passive: boolean }> {
     const out: Array<{ id: string; icon: string; name: string; level: number; evo: boolean; passive: boolean }> = [];
     for (const [id, lv] of this.ctx.state.skills) {
       const d = RUN_SKILLS[id];
       const evo = this.ctx.state.evolved.has(id);
-      out.push({ id, icon: d.icon, name: evo ? d.evo.name : d.name, level: lv, evo, passive: false });
+      out.push({ id, icon: d.icon, name: runSkillName(this.ctx.state, id), level: evo ? EVOLVED_LEVEL : lv, evo, passive: false });
     }
     for (const [id, lv] of this.ctx.state.passives) {
       const d = PASSIVES[id];

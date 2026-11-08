@@ -265,7 +265,11 @@ export function createOperative(opts: {
   const muzzlePoint = attachWeaponMesh(gun, weapon, accentHex, s);
 
   const muzzleLight = new THREE.PointLight(0xffcc66, 0, 8);
-  muzzlePoint.add(muzzleLight);
+  // Only the player's muzzle light lives in the scene. Every PointLight in the scene
+  // costs per-pixel work in every lit material, and adding one when an ally /
+  // captive spawns mid-run changes the light count → every shader recompiles (big
+  // freeze). Allies keep a detached light object so callers can still drive it.
+  if (opts.isPlayer) muzzlePoint.add(muzzleLight);
 
   const blob = new THREE.Mesh(
     new THREE.CircleGeometry(0.48 * s, 20),
@@ -362,7 +366,7 @@ export function setOperativeWeapon(op: OperativeVisual, index: number): void {
   const scale = op.root.scale.x || 1;
   const oldLight = op.muzzleLight;
   op.muzzlePoint = attachWeaponMesh(op.gun, op.weapon, op.color, scale);
-  op.muzzlePoint.add(oldLight);
+  if (op.isPlayer) op.muzzlePoint.add(oldLight);
   op.muzzleLight = oldLight;
   op.fireCooldown = 0.15;
   op.ammo = op.weapon.melee ? 999 : op.weapon.magSize;
@@ -790,7 +794,10 @@ export function animateZombieWalk(
     z.head.rotation.x = gait.headX * 0.5;
     z.head.rotation.y = gait.headY + Math.sin(t * 1.4 + z.wobble) * (moving ? 0.04 : 0.12);
   }
-  z.root.position.y = gait.bobY;
+  // Clip-animated zombies bob through their own walk cycle; adding the proxy gait
+  // bob on the root as well made them float / bounce off the ground.
+  const clipDriven = !z.proxy.visible && !!(z as ZombieVisual & { vrm?: { zombieAnim?: unknown } }).vrm?.zombieAnim;
+  z.root.position.y = clipDriven ? 0 : gait.bobY;
   updateZombieVrm(z, dt, moving, lod);
 }
 

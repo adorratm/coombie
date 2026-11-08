@@ -77,6 +77,9 @@ export class ZombieAnimator {
   private fastW = 0;
   private act: THREE.AnimationAction | null = null;
   private actW = 0;
+  /** previous one-shot, faded out instead of cut (avoids a pose pop between actions) */
+  private prev: THREE.AnimationAction | null = null;
+  private prevW = 0;
   private actEnd = 0;
   private actHold = false;
   private actPriority = 0;
@@ -135,7 +138,20 @@ export class ZombieAnimator {
     if (this.act && this.actW > 0.05 && priority < this.actPriority) return false;
     const a = this.oneShot(seg.clip);
     if (!a) return false;
-    if (this.act && this.act !== a) this.act.setEffectiveWeight(0);
+    if (this.act && this.act !== a) {
+      // hand the outgoing action to the fade slot
+      if (this.prev && this.prev !== a) {
+        this.prev.setEffectiveWeight(0);
+        this.prev.stop();
+      }
+      this.prev = this.act;
+      this.prevW = this.actW;
+      this.prev.paused = true;
+    }
+    if (this.prev === a) {
+      this.prev = null;
+      this.prevW = 0;
+    }
     const len = Math.max(0.05, seg.to - seg.from);
     const rate = len / Math.max(0.05, duration);
     a.reset();
@@ -143,7 +159,7 @@ export class ZombieAnimator {
     a.setEffectiveTimeScale(rate);
     a.setEffectiveWeight(this.act === a ? this.actW : 0);
     a.play();
-    if (this.act !== a) this.actW = Math.min(this.actW, 0.35);
+    if (this.act !== a) this.actW = 0;
     this.act = a;
     this.actEnd = seg.to;
     this.actHold = hold;
@@ -187,6 +203,12 @@ export class ZombieAnimator {
     }
     this.act = null;
     this.actW = 0;
+    if (this.prev) {
+      this.prev.setEffectiveWeight(0);
+      this.prev.stop();
+    }
+    this.prev = null;
+    this.prevW = 0;
     this.actHold = false;
     this.actPriority = 0;
     this.dead = false;
@@ -219,7 +241,19 @@ export class ZombieAnimator {
         this.act.paused = true;
       }
     }
-    const base = 1 - this.actW;
+    if (this.prev) {
+      this.prevW = THREE.MathUtils.damp(this.prevW, 0, 12, dt);
+      if (this.prevW < 0.02) {
+        this.prev.setEffectiveWeight(0);
+        this.prev.stop();
+        this.prev = null;
+        this.prevW = 0;
+      }
+    }
+    // weights must sum to 1 (no bone may fall back to the bind / T-pose)
+    if (this.actW + this.prevW > 1) this.prevW = 1 - this.actW;
+    this.prev?.setEffectiveWeight(this.prevW);
+    const base = Math.max(0, 1 - this.actW - this.prevW);
     const fastW = this.fast ? this.fastW * this.moveW : 0;
     this.idle.setEffectiveWeight(base * (1 - this.moveW));
     this.move.setEffectiveWeight(base * (this.moveW - fastW));

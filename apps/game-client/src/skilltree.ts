@@ -173,6 +173,9 @@ export interface SkillTreeState {
   rageUntil: number;
   rageCooldown: number;
   magnetBoostUntil: number;
+  /** permanent hero-tree bonuses folded into the derived values */
+  bonusShield: number;
+  bonusPickup: number;
 }
 
 export function createSkillTreeState(): SkillTreeState {
@@ -187,6 +190,8 @@ export function createSkillTreeState(): SkillTreeState {
     rageUntil: 0,
     rageCooldown: 0,
     magnetBoostUntil: 0,
+    bonusShield: 0,
+    bonusPickup: 0,
   };
 }
 
@@ -218,8 +223,8 @@ export function unlockSkill(state: SkillTreeState, id: SkillId): boolean {
 }
 
 export function recomputeSkillDerived(state: SkillTreeState): void {
-  let shieldMax = 0;
-  let pickup = 1.6;
+  let shieldMax = state.bonusShield;
+  let pickup = 1.6 + state.bonusPickup;
   let ragePower = 0.3;
   let rageDuration = 4;
   for (const node of SKILL_NODES) {

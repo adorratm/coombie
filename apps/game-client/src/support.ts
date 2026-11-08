@@ -46,7 +46,9 @@ interface Mover {
   t0: number;
   dur: number;
   spin?: THREE.Object3D[];
-  onTick?: (k: number, pos: THREE.Vector3) => void;
+  /** spun around their local X axis (tail rotors) */
+  spinX?: THREE.Object3D[];
+  onTick?: (k: number, pos: THREE.Vector3, dt: number) => void;
   bank?: number;
 }
 interface Decal {
@@ -95,13 +97,15 @@ export class SupportCalls {
     this.mat.black = std(0x15171a, 0.6, 0.3);
     this.mat.white = std(0xd9dcdf, 0.5, 0.2);
     this.mat.chute = new THREE.MeshStandardMaterial({ color: 0x6a7a4a, roughness: 0.9, side: THREE.DoubleSide });
-    this.mat.flame = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.85 });
+    this.mat.flame = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+    this.mat.blur = new THREE.MeshBasicMaterial({ color: 0x1a1c1e, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
     this.geo.box = new THREE.BoxGeometry(1, 1, 1);
     this.geo.cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 14).rotateX(Math.PI / 2);
     this.geo.cone = new THREE.ConeGeometry(0.5, 1, 14).rotateX(Math.PI / 2);
     this.geo.sphere = new THREE.SphereGeometry(0.5, 14, 10);
     this.geo.ring = new THREE.RingGeometry(0.9, 1, 48);
     this.geo.plane = new THREE.PlaneGeometry(1, 1);
+    this.geo.disc = new THREE.CircleGeometry(1, 32);
     const delta = new THREE.Shape();
     delta.moveTo(0, 1.4);
     delta.lineTo(4.6, -1.6);
@@ -140,6 +144,7 @@ export class SupportCalls {
       const fl = this.part(g, 'cone', 'flame', 0.8, 0.8, 2.2, 0, 0, -7.6);
       fl.rotation.y = Math.PI;
       fl.castShadow = false;
+      fl.name = 'flame';
       this.part(g, 'cyl', 'darkGrey', 0.5, 0.5, 2.4, 2.6, -0.45, -0.4); // under-wing stores
       this.part(g, 'cyl', 'darkGrey', 0.5, 0.5, 2.4, -2.6, -0.45, -0.4);
       this.protos.jet = g;
@@ -167,6 +172,14 @@ export class SupportCalls {
       this.part(rotor, 'box', 'black', 13, 0.06, 0.45);
       this.part(rotor, 'box', 'black', 0.45, 0.06, 13);
       g.add(rotor);
+      // motion-blur disc so the spinning rotor reads at speed
+      const blur = new THREE.Mesh(this.geo.disc!, this.mat.blur!);
+      blur.rotation.x = -Math.PI / 2;
+      blur.scale.setScalar(6.6);
+      blur.position.y = 1.72;
+      blur.castShadow = false;
+      blur.renderOrder = 5;
+      g.add(blur);
       const tail = new THREE.Group();
       tail.name = 'tail';
       tail.position.set(0.25, 1.2, -8.2);
@@ -225,6 +238,11 @@ export class SupportCalls {
       this.protos.bomb = g;
     }
     return this.protos.bomb.clone();
+  }
+
+  /** One instance of every vehicle, for the loading-screen shader warm-up. */
+  warmObjects(): THREE.Object3D[] {
+    return [this.jet(), this.heli(), this.uav(), this.cargo(), this.bomb()];
   }
 
   // ------------------------------------------------------------ telegraphs
@@ -385,7 +403,28 @@ export class SupportCalls {
       const from = c.clone().addScaledVector(dir, -SPEED * 1.8).setY(ALT + 3);
       const to = c.clone().addScaledVector(dir, SPEED * 1.8).setY(ALT + 7);
       const plane = this.jet();
-      this.fly(plane, from, to, arrive - 1.8, 3.6, { bank: off === 0 ? 0.15 : off * 0.04 });
+      const flame = plane.getObjectByName('flame');
+      const fx = this.ctx.fx;
+      let boom = false;
+      this.fly(plane, from, to, arrive - 1.8, 3.6, {
+        bank: off === 0 ? 0.15 : off * 0.04,
+        onTick: (k, pos) => {
+          // afterburner flicker + exhaust trail behind the nozzle
+          if (flame) flame.scale.set(0.8, 0.8, 2.2 * (0.8 + Math.random() * 0.5));
+          const nx = pos.x - dir.x * 8;
+          const nz = pos.z - dir.z * 8;
+          fx.emit('fire', nx, pos.y, nz, { life: 0.12, s0: 1.3, s1: 0.4, color: 0xffb060, spin: 0, a: 0.8, drag: 0 });
+          fx.emit('smoke', nx, pos.y, nz, { vy: 0.3, life: 1.4, s0: 0.9, s1: 2.6, color: 0xb8b4ac, a: 0.28, drag: 0.6 });
+          // wing-tip vapour
+          if (Math.random() < 0.6) {
+            for (const s of [-1, 1]) fx.emit('smoke', pos.x + side.x * 4.6 * s - dir.x * 2, pos.y, pos.z + side.z * 4.6 * s - dir.z * 2, { life: 0.5, s0: 0.25, s1: 0.7, color: 0xe8ecef, a: 0.35 });
+          }
+          if (!boom && k > 0.48) {
+            boom = true;
+            this.ctx.shake(0.3);
+          }
+        },
+      });
       for (let i = 0; i < nb; i++) {
         const k = nb === 1 ? 0.5 : i / (nb - 1);
         const p = a.clone().lerp(b, k);
@@ -421,25 +460,47 @@ export class SupportCalls {
     const total = (from.distanceTo(to)) / SPEED;
     const dps = 30 * (1 + 0.3 * (lv - 1)) * power;
     let tick = 0;
+    let gunT = 0;
     let shots = 0;
+    let washT = 0;
+    const sideV = new THREE.Vector3(dir.z, 0, -dir.x);
+    const muzzle = new THREE.Vector3();
+    const tgt = new THREE.Vector3();
+    const fx = this.ctx.fx;
     this.fly(h, from, to, start - 2.2, total, {
-      spin: [h.getObjectByName('rotor')!, h.getObjectByName('tail')!],
+      spin: [h.getObjectByName('rotor')!],
+      spinX: [h.getObjectByName('tail')!],
       bank: 0.12,
-      onTick: (_k, pos) => {
+      onTick: (_k, pos, dt) => {
+        // rotor downwash: dust kicked up on the ground under the helicopter
+        washT += dt;
+        if (washT > 0.05) {
+          washT = 0;
+          const a0 = Math.random() * Math.PI * 2;
+          fx.emit('smoke', pos.x + Math.cos(a0) * 2.5, 0.3, pos.z + Math.sin(a0) * 2.5, { vx: Math.cos(a0) * 5, vz: Math.sin(a0) * 5, vy: 0.4, life: 0.9, s0: 0.8, s1: 2.4, color: 0x7a6e5c, a: 0.22, drag: 2.2 });
+        }
         // fire while over the strip
-        const along = pos.clone().sub(a).dot(dir);
+        const along = (pos.x - a.x) * dir.x + (pos.z - a.z) * dir.z;
         if (along < -2 || along > len + 2) return;
-        tick += 1 / 60;
-        shots++;
-        const tgt = a.clone().addScaledVector(dir, THREE.MathUtils.clamp(along + 3 + Math.random() * 4, 0, len)).add(new THREE.Vector3(dir.z, 0, -dir.x).multiplyScalar((Math.random() - 0.5) * w));
-        const muzzle = pos.clone().add(new THREE.Vector3(0, -1.3, 0)).addScaledVector(dir, 2.4);
-        this.ctx.fx.tracer(muzzle, tgt.clone().setY(0.2), 0xffc46a);
-        if (shots % 3 === 0) this.ctx.fx.debris(tgt, 2, 0.4);
-        if (shots % 2 === 0) this.ctx.fx.emit('smoke', tgt.x, 0.3, tgt.z, { vy: 0.6, life: 0.8, s0: 0.3, s1: 0.9, color: 0x6e6250, a: 0.35 });
-        if (evo && shots % 20 === 0) this.blast(tgt, 2.2, dps * 0.4, false);
+        tick += dt;
+        gunT += dt;
+        // ~25 rounds/s regardless of frame rate
+        while (gunT >= 0.04) {
+          gunT -= 0.04;
+          shots++;
+          tgt.copy(a).addScaledVector(dir, THREE.MathUtils.clamp(along + 3 + Math.random() * 4, 0, len)).addScaledVector(sideV, (Math.random() - 0.5) * w);
+          muzzle.copy(pos).addScaledVector(dir, 2.4);
+          muzzle.y -= 1.3;
+          fx.tracer(muzzle, tgt.setY(0.2), 0xffc46a);
+          if (shots % 2 === 0) fx.emit('flash', muzzle.x, muzzle.y, muzzle.z, { life: 0.05, s0: 1.1, s1: 0.6, color: 0xffd080, spin: 0, a: 0.9 });
+          if (shots % 2 === 0) fx.sparks(tgt, 2, 0xffc070, 3);
+          if (shots % 3 === 0) fx.debris(tgt, 2, 0.4);
+          if (shots % 2 === 0) fx.emit('smoke', tgt.x, 0.3, tgt.z, { vy: 0.6, life: 0.8, s0: 0.3, s1: 0.9, color: 0x6e6250, a: 0.35 });
+          if (evo && shots % 20 === 0) this.blast(tgt.clone().setY(0), 2.2, dps * 0.4, false);
+        }
         if (tick >= 0.1) {
-          tick = 0;
-          const side = new THREE.Vector3(dir.z, 0, -dir.x);
+          tick -= 0.1;
+          const side = sideV;
           for (const z of this.ctx.zombies) {
             if (z.hp <= 0) continue;
             const r = z.root.position.clone().sub(a);
@@ -537,7 +598,8 @@ export class SupportCalls {
     this.part(g, 'box', 'olive', 1.1, 0.8, 1.1, 0, 0.4, 0);
     this.part(g, 'box', 'black', 1.12, 0.1, 1.12, 0, 0.5, 0);
     const chute = new THREE.Group();
-    const canopy = new THREE.Mesh(new THREE.SphereGeometry(2.4, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.4), this.mat.chute!);
+    this.geo.canopy ??= new THREE.SphereGeometry(2.4, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.4);
+    const canopy = new THREE.Mesh(this.geo.canopy, this.mat.chute!);
     canopy.position.y = 5.5;
     canopy.castShadow = true;
     chute.add(canopy);
@@ -578,7 +640,8 @@ export class SupportCalls {
       m.obj.lookAt(m.to);
       if (m.bank) m.obj.rotateZ(Math.sin(k * Math.PI) * m.bank);
       if (m.spin) for (const s of m.spin) s.rotation.y += dt * 40;
-      m.onTick?.(k, m.obj.position);
+      if (m.spinX) for (const s of m.spinX) s.rotation.x += dt * 55;
+      m.onTick?.(k, m.obj.position, dt);
     }
     for (let i = this.falls.length - 1; i >= 0; i--) {
       const f = this.falls[i]!;

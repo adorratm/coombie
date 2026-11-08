@@ -88,7 +88,11 @@ export function buildGameMap(scene: THREE.Scene, id: MapId, renderer?: THREE.Web
     new THREE.MeshBasicMaterial({ color: 0x3dff9a, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
   );
   beam.position.y = 20;
-  evacMarker.add(evRing, evLight, beam);
+  evacMarker.add(evRing, beam);
+  // keep the light outside the hidden group (intensity 0 until evac): toggling a
+  // light's visibility changes the scene light count → all shaders recompile
+  evLight.position.set(e.x, 3, e.z);
+  b.root.add(evLight);
   evacMarker.visible = false;
   b.root.add(evacMarker);
 
@@ -115,7 +119,7 @@ export function buildGameMap(scene: THREE.Scene, id: MapId, renderer?: THREE.Web
       if (evacMarker.visible) {
         evRing.scale.setScalar(1 + Math.sin(t * 3) * 0.04);
         evLight.intensity = 6 + Math.sin(t * 5) * 2;
-      }
+      } else if (evLight.intensity !== 0) evLight.intensity = 0;
     },
     dispose: () => {
       weather.dispose();

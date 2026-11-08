@@ -117,6 +117,7 @@ class Layer {
   private readonly col: Float32Array;
   private readonly ps: P[] = [];
   private readonly free: P[] = [];
+  private lastN = 0;
 
   constructor(scene: THREE.Scene, tex: THREE.Texture, additive: boolean, private readonly cap: number) {
     const quad = new THREE.PlaneGeometry(1, 1);
@@ -193,9 +194,18 @@ class Layer {
       n++;
     }
     this.geo.instanceCount = n;
-    (this.geo.getAttribute('aPos') as THREE.BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aSizeRot') as THREE.BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aColor') as THREE.BufferAttribute).needsUpdate = true;
+    this.mesh.visible = n > 0;
+    // nothing alive now or last frame → no GPU upload at all
+    if (n === 0 && this.lastN === 0) return;
+    this.lastN = n;
+    if (n === 0) return;
+    // upload only the live part of each buffer instead of the full capacity
+    for (const [name, size] of [['aPos', 3], ['aSizeRot', 2], ['aColor', 4]] as const) {
+      const a = this.geo.getAttribute(name) as THREE.InstancedBufferAttribute;
+      a.clearUpdateRanges();
+      a.addUpdateRange(0, n * size);
+      a.needsUpdate = true;
+    }
   }
 
   dispose(): void {
@@ -241,7 +251,9 @@ export class SkillFx {
       toxic: new Layer(scene, smoke, false, 300),
     };
     // a few reusable lights for explosions
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 2; i++) {
+      // 2 slots is enough (oldest gets reused); each scene light costs per-pixel
+      // work in every lit material.
       // always visible (intensity 0 when idle): toggling visibility changes the
       // scene light count and forces every material to recompile → big hitches
       const l = new THREE.PointLight(0xff9a40, 0, 12, 2);

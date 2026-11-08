@@ -268,10 +268,9 @@ export function rollItemDrop(
 }
 
 export function updateWorldItem(item: WorldItem, dt: number): void {
-  item.life -= dt;
+  // dropped items never expire (nothing collected may be lost); `life` is kept for save/HUD compat
   item.bob += dt * 3;
   // lies on the ground with a slow turn; marker ring stays flat at ground level
   item.mesh.position.y = 0.3 + Math.sin(item.bob) * 0.03;
   item.mesh.rotation.y += dt * 0.8;
-  if (item.life < 6) item.mesh.visible = Math.sin(item.life * 12) > -0.3;
 }

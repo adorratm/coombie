@@ -138,15 +138,23 @@ const renderRunSkills = (hud: ArenaHudState) => {
 let slotKey = '';
 let weaponPicVariant = '';
 const renderSlots = (hud: ArenaHudState) => {
-  const key = hud.weaponSlots.map((w) => `${w.variant}${w.active ? '*' : ''}`).join(',');
+  const key = hud.weaponSlots.map((w) => `${w.variant}${w.active ? '*' : ''}${w.locked ? `L${w.unlockAt}` : ''}:${w.level ?? 0}`).join(',');
   if (key === slotKey) return;
   slotKey = key;
   el.slotBar.replaceChildren(
     ...hud.weaponSlots.map((w, i) => {
       const d = document.createElement('div');
-      d.className = `slot${w.active ? ' on' : ''} t${w.tier}`;
-      d.innerHTML = `<span class="n">${i + 1}</span><span class="nm">${w.name}</span>`;
+      d.className = `slot${w.active ? ' on' : ''} t${w.tier}${w.locked ? ' locked' : ''}`;
+      const lv = !w.locked && (w.level ?? 0) > 0 ? ` <small class="wl">Sv${w.level}</small>` : '';
+      d.innerHTML = w.locked
+        ? `<span class="n">${i + 1}</span><span class="nm">🔒 Sv ${w.unlockAt}</span>`
+        : `<span class="n">${i + 1}</span><span class="nm">${w.name}${lv}</span>`;
       d.prepend(thumbImg(weaponThumb(w.variant), 'sth'));
+      if (w.locked) {
+        d.style.opacity = '0.42';
+        d.style.filter = 'grayscale(1)';
+        d.title = `Oyun içi seviye ${w.unlockAt} olunca açılır`;
+      }
       return d;
     }),
   );
@@ -191,7 +199,6 @@ const tintFor = (label: string): string => {
 };
 
 const renderDiamonds = (host: HTMLElement, hud: ArenaHudState) => {
-  host.replaceChildren();
   const items: Array<{ label: string; count: string; tint: string }> = [
     ...hud.squad
       .filter((s) => s.alive)
@@ -207,6 +214,11 @@ const renderDiamonds = (host: HTMLElement, hud: ArenaHudState) => {
       tint: 'gold',
     })),
   ].slice(0, 8);
+  // skip the DOM rebuild (layout + style recalc) when nothing visible changed
+  const key = items.map((it) => `${it.label}:${it.count}:${it.tint}`).join('|');
+  if (host.dataset.k === key) return;
+  host.dataset.k = key;
+  host.replaceChildren();
 
   for (const item of items) {
     const d = document.createElement('div');
@@ -217,8 +229,11 @@ const renderDiamonds = (host: HTMLElement, hud: ArenaHudState) => {
 };
 
 const renderTeam = (host: HTMLElement, hud: ArenaHudState) => {
-  host.replaceChildren();
   const max = hud.maxSquad || 8;
+  const key = `${max}|${hud.squad.map((m) => `${m.name}:${Math.ceil(m.hp)}:${m.maxHp}:${m.alive ? 1 : 0}`).join(',')}`;
+  if (host.dataset.k === key) return;
+  host.dataset.k = key;
+  host.replaceChildren();
   for (let i = 0; i < Math.min(max, 8); i++) {
     const member = hud.squad[i];
     const face = document.createElement('div');

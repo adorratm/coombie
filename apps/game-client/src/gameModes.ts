@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { OperativeVisual, ZombieVisual } from './characters';
-import type { ZombieKind } from './zombieKinds';
+import { pickWaveSpawnKind, type ZombieKind } from './zombieKinds';
 import type { MissionHudState } from './mission';
 import { MAPS, type MapId, type ModeId } from './mapDefs';
 import type { GameMap } from './gameMap';
@@ -9,8 +9,9 @@ import type { IndicatorSrc } from './powerups';
 /**
  * Game modes, difficulties and the per-run objective runtime.
  *
- *  survival  survive the timer, then kill the final boss
- *  defense   keep the generator alive until the timer ends
+ *  survival  survive the timer (20 / 30 / 40 / 60 min), then kill the final boss
+ *  horde     20 hordes; the next one only starts once the current one is dead
+ *  defense   keep the generator alive until the timer ends (same durations)
  *  rescue    free 3 survivors (they join the squad), then hold the evac zone
  *  evac      collect 4 fuel cans, then hold the evac zone until the chopper lands
  *  boss      three bosses hunt you one after another
@@ -49,8 +50,9 @@ export interface ModeDef {
   desc: string;
 }
 export const MODES: Record<ModeId, ModeDef> = {
-  survival: { id: 'survival', name: 'Hayatta Kal', icon: '⏱', desc: '8 dakika dayan, sonra son boss\'u öldür.' },
-  defense: { id: 'defense', name: 'Savunma', icon: '⛨', desc: 'Jeneratörü 7 dakika boyunca koru.' },
+  survival: { id: 'survival', name: 'Hayatta Kal', icon: '⏱', desc: 'Seçtiğin süre boyunca dayan (20-60 dk), her 5 dakikada mutant gelir, sonda son boss.' },
+  horde: { id: 'horde', name: 'Horde', icon: '🧟', desc: '20 sürü dalgası. Bir sürü tamamen ölmeden sonraki gelmez; 10. ve 20. dalgada boss.' },
+  defense: { id: 'defense', name: 'Savunma', icon: '⛨', desc: 'Jeneratörü seçtiğin süre boyunca (20-60 dk) koru.' },
   rescue: { id: 'rescue', name: 'Kurtarma', icon: '✚', desc: '3 hayatta kalanı kurtar, tahliye noktasını tut.' },
   evac: { id: 'evac', name: 'Tahliye', icon: '⛽', desc: '4 yakıt bidonu topla, helikopter gelene kadar dayan.' },
   boss: { id: 'boss', name: 'Boss Avı', icon: '☠', desc: 'Üç dev mutant sırayla geliyor.' },
@@ -61,7 +63,16 @@ export interface MissionSelection {
   map: MapId;
   mode: ModeId;
   difficulty: DifficultyId;
+  /** run length for timed modes (survival / defense) */
+  minutes?: RunMinutes;
 }
+
+export type RunMinutes = 20 | 30 | 40 | 60;
+export const RUN_MINUTES: RunMinutes[] = [20, 30, 40, 60];
+export const DEFAULT_RUN_MINUTES: RunMinutes = 20;
+/** modes whose length the player picks */
+export const TIMED_MODES: ModeId[] = ['survival', 'defense'];
+export const HORDE_WAVES = 20;
 
 export interface ModeCtx {
   scene: THREE.Scene;
@@ -116,12 +127,31 @@ export class ModeRuntime {
   private readonly rescueMarkers: THREE.Group[] = [];
   private finalBoss: ZombieVisual | null = null;
   private readonly owned: THREE.Material[] = [];
+  /** timed-mode length (s) */
+  readonly total: number;
+  // horde mode
+  hordeWave = 0;
+  private hordeLeft = 0;
+  private hordeSpawnT = 0;
+  private hordeBreak = 0;
+  private readonly hordeAlive = new Set<ZombieVisual>();
+
+  /** Horde mode spawns every zombie itself; the arena's wave/ambient spawner stays off. */
+  get ownsSpawning(): boolean {
+    return this.sel.mode === 'horde';
+  }
+  /** zombies of the current horde still to come or alive */
+  get hordeRemaining(): number {
+    return this.hordeLeft + this.hordeAlive.size;
+  }
 
   constructor(sel: MissionSelection, ctx: ModeCtx) {
     this.sel = sel;
     this.diff = DIFFICULTIES[sel.difficulty] ?? DIFFICULTIES.normal;
     this.ctx = ctx;
     this.revivesLeft = this.diff.revives;
+    const mins = sel.minutes && [20, 30, 40, 60].includes(sel.minutes) ? sel.minutes : DEFAULT_RUN_MINUTES;
+    this.total = mins * 60;
     this.banner(`${MAPS[sel.map].name} · ${MODES[sel.mode].name}`);
     if (sel.mode === 'evac') this.spawnPickups();
     if (sel.mode === 'rescue') this.spawnSurvivors();
@@ -204,6 +234,48 @@ export class ModeRuntime {
     return b;
   }
 
+  private tickHorde(dt: number): void {
+    for (const z of this.hordeAlive) if (z.hp <= 0 || !z.root.parent) this.hordeAlive.delete(z);
+    if (this.hordeLeft === 0 && this.hordeAlive.size === 0) {
+      if (this.hordeWave >= HORDE_WAVES) {
+        this.win(`${HORDE_WAVES} sürünün hepsini temizledin.`);
+        return;
+      }
+      this.hordeBreak += dt;
+      const wait = this.hordeWave === 0 ? 4 : 8;
+      if (this.hordeBreak < wait) return;
+      this.hordeBreak = 0;
+      this.hordeWave += 1;
+      const w = this.hordeWave;
+      this.hordeLeft = Math.round((12 + w * 5 + (w % 5 === 0 ? 10 : 0)) * this.diff.count);
+      this.banner(w === HORDE_WAVES ? `SON SÜRÜ ${w}/${HORDE_WAVES}` : `SÜRÜ ${w}/${HORDE_WAVES}`);
+      this.ctx.sfx('alarm');
+      if (w % 10 === 0) {
+        const b = this.spawnBoss();
+        if (b) this.hordeAlive.add(b);
+      }
+      return;
+    }
+    // trickle the horde in from a ring around the player (the arena caps alive count)
+    const rate = 1.6 + this.hordeWave * 0.14;
+    this.hordeSpawnT += dt * rate;
+    const pl = this.ctx.player.root.position;
+    while (this.hordeSpawnT >= 1 && this.hordeLeft > 0) {
+      const a = Math.random() * Math.PI * 2;
+      const d = 22 + Math.random() * 12;
+      const kind = pickWaveSpawnKind(this.hordeWave, this.hordeLeft - 1);
+      const z = this.ctx.spawnZombieAt(kind, pl.x + Math.cos(a) * d, pl.z + Math.sin(a) * d);
+      if (!z) {
+        // alive cap reached: wait for kills
+        this.hordeSpawnT = 0;
+        break;
+      }
+      this.hordeSpawnT -= 1;
+      this.hordeLeft -= 1;
+      this.hordeAlive.add(z);
+    }
+  }
+
   /** May the player revive after going down? Consumes one revive. */
   tryRevive(): boolean {
     if (this.revivesLeft <= 0) return false;
@@ -236,12 +308,15 @@ export class ModeRuntime {
     const m = this.ctx.map;
     switch (this.sel.mode) {
       case 'survival': {
-        const total = 480;
-        if (this.stage === 0 && this.t >= 240 && !this.bosses.size) {
+        const total = this.total;
+        // a mutant every 5 minutes before the final boss
+        if (this.t < total && this.t >= (this.stage + 1) * 300 && !this.bosses.size) {
           this.spawnBoss();
           this.banner('Bir mutant yaklaşıyor!');
-          this.stage = 1;
+          this.stage += 1;
         }
+        // pressure grows over the run so long modes stay tense
+        this.spawnMul = Math.max(this.spawnMul, 1 + Math.min(0.6, this.t / total * 0.6));
         if (this.t >= total && !this.finalBoss) {
           this.finalBoss = this.spawnBoss();
           this.banner('SON DALGA — Boss\'u öldür!');
@@ -251,7 +326,7 @@ export class ModeRuntime {
         break;
       }
       case 'defense': {
-        const total = 420;
+        const total = this.total;
         let hits = 0;
         for (const z of this.ctx.zombies) {
           if (z.hp <= 0) continue;
@@ -260,10 +335,10 @@ export class ModeRuntime {
           if (dx * dx + dz * dz < 9) hits += z.kind === 'boss' ? 6 : z.kind === 'tank' ? 3 : 1;
         }
         if (hits) this.coreHp -= hits * dt * 0.9 * this.diff.dmg;
-        this.spawnMul = 1 + this.t / total;
-        if (this.stage === 0 && this.t > 200) {
+        this.spawnMul = 1 + (this.t / total) * 0.8;
+        if (this.t < total && this.t >= (this.stage + 1) * 300) {
           this.spawnBoss();
-          this.stage = 1;
+          this.stage += 1;
           this.banner('Jeneratöre mutant saldırısı!');
         }
         if (this.coreHp <= 0) {
@@ -339,6 +414,9 @@ export class ModeRuntime {
         if (this.bossKills >= 3) this.win('Üç mutant da öldü.');
         break;
       }
+      case 'horde':
+        this.tickHorde(dt);
+        break;
       case 'endless':
         this.spawnMul = 1 + this.t / 300;
         if (this.stageT > 150) {
@@ -360,14 +438,24 @@ export class ModeRuntime {
     let target = 1;
     switch (this.sel.mode) {
       case 'survival':
-        label = this.finalBoss ? 'Son boss\'u öldür' : `Hayatta kal ${fmt(this.t)} / 8:00`;
+        label = this.finalBoss ? 'Son boss\'u öldür' : `Hayatta kal ${fmt(this.t)} / ${fmt(this.total)}`;
         prog = this.finalBoss ? 0 : this.t;
-        target = this.finalBoss ? 1 : 480;
+        target = this.finalBoss ? 1 : this.total;
+        break;
+      case 'horde':
+        label =
+          this.hordeWave === 0
+            ? 'İlk sürü geliyor…'
+            : this.hordeRemaining > 0
+              ? `Sürü ${this.hordeWave}/${HORDE_WAVES} · kalan ${this.hordeRemaining}`
+              : `Sürü ${this.hordeWave}/${HORDE_WAVES} temizlendi · sıradaki geliyor`;
+        prog = Math.max(0, this.hordeWave - (this.hordeRemaining > 0 ? 1 : 0));
+        target = HORDE_WAVES;
         break;
       case 'defense':
-        label = `Jeneratör %${Math.round(this.coreHp)} · ${fmt(420 - this.t)}`;
+        label = `Jeneratör %${Math.round(this.coreHp)} · ${fmt(this.total - this.t)}`;
         prog = this.t;
-        target = 420;
+        target = this.total;
         break;
       case 'evac':
       case 'rescue': {

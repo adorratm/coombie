@@ -125,7 +125,12 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
   const getNumberTexture = (text: string, style: DamageNumberStyle): THREE.CanvasTexture => {
     const key = `${text}:${style}`;
     const cached = numberCache.get(key);
-    if (cached) return cached;
+    if (cached) {
+      // LRU: move to the back so frequently seen values stay resident
+      numberCache.delete(key);
+      numberCache.set(key, cached);
+      return cached;
+    }
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 64;
@@ -143,7 +148,8 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
     ctx.fillText(text, 64, 32);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    if (numberCache.size >= 64) {
+    // big enough to hold the usual damage spread: every miss = new canvas + GPU upload
+    if (numberCache.size >= 320) {
       const first = numberCache.keys().next().value;
       if (first !== undefined) {
         numberCache.get(first)?.dispose();

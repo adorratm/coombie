@@ -1172,6 +1172,10 @@ function setZombieVrmPresentation(z: ZombieVisual, showVrm: boolean): void {
     z.proxy.visible = true;
     return;
   }
+  const ud = avatar.root.userData as { vrmShown?: boolean };
+  // Called every frame per zombie: only touch the hierarchy when the state flips.
+  if (ud.vrmShown === showVrm && avatar.root.visible === showVrm && z.proxy.visible === !showVrm) return;
+  ud.vrmShown = showVrm;
   avatar.root.visible = showVrm;
   z.proxy.visible = !showVrm;
   avatar.root.traverse((o) => {
@@ -1231,10 +1235,18 @@ export function updateZombieVrm(
     ud.speedEma = THREE.MathUtils.damp(ud.speedEma ?? 0, Math.min(sp, 16), 10, step);
     const q = ud.animQueue;
     if (q && q.length) {
+      const now = performance.now() / 1000;
       for (const ev of q) {
+        // Events queued while the zombie was still a proxy / not yet loaded must not
+        // replay late (a stand-up or swipe seconds after the fact looks broken).
+        const age = ev.at !== undefined ? now - ev.at : 0;
+        // emerging from the ground is still valid while the zombie is pinned by spawnUntil
+        const maxAge = ev.kind === 'spawn' ? ev.dur - 0.4 : Math.min(0.35, ev.dur * 0.5);
+        if (age > maxAge) continue;
+        const dur = Math.max(0.15, ev.dur - age);
         if (ev.kind === 'hit') za.hit();
-        else if (ev.kind === 'spawn') za.standUp(ev.dur);
-        else if (ev.seg) za.play(ev.seg, ev.dur, ev.priority ?? 1);
+        else if (ev.kind === 'spawn') za.standUp(dur);
+        else if (ev.seg) za.play(ev.seg, dur, ev.priority ?? 1);
       }
       q.length = 0;
     }
@@ -1261,6 +1273,8 @@ interface ZombieAnimEvent {
   seg?: ClipSeg;
   dur: number;
   priority?: number;
+  /** queue time (s, performance clock) — stale events are dropped */
+  at?: number;
 }
 interface ZombieAnimState {
   lastPos?: THREE.Vector3;
@@ -1273,7 +1287,10 @@ interface ZombieAnimState {
 /** Queue a clip one-shot for a zombie (applied on its next animation update). */
 export function queueZombieAnim(z: ZombieVisual, ev: ZombieAnimEvent): void {
   const ud = z.root.userData as ZombieAnimState;
-  (ud.animQueue ??= []).push(ev);
+  const q = (ud.animQueue ??= []);
+  // the newest one-shot wins; never let a queue build up while the zombie is a proxy
+  if (q.length >= 3) q.shift();
+  q.push({ ...ev, at: ev.at ?? performance.now() / 1000 });
 }
 
 /**

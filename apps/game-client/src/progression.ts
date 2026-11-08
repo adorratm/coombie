@@ -1,7 +1,7 @@
 import type { StatusId } from './statusEffects';
 import type { WeaponId } from './weapons';
 import { WEAPONS, weaponById } from './weapons';
-import { applyRunSkillCard, createRunSkillState, runSkillCards, type RunSkillCard, type RunSkillState , RUN_SKILLS} from './runSkills';
+import { applyRunSkillCard, createRunSkillState, pendingEvolution, runSkillCards, type RunSkillCard, type RunSkillState, RUN_SKILLS } from './runSkills';
 
 /** Extensible combat modifier bag — add keys freely; consumers read with defaults. */
 export interface PlayerMods {
@@ -110,6 +110,8 @@ export interface UpgradeCardDef {
   heroRank?: 'q' | 'e' | 'r';
   /** YAZS run skill / passive / evolution */
   runSkill?: { kind: RunSkillCard['kind']; id: string; level: number };
+  /** per-weapon upgrade track step */
+  weaponLevel?: { weaponId: WeaponId; level: number };
 }
 
 export const DEFAULT_MODS: PlayerMods = {
@@ -767,6 +769,56 @@ export interface MasteryBonus {
   weaponId: WeaponId;
   damage: number;
   fireRate: number;
+  /** additive crit chance while holding this weapon */
+  crit?: number;
+  /** extra bullet pierce */
+  pierce?: number;
+}
+
+/** In-run level cap. */
+export const RUN_LEVEL_MAX = 200;
+/** Steps on each weapon's upgrade track. */
+export const WEAPON_LEVEL_MAX = 8;
+
+interface WeaponStep {
+  label: string;
+  damage?: number;
+  fireRate?: number;
+  crit?: number;
+  pierce?: number;
+}
+/** What every weapon gains per level (index 0 = Sv1). */
+export const WEAPON_TRACK: readonly WeaponStep[] = [
+  { label: '+%15 hasar', damage: 0.15 },
+  { label: '+%12 atış hızı', fireRate: 0.12 },
+  { label: '+%5 kritik şansı', crit: 0.05 },
+  { label: 'Delici mermi: +1 delme, +%15 hasar', pierce: 1, damage: 0.15 },
+  { label: '+%12 atış hızı', fireRate: 0.12 },
+  { label: '+%20 hasar', damage: 0.2 },
+  { label: '+%6 kritik şansı', crit: 0.06 },
+  { label: 'USTALIK: +%30 hasar, +%15 atış hızı, +1 delme', damage: 0.3, fireRate: 0.15, pierce: 1 },
+];
+
+export function weaponLevel(state: ProgressState, weaponId: WeaponId): number {
+  return state.weaponLevels.get(weaponId) ?? 0;
+}
+
+/** Apply one weapon-track step (used by cards and by hero-tree head starts). */
+export function applyWeaponStep(state: ProgressState, weaponId: WeaponId): boolean {
+  const lv = weaponLevel(state, weaponId);
+  if (lv >= WEAPON_LEVEL_MAX) return false;
+  const step = WEAPON_TRACK[lv]!;
+  let m = state.masteries.find((x) => x.weaponId === weaponId);
+  if (!m) {
+    m = { weaponId, damage: 0, fireRate: 0 };
+    state.masteries.push(m);
+  }
+  m.damage += step.damage ?? 0;
+  m.fireRate += step.fireRate ?? 0;
+  m.crit = (m.crit ?? 0) + (step.crit ?? 0);
+  m.pierce = (m.pierce ?? 0) + (step.pierce ?? 0);
+  state.weaponLevels.set(weaponId, lv + 1);
+  return true;
 }
 
 export interface WeaponEvolutionState {
@@ -802,10 +854,21 @@ export interface ProgressState {
   heroRankBonus: { q: number; e: number; r: number };
   /** YAZS run skills / passives / evolutions */
   runSkills: RunSkillState;
+  /** weapon families currently usable in the run (unlocked slots) → display name */
+  slotWeapons: Map<WeaponId, string>;
+  /** weapon upgrade-track level per family */
+  weaponLevels: Map<WeaponId, number>;
+  /** total XP collected this run (feeds persistent hero XP) */
+  totalXp: number;
 }
 
+/**
+ * XP needed for the next level. Quadratic early (fast first levels), then linear so
+ * a 20 min run lands around Lv 90-110 and 60 min runs can reach the Lv 200 cap.
+ */
 export function xpForLevel(level: number): number {
-  return Math.floor(18 + level * 12 + level * level * 2.2);
+  if (level <= 12) return Math.floor(18 + level * 12 + level * level * 2.2);
+  return Math.floor(18 + 12 * 12 + 144 * 2.2 + (level - 12) * 18);
 }
 
 export function classByWeapon(weaponId: WeaponId): WeaponClassDef | undefined {
@@ -855,6 +918,9 @@ export function createProgressState(startClass: ClassId = 'assaulter'): Progress
     banishedIds: new Set(),
     heroRankBonus: { q: 0, e: 0, r: 0 },
     runSkills: createRunSkillState(),
+    slotWeapons: new Map(),
+    weaponLevels: new Map(),
+    totalXp: 0,
   };
 }
 
@@ -870,6 +936,11 @@ const ADDITIVE_MOD_KEYS: ReadonlySet<keyof PlayerMods> = new Set([
   'statusPower',
 ]);
 
+/** Add stat deltas the same way class passives do (additive keys add, others multiply). */
+export function applyModDeltas(mods: PlayerMods, deltas: Partial<PlayerMods>): void {
+  applyPassive(mods, deltas);
+}
+
 function applyPassive(mods: PlayerMods, passive: Partial<PlayerMods>): void {
   for (const [k, v] of Object.entries(passive) as [keyof PlayerMods, number][]) {
     if (ADDITIVE_MOD_KEYS.has(k)) {
@@ -884,6 +955,10 @@ export function applyUpgradeCard(state: ProgressState, card: UpgradeCardDef): vo
   state.pickedIds.push(card.id);
   if (card.runSkill) {
     applyRunSkillCard(state.runSkills, card.runSkill.kind, card.runSkill.id);
+    return;
+  }
+  if (card.weaponLevel) {
+    applyWeaponStep(state, card.weaponLevel.weaponId);
     return;
   }
   if (card.heroRank) state.heroRankBonus[card.heroRank] = Math.min(3, state.heroRankBonus[card.heroRank] + 1);
@@ -965,8 +1040,46 @@ function runSkillUpgradeCards(state: ProgressState): UpgradeCardDef[] {
   }));
 }
 
+function weaponUpgradeCards(state: ProgressState): UpgradeCardDef[] {
+  const out: UpgradeCardDef[] = [];
+  for (const [weaponId, name] of state.slotWeapons) {
+    const lv = weaponLevel(state, weaponId);
+    if (lv >= WEAPON_LEVEL_MAX) continue;
+    const step = WEAPON_TRACK[lv]!;
+    out.push({
+      id: `wl:${weaponId}:${lv + 1}`,
+      name: `${name} Sv${lv + 1}`,
+      description: step.label,
+      rarity: lv + 1 === WEAPON_LEVEL_MAX ? 'epic' : lv + 1 === 4 ? 'rare' : 'common',
+      kind: 'weapon_mastery',
+      icon: 'W',
+      weight: 9,
+      weaponLevel: { weaponId, level: lv + 1 },
+    });
+  }
+  return out;
+}
+
+/** Always-available fallback so a level-up can never run out of cards. */
+const FILLER_CARD: UpgradeCardDef = {
+  id: 'filler:reinforce',
+  name: 'Takviye',
+  description: '+%3 hasar, +%3 can',
+  rarity: 'common',
+  kind: 'stat',
+  icon: '+',
+  mods: { damageMult: 0.03, maxHpMult: 0.03 },
+  weight: 1,
+};
+
 export function rollUpgradeChoices(state: ProgressState, count = 4): UpgradeCardDef[] {
-  const pool = [...runSkillUpgradeCards(state), ...UPGRADE_CARDS.filter((card) => {
+  // A max-level skill must evolve first: the draft is its 2-3 branches.
+  const evoFor = pendingEvolution(state.runSkills);
+  if (evoFor) {
+    const evo = runSkillUpgradeCards(state).filter((c) => c.runSkill?.kind === 'evo' && c.runSkill.id.startsWith(`${evoFor}:`));
+    if (evo.length) return evo.slice(0, 3);
+  }
+  const pool = [...runSkillUpgradeCards(state), ...weaponUpgradeCards(state), FILLER_CARD, ...UPGRADE_CARDS.filter((card) => {
     if (state.banishedIds.has(card.id)) return false;
     if (state.pickedIds.includes(card.id) && (card.classId || card.kind === 'evolution' || card.kind === 'synergy' || card.kind === 'status')) {
       return false;
@@ -1023,8 +1136,15 @@ export function rollUpgradeChoices(state: ProgressState, count = 4): UpgradeCard
 
 export function gainProgressXp(state: ProgressState, amount: number): number {
   let levelsGained = 0;
-  state.xp += amount * state.mods.xpMult;
-  while (state.xp >= state.xpToLevel) {
+  const gained = amount * state.mods.xpMult;
+  state.totalXp += gained;
+  if (state.level >= RUN_LEVEL_MAX) {
+    // capped: keep the bar full, the XP still counts for the hero (totalXp)
+    state.xp = state.xpToLevel;
+    return 0;
+  }
+  state.xp += gained;
+  while (state.xp >= state.xpToLevel && state.level < RUN_LEVEL_MAX) {
     state.xp -= state.xpToLevel;
     state.level += 1;
     state.xpToLevel = xpForLevel(state.level);
@@ -1039,8 +1159,11 @@ export function gainProgressXp(state: ProgressState, amount: number): number {
       }
     }
   }
+  if (state.level >= RUN_LEVEL_MAX) state.xp = state.xpToLevel;
   if (state.pendingPicks > 0 && state.choices.length === 0) {
     state.choices = rollUpgradeChoices(state, 4);
+    // never leave the game frozen on an empty draft
+    if (state.choices.length === 0) state.pendingPicks = 0;
   }
   return levelsGained;
 }

@@ -8,7 +8,7 @@ import { MapBuilder, type PropId } from './mapBuilder';
 
 export type MapId = 'city' | 'hospital' | 'military' | 'harbor' | 'forest' | 'highway' | 'industrial' | 'snow' | 'desert' | 'lab';
 export type Weather = 'none' | 'rain' | 'snow' | 'dust' | 'ash';
-export type ModeId = 'survival' | 'defense' | 'rescue' | 'evac' | 'boss' | 'endless';
+export type ModeId = 'survival' | 'horde' | 'defense' | 'rescue' | 'evac' | 'boss' | 'endless';
 
 export interface MapLighting {
   bg: number;
@@ -145,7 +145,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 1101,
     weather: 'rain',
     accent: 0x38bdf8,
-    modes: ['survival', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
     lighting: L({ bg: 0x05070a, fog: 0x070a0f, fogDensity: 0.02, ambient: [0x1e2733, 0.5], hemi: [0x52627a, 0x0f141a, 0.75], sun: [0xaec4ff, 1.25], sunDir: [-20, 42, 18], rim: [0x38bdf8, 0.6], exposure: 1.3 }),
     build: (b) => {
       b.ground('asphalt_02', 6, 'cracked_concrete', 5, 0.6, 0xb8bcc2);
@@ -186,7 +186,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 2203,
     weather: 'rain',
     accent: 0x86efac,
-    modes: ['survival', 'defense', 'rescue', 'evac', 'endless'],
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'endless'],
     lighting: L({ bg: 0x070a08, fog: 0x0b100d, fogDensity: 0.024, ambient: [0x24302a, 0.55], hemi: [0x6b7f72, 0x101410, 0.7], sun: [0xd7f0e0, 1.1], sunDir: [22, 44, 10], rim: [0x86efac, 0.45], exposure: 1.3 }),
     build: (b) => {
       b.ground('aerial_grass_rock', 8, 'brown_mud', 6, 0.7, 0x9aa894);
@@ -234,7 +234,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 3307,
     weather: 'ash',
     accent: 0xf59e0b,
-    modes: ['survival', 'defense', 'evac', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'defense', 'evac', 'boss', 'endless'],
     lighting: L({ bg: 0x0d0a07, fog: 0x17110c, fogDensity: 0.012, ambient: [0x2a2420, 0.6], hemi: [0x8f8270, 0x14100c, 0.8], sun: [0xffd4ae, 1.75], sunDir: [40, 30, -10], rim: [0xff9a5a, 0.4], exposure: 1.2 }),
     build: (b) => {
       b.ground('gravel_road', 5, 'brown_mud', 6, 0.6, 0xa8a69c);
@@ -281,7 +281,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 4409,
     weather: 'rain',
     accent: 0x60a5fa,
-    modes: ['survival', 'evac', 'rescue', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'evac', 'rescue', 'boss', 'endless'],
     lighting: L({ bg: 0x05070a, fog: 0x0c1016, fogDensity: 0.018, ambient: [0x2a3038, 0.75], hemi: [0x6a7a90, 0x0e1014, 0.9], sun: [0xc8d4f0, 1.55], sunDir: [-30, 40, -20], rim: [0x60a5fa, 0.5], exposure: 1.4 }),
     build: (b) => {
       b.ground('hangar_concrete_floor', 7, 'asphalt_02', 6, 0.55, 0x9ea3a8);
@@ -325,7 +325,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 5501,
     weather: 'none',
     accent: 0x4ade80,
-    modes: ['survival', 'rescue', 'evac', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'rescue', 'evac', 'boss', 'endless'],
     lighting: L({ bg: 0x040607, fog: 0x080c0c, fogDensity: 0.024, ambient: [0x223030, 0.7], hemi: [0x5a7272, 0x0a0c0a, 0.8], sun: [0xb8ccff, 1.35], sunDir: [-18, 46, 26], rim: [0x7dd3fc, 0.45], exposure: 1.5 }),
     build: (b) => {
       b.ground('forest_ground_04', 5, 'brown_mud', 5, 0.65, 0xa4a092);
@@ -361,7 +361,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 6607,
     weather: 'dust',
     accent: 0xfbbf24,
-    modes: ['survival', 'evac', 'rescue', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'evac', 'rescue', 'boss', 'endless'],
     lighting: L({ bg: 0x0c0c0b, fog: 0x1a1915, fogDensity: 0.014, ambient: [0x2a2a26, 0.7], hemi: [0x9a9688, 0x1a1814, 0.75], sun: [0xfff1d6, 1.9], sunDir: [30, 46, 20], rim: [0xfcd34d, 0.3], exposure: 1.15 }),
     build: (b) => {
       b.ground('dry_ground_rocks', 7, 'aerial_grass_rock', 9, 0.5, 0xb0a890);
@@ -401,7 +401,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 7703,
     weather: 'ash',
     accent: 0xfb923c,
-    modes: ['survival', 'defense', 'evac', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'defense', 'evac', 'boss', 'endless'],
     lighting: L({ bg: 0x0d0704, fog: 0x1c0f06, fogDensity: 0.02, ambient: [0x2a1a10, 0.6], hemi: [0x8a5a3a, 0x120c08, 0.7], sun: [0xff9a50, 1.7], sunDir: [-34, 34, -16], rim: [0xff6a1a, 0.55], exposure: 1.25 }),
     build: (b) => {
       b.ground('concrete_floor_worn_001', 6, 'brown_mud', 6, 0.55, 0xa8a094);
@@ -433,7 +433,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 8801,
     weather: 'snow',
     accent: 0xe0f2fe,
-    modes: ['survival', 'rescue', 'evac', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'rescue', 'evac', 'boss', 'endless'],
     lighting: L({ bg: 0x0a0d12, fog: 0x8a96a4, fogDensity: 0.022, ambient: [0x3a4450, 0.75], hemi: [0xb8c8d8, 0x3a4048, 0.8], sun: [0xdce8ff, 1.4], sunDir: [20, 40, 30], rim: [0x9ab8ff, 0.4], exposure: 1.05 }),
     build: (b) => {
       b.ground('snow006', 6, 'asphalt_snow', 6, 0.25, 0xf2f4f8);
@@ -468,7 +468,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 9907,
     weather: 'dust',
     accent: 0xfacc15,
-    modes: ['survival', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
     lighting: L({ bg: 0x15100a, fog: 0x3a2c1c, fogDensity: 0.011, ambient: [0x4a3a28, 0.7], hemi: [0xffe0b0, 0x3a2a18, 0.8], sun: [0xffe2b0, 2.6], sunDir: [26, 50, -12], rim: [0xffb060, 0.3], exposure: 1.05 }),
     build: (b) => {
       b.ground('coast_sand_01', 7, 'dry_ground_rocks', 7, 0.7, 0xd8c4a0);
@@ -499,7 +499,7 @@ export const MAPS: Record<MapId, MapDef> = {
     seed: 1013,
     weather: 'none',
     accent: 0xef4444,
-    modes: ['survival', 'defense', 'rescue', 'boss', 'endless'],
+    modes: ['survival', 'horde', 'defense', 'rescue', 'boss', 'endless'],
     lighting: L({ bg: 0x050404, fog: 0x0c0808, fogDensity: 0.022, ambient: [0x302830, 0.8], hemi: [0x908890, 0x141010, 0.85], sun: [0xf0e8ff, 1.2], sunDir: [10, 50, 6], rim: [0xef4444, 0.45], exposure: 1.4 }),
     build: (b) => {
       b.ground('dirty_tiles', 2.5, 'concrete_floor_worn_001', 4, 0.5, 0xd0d4d8);

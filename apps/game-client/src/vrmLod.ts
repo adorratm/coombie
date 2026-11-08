@@ -56,7 +56,8 @@ export function zombieVrmLod(
     return 'reduced';
   }
 
-  // Mid-far band: mostly proxy, occasional cheap VRM tick if already loaded.
+  // Mid-far band: cheap VRM tick every 4th frame, pose frozen otherwise.
+  // (Returning 'proxy' here swapped VRM <-> proxy mesh every frame: visible flicker.)
   if ((frame + phase) % 4 === 0) return 'reduced';
-  return 'proxy';
+  return 'skip';
 }
