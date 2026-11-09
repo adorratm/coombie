@@ -44,6 +44,32 @@ export class LobbyService {
     return this.toPayload(room);
   }
 
+  /**
+   * Dracord oturumu → sabit kodlu co-op oda. Yoksa oluşturur (ilk gelen host),
+   * varsa katılır. Aynı kullanıcı yeniden bağlanırsa yerini korur.
+   */
+  joinOrCreateFixedRoom(
+    roomCode: string,
+    playerId: string,
+    displayName: string,
+  ): LobbyStatePayload {
+    const code = roomCode.toUpperCase();
+    if (!this.rooms.has(code)) {
+      const player = createPlayerState(playerId, displayName, 'ironclad');
+      const room: Room = {
+        roomCode: code,
+        mode: 'coop',
+        fillBots: true,
+        hostPlayerId: playerId,
+        players: new Map([[playerId, player]]),
+      };
+      this.rooms.set(code, room);
+      void this.persist(room);
+      return this.toPayload(room);
+    }
+    return this.joinRoom(code, playerId, displayName);
+  }
+
   joinRoom(
     roomCode: string,
     playerId: string,

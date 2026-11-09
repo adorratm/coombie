@@ -22,6 +22,8 @@ export const ClientEvents = {
   LobbySetReady: 'lobby:set_ready',
   LobbyChat: 'lobby:chat',
   LobbyStart: 'lobby:start',
+  /** Dracord içinden: launch token ile kimlik + oturuma bağlı ortak oda */
+  LobbyDracord: 'lobby:dracord',
 
   MatchInput: 'match:input',
   MatchAbility: 'match:ability',
@@ -45,6 +47,21 @@ export interface LobbyCreatePayload {
   mode: GameMode;
   fillBots?: boolean;
   displayName: string;
+}
+
+/** Dracord oturumu → sabit oda kodu (istemci ve sunucu aynı kodu üretir) */
+export function dracordRoomCode(sessionId: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < sessionId.length; i++) {
+    h ^= sessionId.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `DC-${(h >>> 0).toString(36).toUpperCase().padStart(6, '0').slice(-6)}`;
+}
+
+/** Dracord launch token (DracordEmbed.ready().token) — sunucu doğrular */
+export interface LobbyDracordPayload {
+  token: string;
 }
 
 export interface LobbyJoinPayload {
