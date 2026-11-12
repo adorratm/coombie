@@ -29,8 +29,10 @@ jobs:
       - name: Install
         run: yarn install --immutable
 
-      - name: Build shared (workspace types)
-        run: yarn workspace @protocol-z/shared build
+      - name: Build shared + game-engine (workspace types)
+        run: |
+          yarn workspace @protocol-z/shared build
+          yarn workspace @protocol-z/game-engine build
 
       - name: Typecheck
         run: yarn typecheck

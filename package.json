@@ -16,7 +16,7 @@
     "build": "yarn workspaces foreach -Apt run build",
     "typecheck": "yarn workspaces foreach -Apt run typecheck",
     "test": "yarn workspace @protocol-z/game-client test",
-    "ci": "yarn workspace @protocol-z/shared build && yarn typecheck && yarn test",
+    "ci": "yarn workspace @protocol-z/shared build && yarn workspace @protocol-z/game-engine build && yarn typecheck && yarn test",
     "build:packages": "yarn workspace @protocol-z/shared build && yarn workspace @protocol-z/game-engine build && yarn workspace @protocol-z/game-client build",
     "build:desktop": "yarn workspace @protocol-z/game-client build:desktop",
     "package:desktop": "yarn workspace @protocol-z/desktop package",
