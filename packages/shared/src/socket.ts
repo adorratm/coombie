@@ -89,6 +89,11 @@ export interface MatchPowerUpSelectPayload {
   targetOperativeId: OperativeId;
 }
 
+/** `match:start` — lobby state plus this player's ticket for the /match namespace */
+export interface MatchStartPayload extends LobbyStatePayload {
+  ticket: string;
+}
+
 export interface LobbyStatePayload {
   roomCode: string;
   config: MatchConfig;

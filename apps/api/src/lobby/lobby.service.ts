@@ -85,7 +85,7 @@ export class LobbyService {
       [...room.players.values()].map((p) => p.operativeId),
     );
     const fallback = (
-      ['ironclad', 'valkyrie', 'breaker', 'tox'] as OperativeId[]
+      ['ironclad', 'valkyrie', 'breaker', 'tox', 'ghost', 'spark', 'warden', 'havoc'] as OperativeId[]
     ).find((id) => !taken.has(id))!;
 
     room.players.set(
@@ -168,7 +168,7 @@ export class LobbyService {
       hostPlayerId: room.hostPlayerId,
       config: {
         mode: room.mode,
-        maxPlayers: room.mode === 'solo' ? 1 : 4,
+        maxPlayers: room.mode === 'solo' ? 1 : MAX_COOP_PLAYERS,
         fillBots: room.fillBots,
         region: 'eu-central',
       },

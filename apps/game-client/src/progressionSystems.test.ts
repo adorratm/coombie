@@ -150,7 +150,11 @@ describe('run level and weapons', () => {
     const s = createProgressState('assaulter');
     s.slotWeapons.set('rifle', 'Tüfek');
     for (let i = 0; i < WEAPON_LEVEL_MAX + 2; i++) {
-      const card = rollUpgradeChoices(s, 40).find((c) => c.weaponLevel?.weaponId === 'rifle');
+      // the draft is random: a single roll may not offer the rifle card (this made CI flaky)
+      let card: ReturnType<typeof rollUpgradeChoices>[number] | undefined;
+      for (let tries = 0; tries < 40 && !card; tries++) {
+        card = rollUpgradeChoices(s, 40).find((c) => c.weaponLevel?.weaponId === 'rifle');
+      }
       if (!card) break;
       applyUpgradeCard(s, card);
     }

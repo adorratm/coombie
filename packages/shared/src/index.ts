@@ -4,3 +4,4 @@ export * from './operatives';
 export * from './zombies';
 export * from './powerups';
 export * from './socket';
+export * from './net';

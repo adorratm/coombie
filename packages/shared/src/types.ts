@@ -97,7 +97,8 @@ export interface PlayerState {
 
 export interface MatchConfig {
   mode: GameMode;
-  maxPlayers: 1 | 2 | 3 | 4;
+  /** 1 = solo, otherwise up to MAX_COOP_PLAYERS (8) */
+  maxPlayers: number;
   fillBots: boolean;
   region: string;
 }

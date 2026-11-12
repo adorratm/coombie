@@ -17,6 +17,7 @@ import {
   type LobbySelectOperativePayload,
 } from '@protocol-z/shared';
 import { LobbyService } from './lobby.service';
+import { MatchService } from '../match/match.service';
 import { v4 as uuid } from 'uuid';
 import { dracordRoomCode, verifyDracordToken } from './dracord-auth';
 
@@ -28,7 +29,10 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
-  constructor(private readonly lobby: LobbyService) {}
+  constructor(
+    private readonly lobby: LobbyService,
+    private readonly matches: MatchService,
+  ) {}
 
   handleConnection(client: Socket): void {
     if (!client.data.playerId) {
@@ -183,15 +187,26 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ClientEvents.LobbyStart)
-  onStart(@ConnectedSocket() client: Socket) {
+  async onStart(@ConnectedSocket() client: Socket) {
     const roomCode = client.data.roomCode as string | undefined;
     if (!roomCode) return { error: 'NO_ROOM' };
+    const state = this.lobby.getRoom(roomCode);
+    // yalnız oda sahibi başlatır (dünyayı onun istemcisi yürütecek)
+    if (state.hostPlayerId !== client.data.playerId) {
+      client.emit(ServerEvents.LobbyError, { message: 'NOT_HOST' });
+      return { error: 'NOT_HOST' };
+    }
     if (!this.lobby.canStart(roomCode)) {
       client.emit(ServerEvents.LobbyError, { message: 'NOT_READY' });
       return { error: 'NOT_READY' };
     }
-    const state = this.lobby.getRoom(roomCode);
-    this.server.to(roomCode).emit(ServerEvents.MatchStart, state);
+    // her oyuncuya kendi maç bileti — /match soketi bununla kimlik doğrular
+    const tickets = this.matches.ticketsFor(state);
+    const socks = await this.server.in(roomCode).fetchSockets();
+    for (const s of socks) {
+      const ticket = tickets.get(s.data?.playerId as string);
+      if (ticket) s.emit(ServerEvents.MatchStart, { ...state, ticket });
+    }
     return { ok: true };
   }
 }

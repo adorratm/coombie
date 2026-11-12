@@ -1,70 +1,28 @@
-import { Injectable } from '@nestjs/common';
-import {
-  applyKillExp,
-  createMatch,
-  currentWave,
-  type MatchRuntime,
-} from '@protocol-z/game-engine';
-import {
-  rollPowerUpChoices,
-  type LobbyStatePayload,
-  type PowerUpChoiceOffer,
-} from '@protocol-z/shared';
-import { v4 as uuid } from 'uuid';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { MatchRelay, type LobbyStatePayload } from '@protocol-z/shared';
+import { randomBytes } from 'node:crypto';
 
+/** Co-op maç aktarıcısının durumu (biletler, kim hangi odada, hız sınırları). */
 @Injectable()
-export class MatchService {
-  private matches = new Map<string, MatchRuntime>();
+export class MatchService implements OnModuleDestroy {
+  readonly relay = new MatchRelay(() => randomBytes(24).toString('base64url'));
+  private readonly sweeper = setInterval(() => this.relay.sweep(Date.now()), 60_000);
 
-  startFromLobby(lobby: LobbyStatePayload): MatchRuntime {
-    const match = createMatch(lobby.config.mode, lobby.players);
-    this.matches.set(lobby.roomCode, match);
-    return match;
+  constructor() {
+    this.sweeper.unref?.();
   }
 
-  get(roomCode: string): MatchRuntime | undefined {
-    return this.matches.get(roomCode);
+  /** Lobi başladı: her oyuncuya tek kullanımlık maç bileti. */
+  ticketsFor(lobby: LobbyStatePayload): Map<string, string> {
+    return this.relay.issueTickets(
+      lobby.roomCode,
+      lobby.hostPlayerId,
+      lobby.players.filter((p) => !p.isBot).map((p) => ({ playerId: p.playerId, displayName: p.displayName, operativeId: p.operativeId })),
+      Date.now(),
+    );
   }
 
-  /** Prototype: award exp and open power-up offers */
-  awardExp(
-    roomCode: string,
-    killerPlayerId: string,
-    amount: number,
-  ): { offers: PowerUpChoiceOffer[]; wave: ReturnType<typeof currentWave> } {
-    const match = this.matches.get(roomCode);
-    if (!match) return { offers: [], wave: currentWave(1) };
-    const offers = applyKillExp(match, killerPlayerId, amount, () => uuid());
-    match.pendingOffers.push(...offers);
-    return { offers, wave: currentWave(match.level) };
-  }
-
-  selectPowerUp(
-    roomCode: string,
-    offerId: string,
-    powerUpId: string,
-    targetOperativeId: string,
-  ): boolean {
-    const match = this.matches.get(roomCode);
-    if (!match) return false;
-    const offerIdx = match.pendingOffers.findIndex((o) => o.offerId === offerId);
-    if (offerIdx < 0) return false;
-    const offer = match.pendingOffers[offerIdx]!;
-    const choice = offer.choices.find((c) => c.id === powerUpId);
-    if (!choice) return false;
-
-    for (const entry of match.players.values()) {
-      if (entry.state.operativeId === targetOperativeId) {
-        entry.state.powerUps.push(choice.id);
-      }
-    }
-
-    offer.picksRemaining -= 1;
-    if (offer.picksRemaining <= 0) {
-      match.pendingOffers.splice(offerIdx, 1);
-    } else {
-      offer.choices = rollPowerUpChoices(3);
-    }
-    return true;
+  onModuleDestroy() {
+    clearInterval(this.sweeper);
   }
 }
