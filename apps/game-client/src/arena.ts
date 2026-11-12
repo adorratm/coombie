@@ -23,6 +23,20 @@ import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } fro
 import { WEAPONS as ALL_WEAPONS, weaponByVariant, weaponIndexOfVariant, weaponVariantId, type WeaponFxDef } from './weapons';
 import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
 import { waveKindForLevel } from '@protocol-z/shared';
+import { buildSpawnField } from './spawnField';
+import {
+  HORDE_WARN_SECONDS,
+  aliveSlack,
+  aliveTarget as directorAliveTarget,
+  hordeSpeedMul,
+  initialSpawnCount,
+  ambientRate,
+  earlyDamageMul,
+  isHordeWave,
+  zombieHpMul,
+  spawnRate,
+  waveBudget,
+} from './spawnDirector';
 import {
   animateOperative,
   animateZombieWalk,
@@ -40,7 +54,6 @@ import { SpatialHash2D } from './spatialHash';
 import { applyStatus, rollStatusOnHit, statusTint, tickZombieStatuses } from './statusEffects';
 import { beginZombieLodFrame, zombieVrmLod } from './vrmLod';
 import {
-  clientWaveSpawnBudget,
   deathBurstScale,
   deathDecalScale,
   engageRangeFor,
@@ -275,7 +288,9 @@ type Bullet = {
 const PLAYER_RADIUS = 0.55;
 const ZOMBIE_RADIUS = 0.5;
 /** Soft cap — raised with spatial hash + VRM LOD; still far below design aspirational counts. */
+/** alive cap: phones keep the old budget, desktops can show bigger late-game hordes */
 const MAX_ZOMBIES_BASE = 48;
+const MAX_ZOMBIES_DESKTOP = 64;
 const ZOMBIE_HIT_QUERY_R = 1.5;
 const CAM_ZOOM_MIN = 0.55;
 const CAM_ZOOM_MAX = 1.85;
@@ -481,7 +496,18 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     justRescued: false,
   });
 
-  const MAX_ZOMBIES = Math.round(MAX_ZOMBIES_BASE * Math.min(1.35, diff.count));
+  const MAX_ZOMBIES = Math.round((coarse ? MAX_ZOMBIES_BASE : MAX_ZOMBIES_DESKTOP) * Math.min(1.35, diff.count));
+  // walkable area connected to the player: spawns never land outside the map or in sealed pockets
+  const MIN_FIELD_CELLS = 60;
+  let spawnField = buildSpawnField(ARENA_BOUND, colliders, player.root.position.x, player.root.position.z, ZOMBIE_RADIUS, 1.5);
+  void map.ready.then(() => {
+    // props finish loading asynchronously → colliders are only complete now
+    spawnField = buildSpawnField(ARENA_BOUND, colliders, player.root.position.x, player.root.position.z, ZOMBIE_RADIUS, 1.5);
+  });
+  /** a horde wave is draining its budget: faster zombies, all from one side */
+  let hordeActive = false;
+  let hordeAngle = 0;
+  let hordeWarned = false;
   const zombies: ZombieVisual[] = [];
   const zombieHash = new SpatialHash2D<ZombieVisual>(4);
   const zombieQuery: ZombieVisual[] = [];
@@ -514,11 +540,12 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (zombies.length >= MAX_ZOMBIES && kind !== 'boss') return null;
     const z = createZombie(kind);
     z.proxy.visible = true;
-    const waveMul = 1 + (wave - 1) * 0.12;
+    const waveMul = zombieHpMul(wave);
     z.maxHp = Math.ceil(z.maxHp * waveMul * diff.hp);
     z.hp = z.maxHp;
-    z.attackDamage = Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg);
+    z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg * earlyDamageMul(simTime)));
     z.speed *= diff.speed;
+    if (hordeActive && kind !== 'boss' && !at) z.speed *= hordeSpeedMul(wave);
     z.baseSpeed = z.speed;
     // later waves are worth more XP so long runs can climb toward the Lv 200 cap
     z.xpValue = Math.max(1, Math.round(z.xpValue * (1 + (wave - 1) * 0.08)));
@@ -528,9 +555,18 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     const dist = nearPlayer ? 20 + Math.random() * 26 : 50 + Math.random() * 70;
     const cx = nearPlayer ? player.root.position.x : 0;
     const cz = nearPlayer ? player.root.position.z : 0;
-    const x = THREE.MathUtils.clamp(at ? at.x : cx + Math.cos(ang) * dist, -ARENA_BOUND, ARENA_BOUND);
-    const zz = THREE.MathUtils.clamp(at ? at.z : cz + Math.sin(ang) * dist, -ARENA_BOUND, ARENA_BOUND);
-    const resolved = resolveCircleAabbs(x, zz, ZOMBIE_RADIUS, colliders);
+    const fieldOk = spawnField.size >= MIN_FIELD_CELLS;
+    const picked =
+      !at && fieldOk
+        ? hordeActive && nearPlayer
+          ? spawnField.pick(cx, cz, 24, 36, Math.random, { angle: hordeAngle, spread: 0.7 })
+          : spawnField.pick(cx, cz, nearPlayer ? 20 : 50, nearPlayer ? 46 : 120)
+        : null;
+    const x = THREE.MathUtils.clamp(at ? at.x : picked ? picked.x : cx + Math.cos(ang) * dist, -ARENA_BOUND, ARENA_BOUND);
+    const zz = THREE.MathUtils.clamp(at ? at.z : picked ? picked.z : cz + Math.sin(ang) * dist, -ARENA_BOUND, ARENA_BOUND);
+    let resolved = resolveCircleAabbs(x, zz, ZOMBIE_RADIUS, colliders);
+    // collider push-out can leave the map or enter a sealed pocket → pull back to walkable ground
+    if (fieldOk && !spawnField.reachable(resolved.x, resolved.z)) resolved = spawnField.snap(resolved.x, resolved.z);
     z.root.position.set(resolved.x, 0, resolved.z);
     scene.add(z.root);
     zombies.push(z);
@@ -556,7 +592,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     spawnZombie(k as ZombieVisual['kind'], true, { x: player.root.position.x + Math.cos(a) * 9, z: player.root.position.z + Math.sin(a) * 9, emerge: false });
   }
   // opening pressure stays low; the director below ramps it up over the first minutes
-  for (let i = 0; i < Math.round(4 * diff.count); i++) {
+  for (let i = 0; i < initialSpawnCount(diff.count); i++) {
     spawnZombie(i % 6 === 0 ? 'acid' : i % 4 === 0 ? 'runner' : 'grunt', true);
   }
 
@@ -2009,15 +2045,27 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       // horde mode: the mode runtime drives waves; keep scaling/HUD in sync
       wave = Math.max(1, modeRt.hordeWave);
       waveTimer = 0;
+    } else if (!hordeWarned && waveTimer > 45 - HORDE_WARN_SECONDS && isHordeWave(wave + 1)) {
+      // heads-up before the horde arrives
+      hordeWarned = true;
+      missionRuntime.banner = '⚠ HORDE GELİYOR — HAZIRLAN!';
+      missionRuntime.bannerUntil = simTime + HORDE_WARN_SECONDS;
+      audio.playAbility();
+      shake = Math.max(shake, 0.2);
     } else if (waveTimer > 45) {
       waveTimer = 0;
       wave += 1;
-      spawnBudget = Math.round(clientWaveSpawnBudget(wave) * diff.count * modeRt.spawnMul);
+      hordeWarned = false;
+      spawnBudget = Math.round(waveBudget(wave) * diff.count * modeRt.spawnMul);
       shake = Math.max(shake, 0.3);
       const wk = waveKindForLevel(wave);
-      if (wk === 'horde') {
-        missionRuntime.banner = `DALGA ${wave}: HORDE SALDIRISI`;
-        missionRuntime.bannerUntil = simTime + 3.8;
+      hordeActive = isHordeWave(wave);
+      if (hordeActive) {
+        hordeAngle = Math.random() * Math.PI * 2;
+        missionRuntime.banner = `DALGA ${wave}: HORDE SALDIRISI — ${spawnBudget} ZOMBİ`;
+        missionRuntime.bannerUntil = simTime + 4.5;
+        audio.playAbility();
+        shake = Math.max(shake, 0.5);
       } else if (wk === 'elite_super') {
         missionRuntime.banner = `DALGA ${wave}: ELİT SÜPER`;
         missionRuntime.bannerUntil = simTime + 3.8;
@@ -2028,16 +2076,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
     // Spawn director: alive target ramps from ~6 to full pressure over 2.5 min, and the
     // wave budget trickles in (it used to dump one zombie per frame = a wall at once).
-    const ramp = Math.min(1, simTime / 150);
-    const aliveTarget = Math.min(
-      MAX_ZOMBIES,
-      Math.round((6 + 10 * ramp + Math.min(22, (wave - 1) * 1.4)) * diff.count * Math.min(1.8, modeRt.spawnMul)),
-    );
-    spawnAcc = Math.min(3, spawnAcc + dt * (0.9 + ramp * 1.6 + wave * 0.05));
-    if (!modeRt.ownsSpawning && spawnBudget > 0 && spawnAcc >= 1 && zombies.length < Math.min(MAX_ZOMBIES, aliveTarget + 8)) {
+    if (hordeActive && spawnBudget <= 0) hordeActive = false;
+    const aliveTarget = Math.min(MAX_ZOMBIES, directorAliveTarget(simTime, wave, diff.count, modeRt.spawnMul));
+    spawnAcc = Math.min(3, spawnAcc + dt * spawnRate(simTime, wave, hordeActive));
+    if (!modeRt.ownsSpawning && spawnBudget > 0 && spawnAcc >= 1 && zombies.length < Math.min(MAX_ZOMBIES, aliveTarget + aliveSlack(wave, hordeActive))) {
       spawnAcc -= 1;
       spawnBudget -= 1;
-      const kind = pickWaveSpawnKind(wave, spawnBudget);
+      const kind = pickWaveSpawnKind(wave, spawnBudget, hordeActive);
       if (mission.mode === 'defense' && Math.random() < 0.45) {
         const a = Math.random() * Math.PI * 2;
         const c = map.anchors.core;
@@ -2483,7 +2528,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     camera.lookAt(camTarget);
 
     // Ambient top-up toward the director's alive target (see spawn director above)
-    if (!modeRt.ownsSpawning && zombies.length < aliveTarget && Math.random() < dt * (0.6 + ramp * 0.9)) {
+    if (!modeRt.ownsSpawning && zombies.length < aliveTarget && Math.random() < dt * ambientRate(simTime, wave)) {
       const r = Math.random();
       spawnZombie(
         r > 0.94

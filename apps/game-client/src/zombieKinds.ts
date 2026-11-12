@@ -265,8 +265,9 @@ export function clientWaveSpawnBudget(wave: number): number {
   return Math.min(28, spawnBudgetForLevel(wave));
 }
 
-export function pickWaveSpawnKind(wave: number, budgetAfterDecrement: number): ZombieKind {
-  const wk = waveKindForLevel(wave);
+/** `horde` forces the fast horde mix (client hordes come more often than the shared canon's) */
+export function pickWaveSpawnKind(wave: number, budgetAfterDecrement: number, horde = false): ZombieKind {
+  const wk = horde ? 'horde' : waveKindForLevel(wave);
   if (wk === 'elite_super' && budgetAfterDecrement === 0) return wave % 2 === 0 ? 'hooker' : 'boss';
   // special infected join from wave 2 on, more of them later
   const sp = Math.min(0.32, 0.06 + wave * 0.035);

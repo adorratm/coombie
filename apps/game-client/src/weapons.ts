@@ -197,7 +197,7 @@ export const WEAPONS: WeaponDef[] = [
     sfx: 'melee',
     grip: 'melee',
     fireRate: 0.38,
-    damage: 2.4,
+    damage: 4.2,
     range: 2.2,
     spread: 0,
     pellets: 1,
@@ -216,7 +216,7 @@ export const WEAPONS: WeaponDef[] = [
     sfx: 'melee',
     grip: 'melee',
     fireRate: 0.55,
-    damage: 3.6,
+    damage: 6.4,
     range: 2.6,
     spread: 0,
     pellets: 1,
@@ -235,7 +235,7 @@ export const WEAPONS: WeaponDef[] = [
     sfx: 'melee',
     grip: 'melee',
     fireRate: 0.72,
-    damage: 5.2,
+    damage: 9.6,
     range: 2.8,
     spread: 0,
     pellets: 1,
@@ -306,7 +306,7 @@ WEAPONS.push(
   V({ id: 'lmg', variant: 'thumper_gl', name: 'Thumper GL', sfx: 'shotgun', grip: 'rifle', fireRate: 0.75, damage: 4.5, range: 26, spread: 0.02, pellets: 1, tracerColor: 0xffaa33, recoil: 0.4, auto: true, magSize: 6, reloadTime: 2.6, tier: 3, cost: 980, desc: 'Bombaatar: alan hasarı.',
     look: { body: 'launcher', mag: 'drum', stock: 'fixed', finish: 0x3b4030, trim: 0x15170f }, fx: { flash: 0xffaa33, flashScale: 1.6, tracer: 3, impact: 'explosive', aoe: 3.2, speed: 0.45 } }),
   // ——— Melee (4th) ———
-  V({ id: 'knife', variant: 'machete', name: 'Machete', sfx: 'melee', grip: 'melee', fireRate: 0.42, damage: 3.2, range: 2.6, spread: 0, pellets: 1, tracerColor: 0xd0d8e0, recoil: 0.25, auto: true, magSize: 1, reloadTime: 0.01, melee: true, meleeArc: 1.1, tier: 2, cost: 300, desc: 'Uzun bıçak, geniş kesik.',
+  V({ id: 'knife', variant: 'machete', name: 'Machete', sfx: 'melee', grip: 'melee', fireRate: 0.42, damage: 5.6, range: 2.6, spread: 0, pellets: 1, tracerColor: 0xd0d8e0, recoil: 0.25, auto: true, magSize: 1, reloadTime: 0.01, melee: true, meleeArc: 1.1, tier: 2, cost: 300, desc: 'Uzun bıçak, geniş kesik.',
     look: { body: 'machete', finish: 0xc8d0d8, trim: 0x2a1a10 }, fx: { flash: 0, flashScale: 0, tracer: 0, impact: 'flesh' } }),
 );
 
