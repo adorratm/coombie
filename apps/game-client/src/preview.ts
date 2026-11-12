@@ -1,6 +1,8 @@
 import { thumbImg, weaponThumb } from './thumbs';
 import { createArena, type ArenaHandle, type ArenaHudState } from './arena';
 import { createLobby } from './lobby';
+import { createCoopPanel, type CoopStart } from './coop';
+import type { MissionSelection } from './gameModes';
 import { currentRunLoadout, loadProfile } from './loadout';
 import type { AudioBusId } from './audio';
 import {
@@ -630,11 +632,23 @@ const onResize = () => {
   if (running) arena.setSize(root.clientWidth, root.clientHeight);
 };
 
-const restartRun = () => {
+/** active co-op match (null = solo run) */
+let coop: CoopStart | null = null;
+const endCoop = () => {
+  coop?.leave();
+  coop = null;
+};
+
+const restartRun = (start: CoopStart | null = null) => {
   if (running) arena.dispose();
+  endCoop();
+  coop = start;
   lobby.hide();
   el.hud.style.display = '';
-  arena = createArena(root, { loadout: currentRunLoadout() });
+  const loadout = currentRunLoadout();
+  // co-op: everyone plays the host's mission
+  if (start?.mission) loadout.mission = start.mission as MissionSelection;
+  arena = createArena(root, { loadout, net: start?.session ?? null });
   (window as unknown as { __pzArena?: ArenaHandle }).__pzArena = arena;
   running = true;
   runCommitted = false;
@@ -666,7 +680,9 @@ el.btnSkip.addEventListener('click', () => {
   renderHud(arena.getHudState());
 });
 el.btnRestart.addEventListener('click', () => {
-  restartRun();
+  // a co-op match cannot be restarted alone → back to the lobby (the room is still there)
+  if (coop) toMenu();
+  else restartRun();
 });
 el.btnResume.addEventListener('click', () => {
   arena.setPaused(false);
@@ -674,11 +690,13 @@ el.btnResume.addEventListener('click', () => {
   renderHud(arena.getHudState());
 });
 el.btnPauseRestart.addEventListener('click', () => {
-  restartRun();
+  if (coop) toMenu();
+  else restartRun();
 });
 
 const toMenu = () => {
   if (running) arena.dispose();
+  endCoop();
   running = false;
   meta = loadMetaSave();
   el.results.classList.remove('on');
@@ -689,7 +707,13 @@ const toMenu = () => {
   lobby.show();
 };
 const lobbyHost = document.getElementById('lobby')!;
-const lobby = createLobby(lobbyHost, () => restartRun());
+const coopPanel = createCoopPanel((start) => restartRun(start));
+const lobby = createLobby(lobbyHost, () => {
+  // in a co-op room the run is started from the room (by the host), not solo
+  if (coopPanel.inRoom()) coopPanel.open();
+  else restartRun();
+});
+document.getElementById('lbCoop')?.addEventListener('click', () => coopPanel.open());
 document.getElementById('btnMenu')?.addEventListener('click', toMenu);
 document.getElementById('btnPauseMenu')?.addEventListener('click', toMenu);
 

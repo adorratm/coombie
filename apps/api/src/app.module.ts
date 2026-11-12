@@ -2,11 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './health.controller';
-import { RedisModule } from './redis/redis.module';
-import { LobbyGateway } from './lobby/lobby.gateway';
-import { LobbyService } from './lobby/lobby.service';
-import { MatchGateway } from './match/match.gateway';
-import { MatchService } from './match/match.service';
+import { RealtimeModule } from './realtime.module';
 import { UserEntity } from './entities/user.entity';
 import { MatchHistoryEntity } from './entities/match-history.entity';
 
@@ -28,9 +24,8 @@ import { MatchHistoryEntity } from './entities/match-history.entity';
       retryDelay: 3000,
     }),
     TypeOrmModule.forFeature([UserEntity, MatchHistoryEntity]),
-    RedisModule,
+    RealtimeModule,
   ],
   controllers: [HealthController],
-  providers: [LobbyService, LobbyGateway, MatchService, MatchGateway],
 })
 export class AppModule {}

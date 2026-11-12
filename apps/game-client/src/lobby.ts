@@ -389,7 +389,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     document.head.appendChild(st);
   }
   host.innerHTML = `
-    <div class="lb-top"><div class="lb-logo">COOM<b>BIE</b><small class="lb-co">CO-OP</small></div><button type="button" class="achb" id="lbFs" title="Tam ekranda Ctrl+W sekmeyi kapatmaz">⛶ TAM EKRAN</button><button type="button" class="achb" id="lbAch" style="margin-left:0">🏆 BAŞARIMLAR</button><div class="lb-cr" id="lbCr"></div></div>
+    <div class="lb-top"><div class="lb-logo">COOM<b>BIE</b></div><button type="button" class="achb" id="lbCoop" title="Arkadaşlarınla oyna (1-8 kişi)">👥 CO-OP</button><button type="button" class="achb" id="lbFs" title="Tam ekranda Ctrl+W sekmeyi kapatmaz">⛶ TAM EKRAN</button><button type="button" class="achb" id="lbAch" style="margin-left:0">🏆 BAŞARIMLAR</button><div class="lb-cr" id="lbCr"></div></div>
     <div class="lb-heroes" id="lbHeroes"></div>
     <div class="lb-stage" id="lbStage"><div class="lb-name"><h1 id="lbName"></h1><p id="lbRole"></p></div><div class="toast" id="lbToast"></div></div>
     <div class="lb-side">

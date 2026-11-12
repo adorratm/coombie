@@ -3,6 +3,9 @@ import { spawnBudgetForLevel, waveKindForLevel } from '@protocol-z/shared';
 /** Playable arena kinds. */
 export type ZombieKind = 'grunt' | 'runner' | 'tank' | 'acid' | 'boss' | 'screamer' | 'crawler' | 'bloater' | 'stalker' | 'burner' | 'riot' | 'hive' | 'volt' | 'hooker';
 
+/** Wire order for co-op snapshots — append only, never reorder. */
+export const NET_ZOMBIE_KINDS: readonly ZombieKind[] = ['grunt', 'runner', 'tank', 'acid', 'boss', 'screamer', 'crawler', 'bloater', 'stalker', 'burner', 'riot', 'hive', 'volt', 'hooker'];
+
 /** Display names (HUD, achievements). */
 export const ZOMBIE_NAMES: Record<ZombieKind, string> = {
   grunt: 'Leş', runner: 'Koşucu', tank: 'Tank', acid: 'Asitçi', boss: 'Mutant', screamer: 'Çığırtkan', crawler: 'Sürüngen', bloater: 'Şişko',

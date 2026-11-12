@@ -59,7 +59,7 @@ describe('net session', () => {
     hio.fire(NetEvents.Input, { from: 'evil', d: { x: 1e9 } });
     expect(host.liveRemoteHeroes().length).toBe(1);
     expect(host.liveRemoteHeroes()[0]!.x).toBe(inputs[inputs.length - 1]!.x);
-    tick(5);
+    tick(10);
     expect(host.liveRemoteHeroes().length).toBe(0); // silent guest is no longer a target
   });
 

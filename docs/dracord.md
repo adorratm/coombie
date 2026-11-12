@@ -25,5 +25,12 @@ Dracord dışında açıldığında hiçbir şey değişmez (status `standalone`
 
 ## Durum
 - [x] Kimlik + ortak oda + operatör seçimi + hazır ol (lobi sunucuda gerçek)
-- [ ] Maç ağ kodu: istemci arena şu an yerel simülasyon; `match` namespace'ine bağlanması oyun tarafı işlerle birlikte (boss, spawn, denge — ertelendi)
+- [x] Co-op maç (1–8 kişi) — oda sahibinin istemcisi dünyayı yürütür, sunucu yalnız aktarır (`packages/shared/src/net.ts`).
+  - Lobi: oyun içi **CO-OP** düğmesi → oda kur / kodla katıl → hazır → oda sahibi başlatır. Görevi (harita/mod/zorluk) oda sahibi seçer.
+  - Her oyuncu kendi kahramanını yürütür (hareket, can, seviye, yükseltme); zombiler, hasar, dalgalar oda sahibinde.
+  - Co-op'ta duraklatma yok; yükseltme seçerken oyuncu kısa süre hasar almaz. Oda sahibi çıkarsa maç biter.
+  - Yerel deneme: `DB_DISABLED=1 yarn dev:api` (Postgres/Redis gerekmez) + `yarn dev:game`, iki sekme.
+  - [ ] Eksikler: misafirin Q/E/R yetenekleri zombilere hasar vermiyor (yalnız görsel); zombi saldırı animasyonu,
+        asit/kanca gibi özel efektler, tahliye/kurtarma modlarının nesneleri ve yerden toplananlar misafire yansımıyor;
+        düşen oyuncuyu takım arkadaşı kaldıramıyor; Dracord oturumundan otomatik odaya giriş oyun istemcisine bağlanmadı.
 - [ ] `src/lib/dracord-embed` vendored kopya → `@dracord/embedded-sdk` npm'de yayınlanınca pakete geç

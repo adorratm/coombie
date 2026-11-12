@@ -9,7 +9,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:api": "yarn workspace @protocol-z/api dev",
+    "build:libs": "yarn workspace @protocol-z/shared build && yarn workspace @protocol-z/game-engine build",
+    "dev:api": "yarn build:libs && yarn workspace @protocol-z/api dev",
     "dev:web": "yarn workspace @protocol-z/web dev",
     "dev:game": "yarn workspace @protocol-z/game-client dev",
     "dev:desktop": "yarn workspace @protocol-z/desktop dev",

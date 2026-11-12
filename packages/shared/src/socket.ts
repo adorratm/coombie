@@ -92,6 +92,15 @@ export interface MatchPowerUpSelectPayload {
 /** `match:start` — lobby state plus this player's ticket for the /match namespace */
 export interface MatchStartPayload extends LobbyStatePayload {
   ticket: string;
+  /** the host's mission; guests load the same map / mode / difficulty */
+  mission?: MatchMission;
+}
+
+export interface MatchMission {
+  map: string;
+  mode: string;
+  difficulty: string;
+  minutes?: number;
 }
 
 export interface LobbyStatePayload {

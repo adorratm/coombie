@@ -49,7 +49,8 @@ export class NetSession {
 
   constructor(
     private readonly io: NetTransport,
-    private readonly handlers: NetSessionHandlers = {},
+    /** replaceable: the arena installs its own handlers when a run starts */
+    public handlers: NetSessionHandlers = {},
     private readonly clock: () => number = () => performance.now() / 1000,
   ) {
     this.listen(NetEvents.Roster, (r: NetRoster) => {
@@ -139,7 +140,7 @@ export class NetSession {
   }
 
   /** host: guests whose last report is fresh (a silent guest stops being a target) */
-  liveRemoteHeroes(maxAge = 3): NetHero[] {
+  liveRemoteHeroes(maxAge = 8): NetHero[] {
     const now = this.clock();
     const out: NetHero[] = [];
     for (const h of this.remoteHeroes.values()) if (now - h.at <= maxAge) out.push(h);

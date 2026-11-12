@@ -8,6 +8,7 @@ import {
 } from '@nestjs/websockets';
 import { Namespace, Socket } from 'socket.io';
 import { NetEvents, type NetRoster } from '@protocol-z/shared';
+import { corsOrigins } from '../cors';
 import { MatchService } from './match.service';
 
 const sizeOf = (body: unknown): number => {
@@ -25,7 +26,7 @@ const sizeOf = (body: unknown): number => {
  */
 @WebSocketGateway({
   namespace: '/match',
-  cors: { origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000' },
+  cors: { origin: corsOrigins() },
 })
 export class MatchGateway implements OnGatewayDisconnect {
   @WebSocketServer()

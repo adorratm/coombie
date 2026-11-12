@@ -15,15 +15,30 @@ import {
   type LobbyDracordPayload,
   type LobbyJoinPayload,
   type LobbySelectOperativePayload,
+  type MatchMission,
 } from '@protocol-z/shared';
 import { LobbyService } from './lobby.service';
+import { corsOrigins } from '../cors';
 import { MatchService } from '../match/match.service';
 import { v4 as uuid } from 'uuid';
 import { dracordRoomCode, verifyDracordToken } from './dracord-auth';
 
+/** Oda sahibinin seçtiği görev (harita / mod / zorluk) — herkes aynı haritayı yüklesin diye iletilir. */
+function sanitizeMission(raw: unknown): MatchMission | undefined {
+  const m = raw as Record<string, unknown> | null;
+  const id = (v: unknown) => (typeof v === 'string' && /^[a-z0-9_-]{1,24}$/i.test(v) ? v : null);
+  if (!m || typeof m !== 'object') return undefined;
+  const map = id(m.map);
+  const mode = id(m.mode);
+  const difficulty = id(m.difficulty);
+  if (!map || !mode || !difficulty) return undefined;
+  const minutes = typeof m.minutes === 'number' && [20, 30, 40, 60].includes(m.minutes) ? m.minutes : undefined;
+  return { map, mode, difficulty, minutes };
+}
+
 @WebSocketGateway({
   namespace: '/lobby',
-  cors: { origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000' },
+  cors: { origin: corsOrigins() },
 })
 export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -43,7 +58,7 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /** Dracord odaları sabit koda sahip — kopan oyuncuyu çıkar ki oda temizlensin */
   handleDisconnect(client: Socket): void {
     const roomCode = client.data.roomCode as string | undefined;
-    if (!roomCode || !client.data.dracord) return;
+    if (!roomCode) return;
     const playerId = client.data.playerId as string;
     // Aynı kullanıcı başka sekmeden bağlıysa çıkarma
     void this.server
@@ -71,7 +86,7 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.join(state.roomCode);
     client.data.roomCode = state.roomCode;
     this.server.to(state.roomCode).emit(ServerEvents.LobbyState, state);
-    return state;
+    return { ...state, you: client.data.playerId as string };
   }
 
   /**
@@ -126,7 +141,7 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.join(state.roomCode);
       client.data.roomCode = state.roomCode;
       this.server.to(state.roomCode).emit(ServerEvents.LobbyState, state);
-      return state;
+      return { ...state, you: client.data.playerId as string };
     } catch (e) {
       const message = e instanceof Error ? e.message : 'JOIN_FAILED';
       client.emit(ServerEvents.LobbyError, { message });
@@ -187,7 +202,7 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage(ClientEvents.LobbyStart)
-  async onStart(@ConnectedSocket() client: Socket) {
+  async onStart(@ConnectedSocket() client: Socket, @MessageBody() body?: { mission?: unknown }) {
     const roomCode = client.data.roomCode as string | undefined;
     if (!roomCode) return { error: 'NO_ROOM' };
     const state = this.lobby.getRoom(roomCode);
@@ -201,11 +216,12 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { error: 'NOT_READY' };
     }
     // her oyuncuya kendi maç bileti — /match soketi bununla kimlik doğrular
+    const mission = sanitizeMission(body?.mission);
     const tickets = this.matches.ticketsFor(state);
     const socks = await this.server.in(roomCode).fetchSockets();
     for (const s of socks) {
       const ticket = tickets.get(s.data?.playerId as string);
-      if (ticket) s.emit(ServerEvents.MatchStart, { ...state, ticket });
+      if (ticket) s.emit(ServerEvents.MatchStart, { ...state, ticket, mission });
     }
     return { ok: true };
   }

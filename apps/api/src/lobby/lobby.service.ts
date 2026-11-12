@@ -134,7 +134,7 @@ export class LobbyService {
     room.players.delete(playerId);
     if (room.players.size === 0) {
       this.rooms.delete(room.roomCode);
-      void this.redis.client.del(`lobby:${room.roomCode}`);
+      void this.redis.del(`lobby:${room.roomCode}`);
       return null;
     }
     if (room.hostPlayerId === playerId) {
@@ -177,12 +177,7 @@ export class LobbyService {
   }
 
   private async persist(room: Room): Promise<void> {
-    try {
-      await this.redis.connect();
-      await this.redis.setJson(`lobby:${room.roomCode}`, this.toPayload(room), 3600);
-    } catch {
-      // Redis optional in early local boot
-    }
+    await this.redis.setJson(`lobby:${room.roomCode}`, this.toPayload(room), 3600);
   }
 
   private generateCode(): string {
