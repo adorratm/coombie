@@ -91,6 +91,8 @@ export type NetEvent =
   | { k: 'banner'; text: string; dur: number }
   /** guest → host: hero ability cast */
   | { k: 'cast'; slot: string; x: number; z: number; yaw: number }
+  /** guest → host: ability / skill damage the guest dealt — flat [zombieId, amount, …] */
+  | { k: 'hit'; h: number[] }
   /** guest → host: melee / point-blank hit request is NOT trusted; the host fires for every hero */
   | { k: 'end'; won: boolean; title: string; subtitle: string };
 

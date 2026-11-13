@@ -30,7 +30,11 @@ Dracord dışında açıldığında hiçbir şey değişmez (status `standalone`
   - Her oyuncu kendi kahramanını yürütür (hareket, can, seviye, yükseltme); zombiler, hasar, dalgalar oda sahibinde.
   - Co-op'ta duraklatma yok; yükseltme seçerken oyuncu kısa süre hasar almaz. Oda sahibi çıkarsa maç biter.
   - Yerel deneme: `DB_DISABLED=1 yarn dev:api` (Postgres/Redis gerekmez) + `yarn dev:game`, iki sekme.
-  - [ ] Eksikler: misafirin Q/E/R yetenekleri zombilere hasar vermiyor (yalnız görsel); zombi saldırı animasyonu,
-        asit/kanca gibi özel efektler, tahliye/kurtarma modlarının nesneleri ve yerden toplananlar misafire yansımıyor;
-        düşen oyuncuyu takım arkadaşı kaldıramıyor; Dracord oturumundan otomatik odaya giriş oyun istemcisine bağlanmadı.
+  - Misafirin yetenek / otomatik beceri hasarı oda sahibine bildirilir ve zombilere uygulanır.
+  - Düşen oyuncuyu yanına gelen takım arkadaşı 3 sn'de kaldırır (dirilme hakkı harcanmaz); dirilme hakkı bitince
+    oyuncu yerde bekler, tüm tim 6 sn boyunca yerdeyse görev başarısız olur (`coopRules.ts`, testli).
+  - Yükseltme seçerken hasar almama en fazla 6 sn sürer.
+  - [ ] Eksikler: yeteneklerin yavaşlatma / sersemletme gibi yan etkileri, zombi saldırı animasyonu, asit/kanca gibi
+        özel efektler, tahliye/kurtarma modlarının nesneleri ve yerden toplananlar misafire yansımıyor;
+        Dracord oturumundan otomatik odaya giriş oyun istemcisine bağlanmadı.
 - [ ] `src/lib/dracord-embed` vendored kopya → `@dracord/embedded-sdk` npm'de yayınlanınca pakete geç

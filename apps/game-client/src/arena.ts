@@ -25,6 +25,7 @@ import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
 import { waveKindForLevel } from '@protocol-z/shared';
 import { buildSpawnField } from './spawnField';
 import type { NetSession } from './netSession';
+import { tickDowned } from './coopRules';
 import type { NetHero } from '@protocol-z/shared';
 import {
   HORDE_WARN_SECONDS,
@@ -956,10 +957,17 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     rawDamage: number,
     hitPos: THREE.Vector3,
     knockDir: THREE.Vector3,
-    opts?: { weaponId?: WeaponId; fromPlayer?: boolean },
+    opts?: { weaponId?: WeaponId; fromPlayer?: boolean; /** guest: ability damage, reported to the host */ forward?: boolean; /** already final (from a guest) */ raw?: boolean },
   ) => {
     if (isGuest) {
-      // the host owns zombie health; show the hit, change nothing
+      // the host owns zombie health; show the hit, change nothing.
+      // Gun shots are re-simulated by the host; ability / skill damage is reported to it.
+      if (opts?.forward) {
+        const id = z.root.userData.netId as number | undefined;
+        const final = rawDamage * getCombatStats(opts.weaponId ?? player.weapon.id).damageMult * heroBuffs(player).damage;
+        if (id && final > 0) netHitOut.set(id, (netHitOut.get(id) ?? 0) + final);
+        fx.spawnDamageNumber(hitPos, final, { crit: false, style: 'enemy' });
+      }
       flashZombieHurt(z);
       fx.spawnBloodBurst(hitPos, 0.85);
       fx.spawnHitRing(hitPos, 0xb91c1c, 0.12);
@@ -971,7 +979,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     const stats = getCombatStats(weaponId);
     const hb = fromPlayer ? heroBuffs(player) : NO_BUFF;
     const crit = Math.random() < stats.critChance + hb.crit;
-    let dmg = rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
+    let dmg = opts?.raw ? rawDamage : rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
     // riot shield: hits from the front are mostly stopped
     if (z.kind === 'riot' && z.root.userData.shield && knockDir.lengthSq() > 0.01) {
       const fy = z.root.rotation.y;
@@ -1385,7 +1393,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         mesh,
         vel: dir.multiplyScalar(speed),
         life: weapon.range / (40 * (wfx?.speed ?? 1)),
-        damage: weapon.damage * (op.isPlayer ? pierceBonus : 1) * (op.isPlayer ? 1 : 0.85),
+        // AI squad mates are slightly weaker; another player's hero is not
+        damage: weapon.damage * (op.isPlayer ? pierceBonus : 1) * (op.isPlayer || op.root.userData.netPlayer ? 1 : 0.85),
         owner: op,
         pierce: Math.max(pierce, wfx?.pierce ?? 0) + basePierce,
         fx: wfx,
@@ -1398,6 +1407,14 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   /** host → guests, batched so a horde cannot flood the relay */
   let netXpOut = 0;
   const netDmgOut = new Map<string, { amount: number; fx: number; fz: number }>();
+  /** guest → host: ability damage per zombie id */
+  const netHitOut = new Map<number, number>();
+  let netFlushGuestT = 0;
+  /** co-op: progress of a team mate picking this player up, and how long the whole team has been down */
+  let pickupT = 0;
+  let upgradeShieldT = 0;
+  const UPGRADE_SHIELD_SECONDS = 6;
+  let teamDownT = 0;
   let netFlushT = 0;
   let netBannerSent = '';
   let netEndSent = false;
@@ -1543,6 +1560,17 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (!net) return;
     if (isGuest) {
       net.guestPublish(ownNetHero());
+      netFlushGuestT += dt;
+      if (netFlushGuestT >= 0.1 && netHitOut.size > 0) {
+        netFlushGuestT = 0;
+        const h: number[] = [];
+        for (const [id, amount] of netHitOut) {
+          if (h.length >= 240) break;
+          h.push(id, Math.round(amount * 10) / 10);
+        }
+        netHitOut.clear();
+        net.send({ k: 'hit', h });
+      }
       return;
     }
     syncNetAllies(net.liveRemoteHeroes());
@@ -1585,7 +1613,19 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   if (net) {
     net.handlers = {
       onEvent: (ev) => {
-        if (!isGuest) return; // guest → host events (abilities) are not simulated yet
+        if (isHost) {
+          // a guest's ability damage: apply it as-is to the zombies it names
+          if (ev.k !== 'hit' || !Array.isArray(ev.h)) return;
+          const byId = new Map<number, ZombieVisual>();
+          for (const z of zombies) byId.set(z.root.userData.netId as number, z);
+          for (let i = 0; i + 1 < ev.h.length && i < 240; i += 2) {
+            const z = byId.get(ev.h[i]!);
+            const amount = Number(ev.h[i + 1]);
+            if (!z || z.hp <= 0 || !(amount > 0)) continue;
+            damageZombie(z, Math.min(amount, 20000), z.root.position.clone().setY(1.1), new THREE.Vector3(), { fromPlayer: false, raw: true });
+          }
+          return;
+        }
         if (ev.k === 'dmg' && ev.to === net.playerId) {
           damageOperative(player, ev.amount, new THREE.Vector3(ev.fx, 0, ev.fz));
         } else if (ev.k === 'xp') {
@@ -1633,7 +1673,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     squad,
     zombies,
     aim: mouseAim,
-    damageZombie: (z, dmg, at, dir) => damageZombie(z, dmg, at, dir, { weaponId: player.weapon.id, fromPlayer: true }),
+    damageZombie: (z, dmg, at, dir) => damageZombie(z, dmg, at, dir, { weaponId: player.weapon.id, fromPlayer: true, forward: true }),
     moveWithCollision: applyMoveWithCollision,
     revive: (op) => {
       op.alive = true;
@@ -1698,7 +1738,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     player,
     zombies,
     state: progress.runSkills,
-    damageZombie: (z, dmg, at, dir) => damageZombie(z, dmg, at, dir, { weaponId: player.weapon.id, fromPlayer: true }),
+    damageZombie: (z, dmg, at, dir) => damageZombie(z, dmg, at, dir, { weaponId: player.weapon.id, fromPlayer: true, forward: true }),
     shake: (a) => {
       shake = Math.max(shake, a);
     },
@@ -2258,7 +2298,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (upgrading || !player.alive) userPaused = false;
     // co-op never stops the shared world: no pause, and picking an upgrade only shields you
     if (netPlay) userPaused = false;
-    if (netPlay && upgrading) player.invuln = Math.max(player.invuln, 0.3);
+    // the shield lasts a few seconds per pick — sitting on an unspent upgrade is not god mode
+    upgradeShieldT = netPlay && upgrading ? upgradeShieldT + rawDt : 0;
+    if (netPlay && upgrading && upgradeShieldT < UPGRADE_SHIELD_SECONDS) player.invuln = Math.max(player.invuln, 0.3);
     const frozen = (!netPlay && (upgrading || userPaused)) || !!runOver;
     const dt = frozen ? 0 : rawDt;
     if (!frozen) simTime += dt;
@@ -2275,6 +2317,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (frozen) {
       billboardHealthBars(healthBars, camera);
       renderer.render(scene, camera);
+      // keep talking to the team while the result screen is up (the end of the run must reach them)
+      if (net) netPublish(rawDt);
       return;
     }
 
@@ -2421,8 +2465,35 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     } else {
       reviveTimer += dt;
-      if (reviveTimer > 4 && !runOver && !modeRt.tryRevive()) {
-        modeRt.fail('Tüm dirilme hakların bitti.');
+      let pickedUp = false;
+      if (netPlay && !runOver) {
+        // co-op: a living team mate standing next to you picks you up (no revive spent)
+        const down = tickDowned({ pickup: pickupT, teamDown: teamDownT }, dt, player.root.position.x, player.root.position.z, netTarget.values());
+        pickupT = down.pickup;
+        teamDownT = down.teamDown;
+        pickedUp = down.pickedUp;
+        if (modeRt.revivesLeft <= 0 && !pickedUp) {
+          // out of revives: stay down and wait for the team; the host ends the run when everyone is down
+          reviveTimer = Math.min(reviveTimer, 4);
+          if (reviveTimer >= 4) {
+            missionRuntime.banner = down.near ? 'KALDIRILIYORSUN…' : 'DÜŞTÜN — bir takım arkadaşın yanına gelirse kalkarsın';
+            missionRuntime.bannerUntil = simTime + 0.5;
+          }
+          if (isHost && down.wiped) modeRt.fail('Tüm tim düştü.');
+        }
+      }
+      if (pickedUp) {
+        pickupT = 0;
+        reviveTimer = 0;
+        player.alive = true;
+        player.hp = player.maxHp * 0.4;
+        setOperativeDead(player, false);
+        player.invuln = 2;
+        player.healthBar.setVisible(true);
+        player.healthBar.setRatio(player.hp / player.maxHp);
+        fx.spawnHitRing(player.root.position, 0x7cffb2);
+      } else if (reviveTimer > 4 && !runOver && !modeRt.tryRevive()) {
+        if (!netPlay) modeRt.fail('Tüm dirilme hakların bitti.');
       } else if (reviveTimer > 4 && !runOver) {
         reviveTimer = 0;
         player.alive = true;
@@ -2807,7 +2878,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     camPos.set(player.root.position.x + 0.2 + sx, camH, player.root.position.z + camBack + sz);
     camera.position.lerp(camPos, 1 - Math.exp(-3.4 * dt));
     camera.lookAt(camTarget);
-    if (net) netPublish(dt);
+    if (net) netPublish(rawDt);
 
     // Ambient top-up toward the director's alive target (see spawn director above)
     if (!modeRt.ownsSpawning && zombies.length < aliveTarget && Math.random() < dt * ambientRate(simTime, wave)) {
