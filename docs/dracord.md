@@ -35,6 +35,13 @@ Dracord dışında açıldığında hiçbir şey değişmez (status `standalone`
     oyuncu yerde bekler, tüm tim 6 sn boyunca yerdeyse görev başarısız olur (`coopRules.ts`, testli).
   - Yükseltme seçerken hasar almama en fazla 6 sn sürer.
   - [ ] Eksikler: yeteneklerin yavaşlatma / sersemletme gibi yan etkileri, zombi saldırı animasyonu, asit/kanca gibi
-        özel efektler, tahliye/kurtarma modlarının nesneleri ve yerden toplananlar misafire yansımıyor;
-        Dracord oturumundan otomatik odaya giriş oyun istemcisine bağlanmadı.
-- [ ] `src/lib/dracord-embed` vendored kopya → `@dracord/embedded-sdk` npm'de yayınlanınca pakete geç
+        özel efektler, tahliye/kurtarma modlarının nesneleri ve yerden toplananlar misafire yansımıyor.
+- [x] Oyun istemcisi (`apps/game-client`, masaüstü ve Dracord'da açılan asıl oyun) Dracord içinde açılınca kod sormaz:
+  kimlik Dracord'dan gelir, ses kanalındaki herkes aynı odaya düşer, CO-OP penceresi kendiliğinden açılır
+  (`coop.ts` + `src/dracord-embed`). Token yenilenince ve bağlantı kopup gelince yeniden doğrular.
+  - Giriş URL'si olarak **oyun istemcisinin** adresini ver (ör. `https://coombie.dracord.com.tr/`).
+  - Kendi kendine barındırılan Dracord için: `VITE_DRACORD_HOST_ORIGINS=https://...` (virgüllü).
+  - Yerel deneme (gerçek Dracord olmadan): `node scripts/dracord-mock.mjs` (sahte doğrulama :3999 + iframe sayfası :3000),
+    API'yi `DB_DISABLED=1 DRACORD_GAME_SECRET=test-secret DRACORD_API_URL=http://localhost:3999 yarn dev:api` ile aç,
+    `yarn dev:game`, sonra `http://localhost:3000/?u=u1` ve `?u=u2` (ayrı tarayıcı profillerinde).
+- [ ] `dracord-embed` vendored kopya (web + game-client'ta iki yerde) → `@dracord/embedded-sdk` npm'de yayınlanınca pakete geç

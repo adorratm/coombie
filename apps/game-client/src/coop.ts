@@ -10,6 +10,7 @@ import {
 import { NetSession, type NetTransport } from './netSession';
 import { currentMission, loadProfile } from './loadout';
 import { rosterById } from './roster';
+import { DracordEmbed } from './dracord-embed';
 
 /**
  * Co-op lobby panel (1–8 players): create a room or join by code, ready up, host starts.
@@ -42,7 +43,16 @@ const ERR: Record<string, string> = {
   NOT_READY: 'Herkes hazır olmalı (en az 2 oyuncu).',
   NOT_HOST: 'Oyunu yalnız oda sahibi başlatabilir.',
   NOT_IN_ROOM: 'Odada değilsin.',
+  DRACORD_DISABLED: 'Bu sunucuda Dracord girişi kapalı (oyun anahtarı tanımlı değil).',
+  DRACORD_BAD_TOKEN: 'Dracord oturumu doğrulanamadı.',
+  DRACORD_UNAUTHORIZED: 'Dracord oyun anahtarı geçersiz.',
 };
+
+/** extra Dracord origins allowed to host the game (self-hosted / staging), comma separated */
+function dracordHostOrigins(): string[] {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_DRACORD_HOST_ORIGINS ?? '';
+  return env.split(',').map((s) => s.trim()).filter(Boolean);
+}
 
 const CSS = `
 .coop-back{position:fixed;inset:0;z-index:60;background:rgba(4,6,9,.78);display:none;align-items:center;justify-content:center;font-family:var(--font,Barlow,sans-serif)}
@@ -94,6 +104,11 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
   let error = '';
   let busy = false;
   let starting = false;
+  /**
+   * Inside Dracord (iframe / mobile WebView): no room codes — identity comes from Dracord and
+   * everyone in the same voice-channel session lands in the same room automatically.
+   */
+  const dracord = DracordEmbed.isEmbedded() ? new DracordEmbed({ allowedHostOrigins: dracordHostOrigins() }) : null;
 
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const myName = () => (localStorage.getItem(NAME_KEY) || 'Operatör').slice(0, 24);
@@ -102,7 +117,7 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
     new Promise((resolve, reject) => {
       if (lobby?.connected) return resolve(lobby);
       lobby?.close();
-      const s = io(`${coopServerUrl()}${SOCKET_NS.lobby}`, { transports: ['websocket'], reconnectionAttempts: 3 });
+      const s = io(`${coopServerUrl()}${SOCKET_NS.lobby}`, { transports: ['websocket'], reconnectionAttempts: dracord ? Infinity : 3 });
       const timer = setTimeout(() => reject(new Error('Sunucuya bağlanılamadı.')), 7000);
       s.on('connect', () => {
         clearTimeout(timer);
@@ -127,6 +142,10 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
         state = null;
         error = 'Sunucu bağlantısı koptu.';
         render();
+      });
+      // Dracord: the room is tied to the session, so simply walk back in after a reconnect
+      s.io.on('reconnect', () => {
+        if (dracord) void enterDracord();
       });
       lobby = s;
     });
@@ -168,6 +187,31 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
     busy = false;
     render();
   };
+
+  const enterDracord = async () => {
+    if (!dracord) return;
+    busy = true;
+    error = '';
+    render();
+    try {
+      const ctx = await dracord.ready();
+      await connect();
+      const res = await ack<LobbyStatePayload & { you: string }>(ClientEvents.LobbyDracord, { token: dracord.context?.token ?? ctx.token });
+      state = res;
+      me = res.you;
+      await syncOperative().catch((e: Error) => {
+        error = e.message;
+      });
+    } catch (e) {
+      error = e instanceof Error ? (ERR[e.message] ?? e.message) : 'Dracord bağlantısı kurulamadı.';
+    }
+    busy = false;
+    render();
+  };
+  // a refreshed launch token re-authenticates the same socket (the old one expires)
+  dracord?.onTokenRefresh(({ token }) => {
+    if (lobby?.connected && state) void ack(ClientEvents.LobbyDracord, { token }).catch(() => undefined);
+  });
 
   const leaveRoom = () => {
     lobby?.close();
@@ -218,6 +262,16 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
 
   function render() {
     const inRoom = !!state;
+    if (!inRoom && dracord) {
+      box.innerHTML = `
+        <h2 id="coopTitle">DRACORD ODASI</h2>
+        <p>Ses kanalındaki herkes aynı odaya girer; kod gerekmez.</p>
+        <div class="err" role="alert">${esc(busy ? '' : error)}</div>
+        <div class="foot"><button id="coopClose">KAPAT</button><button id="coopRetry" class="go" ${busy ? 'disabled' : ''}>${busy ? 'BAĞLANIYOR…' : 'TEKRAR DENE'}</button></div>`;
+      box.querySelector('#coopClose')!.addEventListener('click', () => back.classList.remove('on'));
+      box.querySelector('#coopRetry')!.addEventListener('click', () => void enterDracord());
+      return;
+    }
     if (!inRoom) {
       box.innerHTML = `
         <h2 id="coopTitle">CO-OP</h2>
@@ -255,8 +309,8 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
     const allReady = st.players.length >= 2 && st.players.every((p) => p.isReady);
     const m = currentMission();
     box.innerHTML = `
-      <h2 id="coopTitle">ODA <span class="code">${esc(st.roomCode)}</span></h2>
-      <p>${host ? 'Kodu arkadaşlarına gönder. Görev senin lobide seçtiğin harita, mod ve zorlukla başlar.' : 'Görevi oda sahibi seçer. Operatörünü değiştirmek için bu pencereyi kapatıp lobiden seç, sonra geri gel.'}</p>
+      <h2 id="coopTitle">${dracord ? 'DRACORD ODASI' : `ODA <span class="code">${esc(st.roomCode)}</span>`}</h2>
+      <p>${dracord ? 'Ses kanalındaki herkes bu odada. ' : ''}${host ? `${dracord ? '' : 'Kodu arkadaşlarına gönder. '}Görev senin lobide seçtiğin harita, mod ve zorlukla başlar.` : 'Görevi oda sahibi seçer. Operatörünü değiştirmek için bu pencereyi kapatıp lobiden seç, sonra geri gel.'}</p>
       <ul>${st.players
         .map((p) => {
           const def = rosterById(p.operativeId as Parameters<typeof rosterById>[0]);
@@ -266,12 +320,12 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
       <p>${st.players.length}/8 oyuncu${host ? ` · Görev: ${esc(m.map)} · ${esc(m.mode)} · ${esc(m.difficulty)}` : ''}</p>
       <div class="err" role="alert">${esc(starting ? '' : error)}</div>
       <div class="foot">
-        <button id="coopLeave">ODADAN ÇIK</button>
+        ${dracord ? '' : '<button id="coopLeave">ODADAN ÇIK</button>'}
         <button id="coopHide">LOBİYE DÖN</button>
         <button id="coopReady" ${starting ? 'disabled' : ''}>${mine?.isReady ? 'HAZIR DEĞİLİM' : 'HAZIRIM'}</button>
         ${host ? `<button id="coopStart" class="go" ${allReady && !starting ? '' : 'disabled'}>${starting ? 'BAŞLIYOR…' : 'BAŞLAT'}</button>` : ''}
       </div>`;
-    box.querySelector('#coopLeave')!.addEventListener('click', leaveRoom);
+    box.querySelector('#coopLeave')?.addEventListener('click', leaveRoom);
     box.querySelector('#coopHide')!.addEventListener('click', () => back.classList.remove('on'));
     box.querySelector('#coopReady')!.addEventListener('click', () => {
       error = '';
@@ -296,6 +350,11 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
   }
 
   render();
+  if (dracord) {
+    // opened from a Dracord voice channel: go straight to the shared room
+    back.classList.add('on');
+    void enterDracord();
+  }
   return {
     open: () => {
       error = '';
