@@ -20,6 +20,7 @@
     "ci": "yarn workspace @protocol-z/shared build && yarn workspace @protocol-z/game-engine build && yarn typecheck && yarn test",
     "build:packages": "yarn workspace @protocol-z/shared build && yarn workspace @protocol-z/game-engine build && yarn workspace @protocol-z/game-client build",
     "build:desktop": "yarn workspace @protocol-z/game-client build:desktop",
+    "build:game-web": "yarn workspace @protocol-z/game-client build:web",
     "package:desktop": "yarn workspace @protocol-z/desktop package",
     "package:desktop:dir": "yarn workspace @protocol-z/desktop package:dir",
     "docker:up": "docker compose -f infra/docker-compose.yml up -d --build",

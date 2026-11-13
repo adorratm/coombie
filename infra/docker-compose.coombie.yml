@@ -1,0 +1,16 @@
+# coombie.dracord.com.tr — tek kapsayıcı (oyun + lobi + co-op). Bkz. docs/deploy.md
+services:
+  coombie:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.coombie
+    restart: unless-stopped
+    environment:
+      # Dracord içinden giriş için (geliştirici portalındaki oyun anahtarı). Boşsa yalnız kodla oda çalışır.
+      DRACORD_GAME_SECRET: ${DRACORD_GAME_SECRET:-}
+      DRACORD_API_URL: ${DRACORD_API_URL:-https://api.dracord.com.tr}
+      # Oyun başka bir adresten de sunulacaksa (ör. yerel geliştirme) virgülle ekle
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://coombie.dracord.com.tr}
+    ports:
+      # yalnız sunucunun kendisinden erişilir; dışarıya nginx / Cloudflare açar
+      - '127.0.0.1:${COOMBIE_PORT:-3101}:3001'

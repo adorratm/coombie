@@ -32,7 +32,8 @@ export function coopServerUrl(): string {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_API_URL;
   if (q && /^https?:\/\//.test(q)) return q.replace(/\/$/, '');
   if (env) return env.replace(/\/$/, '');
-  return /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? `${location.protocol}//${location.hostname}:3001` : location.origin;
+  // vite dev server → the API next to it; otherwise the game is served by the API itself (same origin)
+  return location.port === '5173' ? `${location.protocol}//${location.hostname}:3001` : location.origin;
 }
 
 const ERR: Record<string, string> = {

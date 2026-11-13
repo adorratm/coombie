@@ -1,0 +1,34 @@
+# COOMBIE tek kapsayıcı: oyun istemcisi (statik) + lobi + co-op maç aktarıcısı, tek port.
+# Postgres / Redis gerekmez (DB_DISABLED=1). Önüne yalnız TLS sonlandıran bir proxy koy (Cloudflare / nginx).
+#   docker build -f infra/Dockerfile.coombie -t coombie .
+#   docker run -p 3001:3001 -e DRACORD_GAME_SECRET=... coombie
+FROM node:26.13.0-bookworm-slim AS build
+WORKDIR /app
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+COPY package.json yarn.lock .yarnrc.yml tsconfig.base.json ./
+COPY .yarn/releases .yarn/releases
+COPY packages ./packages
+COPY apps/api ./apps/api
+COPY apps/game-client ./apps/game-client
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/desktop/package.json ./apps/desktop/package.json
+# Linux image: classic node-modules linker resolves workspace packages cleanly for tsc/nest
+RUN printf '%s\n' 'nodeLinker: node-modules' 'yarnPath: .yarn/releases/yarn-4.18.1.cjs' 'tsEnableAutoTypes: false' > .yarnrc.yml \
+ && node .yarn/releases/yarn-4.18.1.cjs install \
+ && ./node_modules/typescript/bin/tsc -p packages/shared/tsconfig.json \
+ && ./node_modules/typescript/bin/tsc -p packages/game-engine/tsconfig.json \
+ && (cd apps/api && node ../../node_modules/@nestjs/cli/bin/nest.js build) \
+ && (cd apps/game-client && node ../../node_modules/vite/bin/vite.js build --config vite.desktop.config.ts --outDir dist-web --emptyOutDir)
+
+FROM node:26.13.0-bookworm-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production PORT=3001 DB_DISABLED=1 GAME_STATIC_DIR=/app/game
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/game-client/dist-web ./game
+USER node
+EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=4s --start-period=10s CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "apps/api/dist/main.js"]

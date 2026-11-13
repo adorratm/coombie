@@ -12,6 +12,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json",
     "build:desktop": "vite build --config vite.desktop.config.ts",
+    "build:web": "vite build --config vite.desktop.config.ts --outDir dist-web --emptyOutDir",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
