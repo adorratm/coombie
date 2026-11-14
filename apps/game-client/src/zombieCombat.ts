@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { KOR_TRAIL_SECONDS, KOVAN_BROOD_SECONDS, KOVAN_BROOD_SIZE, KOVAN_DEATH_BROOD, SALTER_NOVA_LEAD, SALTER_NOVA_RADIUS, SALTER_NOVA_SECONDS, SALTER_STUN_SECONDS, type BossVariant } from './bossVariants';
 import type { OperativeVisual, ZombieVisual } from './characters';
 import type { ZombieKind } from './zombieKinds';
 import { SEG, type ClipSeg } from './zombieAnim';
@@ -860,6 +861,10 @@ export function bloaterExplode(z: ZombieVisual, ctx: ZombieCombatCtx, power: num
 export function tickZombiePassive(z: ZombieVisual, dt: number, distToTarget: number, ctx: ZombieCombatCtx): void {
   const ud = z.root.userData as { pt?: number; cloak?: boolean; hurtAt?: number; lastHp?: number };
   ud.pt = (ud.pt ?? 0) - dt;
+  if (z.kind === 'boss') {
+    tickBossVariant(z, distToTarget, ctx);
+    return;
+  }
   if (z.kind === 'stalker') {
     if (ud.lastHp !== undefined && z.hp < ud.lastHp) ud.hurtAt = ctx.nowSec;
     ud.lastHp = z.hp;
@@ -893,9 +898,61 @@ export function tickZombiePassive(z: ZombieVisual, dt: number, distToTarget: num
   }
 }
 
+/** Variant traits of a boss: brood, fire trail, shock nova. Uses `userData.pt` as its timer. */
+function tickBossVariant(z: ZombieVisual, distToTarget: number, ctx: ZombieCombatCtx): void {
+  const ud = z.root.userData as { pt?: number; bossVariant?: BossVariant; novaAt?: number };
+  const variant = ud.bossVariant ?? 'mutant';
+  const p = z.root.position;
+  if (variant === 'kor') {
+    if (ctx.vfx && Math.random() < 0.5) ctx.vfx.flame(p.x + (Math.random() - 0.5) * 1.2, p.z + (Math.random() - 0.5) * 1.2, 0.8);
+    if ((ud.pt ?? 0) > 0) return;
+    ud.pt = KOR_TRAIL_SECONDS;
+    ctx.hazards.fire(p.x, p.z, 1.5, 5, 3.5);
+  } else if (variant === 'kovan') {
+    if ((ud.pt ?? 0) > 0) return;
+    ud.pt = KOVAN_BROOD_SECONDS;
+    ctx.fx.spawnBloodBurst(p.clone().setY(1.5), 1.4, 0x5a3a14);
+    for (let i = 0; i < KOVAN_BROOD_SIZE; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      ctx.spawnZombieAt('crawler', p.x + Math.cos(ang) * 1.8, p.z + Math.sin(ang) * 1.8);
+    }
+  } else if (variant === 'salter') {
+    if (ud.novaAt !== undefined) {
+      if (ctx.nowSec < ud.novaAt) return;
+      ud.novaAt = undefined;
+      ud.pt = SALTER_NOVA_SECONDS;
+      const origin = p.clone().setY(1.2);
+      ctx.vfx?.sparks(origin, 30, 0xbfe6ff, 9);
+      ctx.shake(0.35);
+      for (const op of ctx.squad) {
+        if (!op.alive || op.root.position.distanceTo(p) > SALTER_NOVA_RADIUS) continue;
+        ctx.vfx?.bolt(origin, op.root.position.clone().setY(1.1), 0xd8e8ff, 0.05, 0.14, 6);
+        if (ctx.damageOperative(op, z.attackDamage * 0.8, origin)) stun(op, ctx.nowSec + SALTER_STUN_SECONDS);
+      }
+    } else if ((ud.pt ?? 0) <= 0 && distToTarget < SALTER_NOVA_RADIUS + 3) {
+      // telegraph first: the ring is the player's cue to step out
+      ud.novaAt = ctx.nowSec + SALTER_NOVA_LEAD;
+      ctx.fx.spawnWarnRing(p.clone(), SALTER_NOVA_RADIUS, 0x5cc8ff, SALTER_NOVA_LEAD);
+    }
+  }
+}
+
 /** Kind-specific death effects (called before the corpse is removed). */
 export function zombieDeathEffects(z: ZombieVisual, ctx: ZombieCombatCtx): void {
   const o = z.root.position;
+  if (z.kind === 'boss') {
+    const variant = (z.root.userData as { bossVariant?: BossVariant }).bossVariant;
+    if (variant === 'kor') {
+      ctx.vfx?.explosion(o.clone(), 2.2, 0xff8a30);
+      ctx.hazards.fire(o.x, o.z, 3.5, 8, 5);
+    } else if (variant === 'kovan') {
+      ctx.fx.spawnBloodBurst(o.clone().setY(1), 2.4, 0x5a3a14);
+      for (let i = 0; i < KOVAN_DEATH_BROOD; i++) {
+        const ang = (i / KOVAN_DEATH_BROOD) * Math.PI * 2;
+        ctx.spawnZombieAt('crawler', o.x + Math.cos(ang) * 2, o.z + Math.sin(ang) * 2);
+      }
+    } else if (variant === 'salter') ctx.vfx?.sparks(o.clone().setY(1.4), 30, 0xd8e8ff, 8);
+  }
   if (z.kind === 'burner') {
     ctx.vfx?.explosion(o.clone(), 1.1, 0xff8a30);
     ctx.hazards.fire(o.x, o.z, 2.2, 8, 4);

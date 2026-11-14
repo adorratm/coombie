@@ -20,6 +20,7 @@ import { allAvatarUrls } from './roster';
 import { rosterById } from './roster';
 import { currentRunLoadout, type AbilitySlot, type RunLoadout } from './loadout';
 import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
+import { BOSS_VARIANTS, pickBossVariant, type BossVariant } from './bossVariants';
 import { WEAPONS as ALL_WEAPONS, weaponByVariant, weaponIndexOfVariant, weaponVariantId, type WeaponFxDef } from './weapons';
 import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
 import { waveKindForLevel } from '@protocol-z/shared';
@@ -526,6 +527,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     spawnField = buildSpawnField(ARENA_BOUND, colliders, player.root.position.x, player.root.position.z, ZOMBIE_RADIUS, 1.5);
   });
   let netZombieSeq = 0;
+  let lastBossVariant: BossVariant | null = null;
   /** a horde wave is draining its budget: faster zombies, all from one side */
   let hordeActive = false;
   let hordeAngle = 0;
@@ -554,6 +556,29 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     z.root.add(g);
     z.root.userData.shield = g;
   };
+  /** Give a freshly created boss its variant: stats, size, ground aura and arrival banner. */
+  const applyBossVariant = (z: ZombieVisual): void => {
+    // dev: ?boss=kovan forces a variant
+    const forced = new URLSearchParams(location.search).get('boss') as BossVariant | null;
+    const def = BOSS_VARIANTS[forced && forced in BOSS_VARIANTS ? forced : pickBossVariant(wave, lastBossVariant)];
+    lastBossVariant = def.id;
+    z.root.userData.bossVariant = def.id;
+    z.maxHp = Math.ceil(z.maxHp * def.hpMul);
+    z.hp = z.maxHp;
+    z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * def.damageMul));
+    z.speed *= def.speedMul;
+    z.root.scale.multiplyScalar(def.scaleMul);
+    const aura = new THREE.Mesh(
+      new THREE.RingGeometry(1.5, 1.9, 40),
+      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+    );
+    aura.rotation.x = -Math.PI / 2;
+    aura.position.y = 0.06;
+    aura.name = 'bossAura';
+    z.root.add(aura);
+    missionRuntime.banner = `☠ ${def.name.toLocaleUpperCase('tr')} — ${def.intro}`;
+    missionRuntime.bannerUntil = simTime + 4;
+  };
   const spawnZombie = (
     kind: ZombieVisual['kind'] = 'grunt',
     nearPlayer = true,
@@ -569,6 +594,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     z.hp = z.maxHp;
     z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg * earlyDamageMul(simTime)));
     z.speed *= diff.speed;
+    if (kind === 'boss') applyBossVariant(z);
     if (hordeActive && kind !== 'boss' && !at) z.speed *= hordeSpeedMul(wave);
     z.baseSpeed = z.speed;
     // later waves are worth more XP so long runs can climb toward the Lv 200 cap
@@ -938,6 +964,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (barIdx >= 0) healthBars.splice(barIdx, 1);
     z.healthBar.dispose();
     if (z.kind === 'bloater') bloaterExplode(z, zombieCtx, 0.8);
+    z.root.getObjectByName('bossAura')?.removeFromParent();
     zombieDeathEffects(z, zombieCtx);
     z.hurtFlash = 0.001;
     updateZombieHurtFlash(z, 1);
