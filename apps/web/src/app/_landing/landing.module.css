@@ -1,0 +1,108 @@
+/* Landing page. Same design as apps/game-client/public/tanitim/index.html, scoped to .page. */
+.page {
+  --bg: #07090c; --panel: #0e1217; --panel-2: #131920; --line: rgba(220,230,240,.13); --line-2: rgba(220,230,240,.28);
+  --text: #f3f5f7; --dim: #9aa3ad; --ok: #5ad46a; --hp: #e23b2f;
+  --display: Rajdhani, system-ui, sans-serif; --body: Barlow, system-ui, sans-serif;
+  background: var(--bg); color: var(--text); font: 400 16px/1.55 var(--body); -webkit-font-smoothing: antialiased;
+}
+.page h1, .page h2, .page h3 { font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; line-height: 1; margin: 0; text-wrap: balance; }
+.page p { margin: 0; text-wrap: pretty; }
+.page a:focus-visible { outline: 2px solid var(--ok); outline-offset: 3px; }
+.wrap { width: min(1120px, 100% - 40px); margin-inline: auto; }
+.kicker { font: 600 12px/1 var(--display); letter-spacing: .22em; text-transform: uppercase; color: var(--ok); }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 26px; font: 700 17px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; text-decoration: none; border: 1px solid var(--line-2); transition: background .15s, border-color .15s, transform .15s; }
+.btn:hover { border-color: var(--text); }
+.btn:active { transform: translateY(1px); }
+.btn.go { background: var(--ok); border-color: var(--ok); color: #061008; }
+.btn.go:hover { background: #76e184; border-color: #76e184; }
+.section { padding: clamp(64px, 9vw, 112px) 0 0; }
+.section > .wrap h2 { font-size: clamp(34px, 5.4vw, 60px); margin-top: 12px; }
+.sub { max-width: 38em; margin-top: 14px; color: var(--dim); }
+/* top bar */
+.top { position: absolute; inset: 0 0 auto 0; z-index: 2; }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.top .mark { font: 700 22px/1 var(--display); letter-spacing: .18em; text-decoration: none; }
+.top nav { display: flex; gap: 22px; font: 600 13px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; }
+.top nav a { text-decoration: none; color: var(--dim); padding: 14px 0; }
+.top nav a:hover { color: var(--text); }
+@media (max-width: 640px) { .top nav { display: none; } }
+
+/* hero */
+.hero { position: relative; min-height: min(92vh, 780px); display: grid; align-items: end; padding: 120px 0 64px; overflow: hidden; isolation: isolate; }
+.hero::before { content: ''; position: absolute; inset: 0; z-index: -2; background: url(/ui/maps/city.jpg) center/cover; filter: saturate(.8) contrast(1.05); transform: scale(1.04); }
+.hero::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(7,9,12,.55) 0%, rgba(7,9,12,.35) 35%, var(--bg) 96%), linear-gradient(90deg, rgba(7,9,12,.85) 0%, rgba(7,9,12,0) 70%); }
+.hero h1 { font-size: clamp(64px, 15vw, 168px); letter-spacing: .01em; margin: 14px 0 0 -4px; }
+.hero h1 span { color: var(--hp); }
+.lead { max-width: 30em; margin-top: 18px; font-size: clamp(17px, 2.1vw, 20px); color: #d5dbe1; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.note { margin-top: 14px; font-size: 14px; color: var(--dim); }
+
+/* facts strip */
+.facts { border-block: 1px solid var(--line); background: var(--panel); }
+.facts ul.wrap { margin-block: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); }
+.facts li { padding: 22px 0 20px; }
+.facts li + li { border-left: 1px solid var(--line); padding-left: 24px; }
+.facts b { display: block; font: 700 clamp(34px, 5vw, 52px)/1 var(--display); font-variant-numeric: tabular-nums; }
+.facts span { font: 600 12px/1 var(--display); letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+@media (max-width: 640px) { .facts ul.wrap { margin-block: 0; padding: 0; list-style: none; grid-template-columns: repeat(2, 1fr); } .facts li:nth-child(3) { border-left: 0; padding-left: 0; } .facts li:nth-child(n+3) { border-top: 1px solid var(--line); } }
+
+
+/* operatives */
+.ops { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 36px; background: var(--line); border: 1px solid var(--line); }
+.op { background: var(--panel); padding: 20px 18px 18px; display: grid; gap: 10px; align-content: start; border-top: 3px solid var(--c); }
+.op h3 { font-size: 26px; }
+.role { font: 600 12px/1 var(--display); letter-spacing: .18em; text-transform: uppercase; color: var(--c); }
+.op dl { margin: 4px 0 0; display: grid; gap: 8px; font-size: 14px; }
+.op dt { font: 600 11px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-bottom: 3px; }
+.op dd { margin: 0; }
+@media (max-width: 900px) { .ops { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .ops { grid-template-columns: 1fr; } }
+
+/* modes */
+.modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 48px; margin-top: 30px; }
+.mode { display: grid; grid-template-columns: 44px 1fr; gap: 4px 14px; padding: 18px 0; border-top: 1px solid var(--line); }
+.mode i { grid-row: span 2; font: normal 26px/1.1 var(--body); }
+.mode h3 { font-size: 22px; align-self: end; }
+.mode p { font-size: 15px; color: var(--dim); }
+.new { margin-left: 8px; font: 700 10px/1 var(--display); letter-spacing: .16em; color: #061008; background: var(--ok); padding: 3px 6px 2px; vertical-align: 3px; }
+@media (max-width: 760px) { .modes { grid-template-columns: 1fr; } }
+
+/* maps */
+.maps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 36px; }
+.map { position: relative; aspect-ratio: 4 / 5; overflow: hidden; background: var(--panel-2) center/cover; outline: 1px solid var(--line); outline-offset: -1px; }
+.map::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,9,12,0) 40%, rgba(7,9,12,.92) 100%); }
+.map div { position: absolute; inset: auto 12px 12px 12px; z-index: 1; }
+.map b { display: block; font: 700 19px/1.05 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.map span { font-size: 12px; color: #c3cad1; }
+@media (max-width: 900px) { .maps { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 520px) { .maps { grid-template-columns: repeat(2, 1fr); } }
+
+/* bosses */
+.bosses { margin-top: 30px; border-top: 1px solid var(--line); }
+.boss { display: grid; grid-template-columns: 10px 190px 1fr 110px; gap: 18px; align-items: baseline; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.boss::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--c); align-self: center; }
+.boss h3 { font-size: 24px; }
+.boss p { color: var(--dim); font-size: 15px; }
+.boss em { font: 600 12px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) { .boss { grid-template-columns: 10px 1fr; } .boss p, .boss em { grid-column: 2; text-align: left; } }
+
+/* co-op */
+.coop { display: grid; grid-template-columns: 1.1fr .9fr; gap: 56px; align-items: start; }
+.coop ol { margin: 34px 0 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 22px; }
+.coop li { counter-increment: s; display: grid; grid-template-columns: 44px 1fr; gap: 14px; }
+.coop li::before { content: counter(s); font: 700 34px/1 var(--display); color: var(--ok); font-variant-numeric: tabular-nums; }
+.coop li b { display: block; font: 700 20px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.coop li span { color: var(--dim); font-size: 15px; }
+.coop aside { margin-top: 34px; background: var(--panel); border: 1px solid var(--line); padding: 26px 24px; }
+.coop aside h3 { font-size: 24px; }
+.coop aside p { margin-top: 10px; color: var(--dim); font-size: 15px; }
+.coop aside .btn { margin-top: 20px; }
+@media (max-width: 820px) { .coop { grid-template-columns: 1fr; gap: 0; } }
+
+/* closing */
+.end { text-align: center; padding-bottom: clamp(64px, 9vw, 112px); }
+.section.end h2 { font-size: clamp(40px, 8vw, 92px); }
+.end .btn { margin-top: 30px; min-height: 56px; padding: 0 40px; font-size: 20px; }
+.footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--dim); font-size: 14px; }
+.footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
