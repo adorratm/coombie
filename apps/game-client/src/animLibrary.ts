@@ -519,4 +519,5 @@ export class OperativeAnimator {
 
 /** Operator animation library shipped in public/anims. */
 export const OPERATOR_ANIM_URL = '/anims/operator.anim.json';
-void loadAnimLibrary(OPERATOR_ANIM_URL);
+// warm the cache in the browser only: on a server render there is no origin to fetch from
+if (typeof document !== 'undefined') void loadAnimLibrary(OPERATOR_ANIM_URL);

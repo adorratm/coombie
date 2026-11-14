@@ -198,7 +198,7 @@ const shots: HookShot[] = [];
 let tipProto: THREE.Object3D | null = null;
 let tetherProto: THREE.Object3D | null = null;
 let warnProto: THREE.Object3D | null = null;
-void preloadHooker().then((r) => {
+if (typeof document !== 'undefined') void preloadHooker().then((r) => {
   if (!r) return;
   tipProto = r[1].scene;
   tetherProto = r[2].scene;

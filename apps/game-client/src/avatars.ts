@@ -188,7 +188,8 @@ export async function preloadAvatars(): Promise<void> {
 }
 
 /** Warm the VRM cache as soon as the module loads (first paint / HMR). */
-void preloadAvatars();
+// browser only: loaders need `document`, and a server render has nothing to draw
+if (typeof document !== 'undefined') void preloadAvatars();
 
 function tintVrmScene(scene: THREE.Object3D, accent: number, style: VrmStyle): void {
   const accentC = new THREE.Color(accent);
