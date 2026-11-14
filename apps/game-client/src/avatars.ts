@@ -1354,6 +1354,19 @@ export function tickZombieCorpses(corpses: ZombieCorpse[], dt: number): void {
   }
 }
 
+/**
+ * Show or hide the drawable parts of `obj` without hiding the lights inside it.
+ * The player's muzzle flash light sits inside the gun: hiding the gun drops it from the
+ * scene's light count, and three.js then recompiles the shader of every lit material —
+ * seconds of stutter on death and again on revive.
+ */
+export function setDrawablesVisible(obj: THREE.Object3D, visible: boolean): void {
+  obj.traverse((o) => {
+    if (o === obj || (o as THREE.Light).isLight) return;
+    if ((o as THREE.Mesh).isMesh || (o as THREE.Sprite).isSprite || (o as THREE.Line).isLine || (o as THREE.Points).isPoints) o.visible = visible;
+  });
+}
+
 /** Death / revive presentation: clip death when the avatar has an animator, else hide. */
 export function setOperativeDead(op: OperativeVisual, dead: boolean): void {
   const avatar = (op as OperativeVisual & { vrm?: VrmAvatarHandle }).vrm;
@@ -1361,10 +1374,12 @@ export function setOperativeDead(op: OperativeVisual, dead: boolean): void {
     if (dead) avatar.animator.die();
     else avatar.animator.revive();
     op.root.visible = true;
-    op.gun.visible = !dead;
+    op.gun.visible = true;
+    setDrawablesVisible(op.gun, !dead);
     return;
   }
-  op.root.visible = !dead;
+  op.root.visible = true;
+  setDrawablesVisible(op.root, !dead);
 }
 
 export type OperativeActionKind = 'throw' | 'shout' | 'shove' | 'deploy' | 'kick' | 'impact' | 'knockdown' | 'roll' | 'radio' | 'shock';
@@ -1397,11 +1412,11 @@ function radioCall(op: OperativeVisual, an: OperativeAnimator): boolean {
   radio.position.set(0.02 / hs, 0.06 / hs, 0.03 / hs);
   const showRadio = () => {
     hand.add(radio);
-    op.gun.visible = false;
+    setDrawablesVisible(op.gun, false);
   };
   const done = () => {
     radio.removeFromParent();
-    op.gun.visible = true;
+    setDrawablesVisible(op.gun, true);
   };
   setTimeout(showRadio, 420);
   setTimeout(done, 3050);

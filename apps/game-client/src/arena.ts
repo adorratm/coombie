@@ -255,6 +255,7 @@ export interface ArenaHudState {
 export interface ArenaHandle {
   scene: THREE.Scene;
   devGoto: (label: string) => boolean;
+  devHurtPlayer: (amount: number) => void;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   dispose: () => void;
@@ -3006,6 +3007,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     setSize,
     animate,
     getWeaponName: () => player.weapon.name,
+    /** dev (?god=1): hit the player (god mode scales it by 0.02, so pass a big number) */
+    devHurtPlayer: (amount: number): void => {
+      if (DEV_GOD) damageOperative(player, amount, player.root.position.clone());
+    },
     /** dev (?god=1): jump to the objective marker with this label */
     devGoto: (label: string): boolean => {
       const src = DEV_GOD ? modeRt.indicators().find((i) => i.label === label) : undefined;
