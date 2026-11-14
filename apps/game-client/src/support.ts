@@ -81,6 +81,28 @@ interface Crate {
 
 const RED = 0xd23a2a;
 
+const HOVER_LINES = ['Kirve: Kalabalığı gördük, angajmana giriyoruz!', 'Kirve: İkili kol geliyor, başınızı eğin!', 'Kirve: Hedef bölge sıcak, tarıyoruz!'];
+
+interface Hover {
+  obj: THREE.Group;
+  rotor: THREE.Object3D;
+  tail: THREE.Object3D;
+  chin: THREE.Object3D | null;
+  start: THREE.Vector3;
+  hover: THREE.Vector3;
+  exit: THREE.Vector3;
+  center: THREE.Vector3;
+  t0: number;
+  hold: number;
+  gunT: number;
+  tick: number;
+  rocketT: number;
+  rockets: number;
+  dps: number;
+  washT: number;
+  shots: number;
+}
+
 export class SupportCalls {
   private t = 0;
   private readonly events: Ev[] = [];
@@ -88,6 +110,7 @@ export class SupportCalls {
   private readonly decals: Decal[] = [];
   private readonly falls: Fall[] = [];
   private readonly crates: Crate[] = [];
+  private readonly hovers: Hover[] = [];
   private readonly geo: Record<string, THREE.BufferGeometry> = {};
   private readonly mat: Record<string, THREE.Material> = {};
   private protos: Partial<Record<'jet' | 'heli' | 'uav' | 'cargo' | 'bomb' | 'crate' | 'duster' | 'dolmus' | 'trafo', THREE.Group>> = {};
@@ -218,39 +241,117 @@ export class SupportCalls {
     return this.protos.jet.clone();
   }
 
-  /** Utility/gunship helicopter, nose +Z. */
+  /**
+   * AH-64 style attack helicopter, nose +Z: narrow tall fuselage, stepped tandem
+   * canopy, chin cannon (`chinGun`, aims), TADS nose turret, twin engine nacelles,
+   * stub wings with Hydra pods and Hellfire racks, mast-mounted radar dome,
+   * four-blade main rotor (`rotor`), scissor tail rotor (`tail`), stabilator, gear.
+   */
   private heli(): THREE.Group {
     if (!this.protos.heli) {
+      const std = (c: number, r: number, m: number) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
+      this.mat.apache ??= std(0x3d4430, 0.62, 0.32);
+      this.mat.apacheDark ??= std(0x2a2f22, 0.7, 0.3);
+      this.mat.canopy ??= new THREE.MeshStandardMaterial({ color: 0x3a5064, roughness: 0.08, metalness: 0.6, flatShading: true });
+      if (!this.geo.fuselage) {
+        const prof: Array<[number, number]> = [
+          [0.0, 5.7], [0.3, 5.55], [0.55, 5.15], [0.72, 4.3], [0.82, 3.0], [0.92, 1.4], [0.95, 0.0], [0.9, -1.3], [0.72, -2.4],
+          [0.48, -3.4], [0.36, -5.0], [0.3, -7.2], [0.26, -8.3], [0.0, -8.45],
+        ];
+        this.geo.fuselage = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 18).rotateX(Math.PI / 2);
+        this.geo.facet = new THREE.SphereGeometry(0.5, 6, 4);
+        this.geo.blade = new THREE.BoxGeometry(1, 1, 1);
+      }
       const g = new THREE.Group();
-      this.part(g, 'sphere', 'olive', 2.6, 2.4, 5.2);
-      this.part(g, 'sphere', 'glass', 2.0, 1.4, 2.0, 0, 0.4, 2.0);
-      this.part(g, 'cyl', 'olive', 0.55, 0.6, 6.5, 0, 0.5, -5.2);
-      this.part(g, 'box', 'olive', 0.15, 1.8, 1.2, 0, 1.2, -8.2);
-      this.part(g, 'box', 'black', 0.12, 0.12, 4.2, 1.1, -1.5, 0);
-      this.part(g, 'box', 'black', 0.12, 0.12, 4.2, -1.1, -1.5, 0);
-      this.part(g, 'box', 'olive', 3.8, 0.25, 0.9, 0, -0.2, 0.3); // stub wings
-      this.part(g, 'cyl', 'darkGrey', 0.45, 0.45, 1.8, 1.9, -0.45, 0.4); // rocket pods
-      this.part(g, 'cyl', 'darkGrey', 0.45, 0.45, 1.8, -1.9, -0.45, 0.4);
-      this.part(g, 'cyl', 'black', 0.3, 0.3, 0.8, 0, 1.4, 0).rotation.x = 0;
+      const add = (geo: string, mat: string, sx: number, sy: number, sz: number, x = 0, y = 0, z = 0, parent: THREE.Object3D = g) => {
+        const m = new THREE.Mesh(this.geo[geo]!, this.mat[mat]!);
+        m.scale.set(sx, sy, sz);
+        m.position.set(x, y, z);
+        m.castShadow = true;
+        parent.add(m);
+        return m;
+      };
+      // fuselage: narrow and tall like the real thing
+      add('fuselage', 'apache', 0.82, 1.2, 1);
+      add('box', 'apacheDark', 1.2, 0.5, 3.4, 0, -0.75, 1.0); // avionics bays (cheeks)
+      // stepped tandem canopy: gunner low in front, pilot higher behind
+      add('facet', 'canopy', 1.05, 0.85, 1.9, 0, 0.62, 3.65);
+      add('facet', 'canopy', 1.15, 1.0, 1.9, 0, 0.98, 2.15);
+      add('box', 'apacheDark', 0.06, 0.5, 0.06, 0, 0.95, 2.95); // blast shield frame
+      // TADS/PNVS turret on the nose
+      add('sphere', 'apacheDark', 0.62, 0.62, 0.62, 0, -0.1, 5.55);
+      add('cyl', 'canopy', 0.28, 0.28, 0.1, 0.16, -0.1, 5.86);
+      add('cyl', 'canopy', 0.22, 0.22, 0.1, -0.16, -0.1, 5.86);
+      // M230 chin cannon
+      const chin = new THREE.Group();
+      chin.name = 'chinGun';
+      chin.position.set(0, -0.95, 3.9);
+      g.add(chin);
+      add('sphere', 'apacheDark', 0.5, 0.42, 0.5, 0, 0, 0, chin);
+      add('cyl', 'black', 0.14, 0.14, 1.5, 0, -0.05, 0.85, chin);
+      add('cyl', 'darkGrey', 0.2, 0.2, 0.35, 0, -0.05, 0.3, chin);
+      // engine nacelles with angled exhausts
+      for (const s of [-1, 1]) {
+        add('cyl', 'apache', 0.75, 0.8, 2.8, 0.95 * s, 0.75, -0.3);
+        add('sphere', 'apache', 0.75, 0.8, 0.9, 0.95 * s, 0.75, 1.05);
+        const ex = add('cyl', 'black', 0.55, 0.55, 0.7, 1.15 * s, 0.85, -1.85);
+        ex.rotation.y = 0.5 * s;
+      }
+      // stub wings + stores
+      for (const s of [-1, 1]) {
+        const w = add('box', 'apache', 2.0, 0.14, 1.0, 1.75 * s, 0.25, 0.2);
+        w.rotation.z = -0.06 * s;
+        add('box', 'apacheDark', 0.08, 0.3, 0.6, 1.4 * s, 0.05, 0.2);
+        add('box', 'apacheDark', 0.08, 0.3, 0.6, 2.4 * s, 0.05, 0.2);
+        // Hydra 70 rocket pod (inboard)
+        add('cyl', 'olive', 0.62, 0.62, 1.6, 1.4 * s, -0.25, 0.3);
+        add('disc', 'black', 0.27, 0.27, 1, 1.4 * s, -0.25, 1.11).rotation.y = 0;
+        // Hellfire rack (outboard): 2×2 missiles
+        for (const dx of [-0.13, 0.13]) for (const dy of [-0.15, -0.42]) {
+          add('cyl', 'white', 0.17, 0.17, 1.4, 2.4 * s + dx, dy, 0.25);
+          add('cone', 'darkGrey', 0.17, 0.17, 0.25, 2.4 * s + dx, dy, 1.07);
+        }
+      }
+      // mast, rotor head and Longbow radar dome
+      add('cyl', 'darkGrey', 0.3, 0.3, 0.7, 0, 1.55, 0.2).rotation.x = Math.PI / 2;
+      add('sphere', 'apacheDark', 0.9, 0.45, 0.9, 0, 2.25, 0.2);
       const rotor = new THREE.Group();
       rotor.name = 'rotor';
-      rotor.position.y = 1.7;
-      this.part(rotor, 'box', 'black', 13, 0.06, 0.45);
-      this.part(rotor, 'box', 'black', 0.45, 0.06, 13);
+      rotor.position.set(0, 1.92, 0.2);
+      add('cyl', 'darkGrey', 0.5, 0.5, 0.25, 0, 0, 0, rotor).rotation.x = Math.PI / 2;
+      for (let b = 0; b < 4; b++) {
+        const blade = add('blade', 'black', 0.5, 0.06, 6.9, 0, 0, 0, rotor);
+        // swept tip pivots from the hub
+        blade.position.set(Math.sin((b * Math.PI) / 2) * 3.5, 0, Math.cos((b * Math.PI) / 2) * 3.5);
+        blade.rotation.y = (b * Math.PI) / 2;
+      }
       g.add(rotor);
-      // motion-blur disc so the spinning rotor reads at speed
       const blur = new THREE.Mesh(this.geo.disc!, this.mat.blur!);
       blur.rotation.x = -Math.PI / 2;
-      blur.scale.setScalar(6.6);
-      blur.position.y = 1.72;
+      blur.scale.setScalar(7);
+      blur.position.set(0, 1.94, 0.2);
       blur.castShadow = false;
       blur.renderOrder = 5;
       g.add(blur);
+      // tail: swept fin, stabilator, scissor tail rotor, tail wheel
+      const fin = add('box', 'apache', 0.14, 2.1, 1.1, 0, 0.9, -8.0);
+      fin.rotation.x = -0.35;
+      add('box', 'apache', 3.2, 0.1, 0.8, 0, -0.05, -8.0);
       const tail = new THREE.Group();
       tail.name = 'tail';
-      tail.position.set(0.25, 1.2, -8.2);
-      this.part(tail, 'box', 'black', 0.05, 2.2, 0.25);
+      tail.position.set(-0.22, 1.6, -8.35);
+      for (const a of [0.48, -0.48]) {
+        const tb = add('box', 'black', 0.05, 2.4, 0.22, 0, 0, 0, tail);
+        tb.rotation.x = a;
+      }
       g.add(tail);
+      add('cyl', 'rubber', 0.3, 0.3, 0.14, 0, -0.55, -7.7).rotation.y = Math.PI / 2;
+      // main gear
+      for (const s of [-1, 1]) {
+        add('box', 'darkGrey', 0.1, 0.8, 0.1, 0.95 * s, -0.95, 1.6);
+        add('cyl', 'rubber', 0.5, 0.5, 0.22, 1.0 * s, -1.35, 1.6).rotation.y = Math.PI / 2;
+      }
+      g.scale.setScalar(0.92);
       this.protos.heli = g;
     }
     return this.protos.heli.clone();
@@ -512,13 +613,20 @@ export class SupportCalls {
     this.at(arrive - 2.0, () => this.ctx.sample('s_jet', { gain: 1, pan: dir.x * 0.6 }));
   }
 
+  /** Two attack helicopters in a loose pair, each strafing its own lane. */
   private heliRun(T: THREE.Vector3, lv: number, evo: boolean, power: number): void {
     const dir = this.screenDir();
+    const side = new THREE.Vector3(dir.z, 0, -dir.x);
+    this.heliLane(T.clone().addScaledVector(side, -2.3), dir, lv, evo, power, 0, true);
+    this.heliLane(T.clone().addScaledVector(side, 2.3), dir, lv, evo, power, 0.7, false);
+  }
+
+  private heliLane(T: THREE.Vector3, dir: THREE.Vector3, lv: number, evo: boolean, power: number, delay: number, sound: boolean): void {
     const len = 22 + lv * 2 + (evo ? 8 : 0);
     const w = 3.6;
     const a = T.clone().addScaledVector(dir, -len / 2);
     const b = T.clone().addScaledVector(dir, len / 2);
-    const start = 4.6;
+    const start = 4.6 + delay;
     const SPEED = 13;
     const runDur = len / SPEED;
     this.markStrip(a, b, w, start + runDur + 1.6);
@@ -527,7 +635,8 @@ export class SupportCalls {
     const to = b.clone().addScaledVector(dir, SPEED * 2.6).setY(ALT + 2);
     const h = this.heli();
     const total = (from.distanceTo(to)) / SPEED;
-    const dps = 30 * (1 + 0.3 * (lv - 1)) * power;
+    const dps = 24 * (1 + 0.3 * (lv - 1)) * power;
+    const chin = h.getObjectByName('chinGun');
     let tick = 0;
     let gunT = 0;
     let shots = 0;
@@ -558,8 +667,10 @@ export class SupportCalls {
           gunT -= 0.04;
           shots++;
           tgt.copy(a).addScaledVector(dir, THREE.MathUtils.clamp(along + 3 + Math.random() * 4, 0, len)).addScaledVector(sideV, (Math.random() - 0.5) * w);
-          muzzle.copy(pos).addScaledVector(dir, 2.4);
-          muzzle.y -= 1.3;
+          if (chin) {
+            chin.lookAt(tgt);
+            chin.getWorldPosition(muzzle).addScaledVector(dir, 1.2);
+          } else muzzle.copy(pos).addScaledVector(dir, 2.4).setY(pos.y - 1.3);
           fx.tracer(muzzle, tgt.setY(0.2), 0xffc46a);
           if (shots % 2 === 0) fx.emit('flash', muzzle.x, muzzle.y, muzzle.z, { life: 0.05, s0: 1.1, s1: 0.6, color: 0xffd080, spin: 0, a: 0.9 });
           if (shots % 2 === 0) fx.sparks(tgt, 2, 0xffc070, 3);
@@ -581,7 +692,161 @@ export class SupportCalls {
         }
       },
     });
-    this.at(start - 2.6, () => this.ctx.sample('s_heli', { gain: 1, pan: -0.4 }));
+    if (sound) this.at(start - 2.6, () => this.ctx.sample('s_heli', { gain: 1, pan: -0.4 }));
+  }
+
+  /**
+   * Automatic gunship sortie (no radio call): two helicopters fly in, hover beside
+   * `T` for a few seconds raking the crowd with the chin cannon and rocket pods,
+   * then peel away.
+   */
+  heliHover(T: THREE.Vector3, lv: number, evo: boolean, power: number): void {
+    const P = this.ctx.player.root.position;
+    this.ctx.say(HOVER_LINES[Math.floor(Math.random() * HOVER_LINES.length)]!, 'radio');
+    this.ctx.radio();
+    const away = T.clone().sub(P).setY(0);
+    if (away.lengthSq() < 1) away.set(0, 0, -1);
+    away.normalize();
+    const side = new THREE.Vector3(away.z, 0, -away.x);
+    for (const s of [-1, 1]) {
+      const hover = T.clone().addScaledVector(side, 5.5 * s).addScaledVector(away, 3).setY(7.5);
+      const start = hover.clone().addScaledVector(away, 34).addScaledVector(side, 10 * s).setY(11);
+      const exit = hover.clone().addScaledVector(side, 40 * s).addScaledVector(away, 20).setY(13);
+      const h = this.heli();
+      h.position.copy(start);
+      h.visible = false;
+      this.ctx.scene.add(h);
+      this.hovers.push({
+        obj: h,
+        rotor: h.getObjectByName('rotor')!,
+        tail: h.getObjectByName('tail')!,
+        chin: h.getObjectByName('chinGun') ?? null,
+        start,
+        hover,
+        exit,
+        center: T.clone().setY(0),
+        t0: this.t + (s > 0 ? 0.4 : 0),
+        hold: 5 + (evo ? 2 : 0) + lv * 0.3,
+        gunT: 0,
+        tick: 0,
+        rocketT: 0.6,
+        rockets: 2 + Math.floor(lv / 2) + (evo ? 2 : 0),
+        dps: 20 * (1 + 0.3 * (lv - 1)) * power,
+        washT: 0,
+        shots: 0,
+      });
+    }
+    this.ctx.sample('s_heli', { gain: 0.8, pan: this.pan(T) });
+  }
+
+  private tickHovers(dt: number): void {
+    const IN = 2.4;
+    const OUT = 2.6;
+    const fx = this.ctx.fx;
+    for (let i = this.hovers.length - 1; i >= 0; i--) {
+      const h = this.hovers[i]!;
+      const e = this.t - h.t0;
+      if (e < 0) continue;
+      h.obj.visible = true;
+      h.rotor.rotation.y += dt * 40;
+      h.tail.rotation.x += dt * 55;
+      if (e >= IN + h.hold + OUT) {
+        h.obj.removeFromParent();
+        this.hovers.splice(i, 1);
+        continue;
+      }
+      const pos = h.obj.position;
+      if (e < IN) {
+        const k = e / IN;
+        pos.lerpVectors(h.start, h.hover, 1 - (1 - k) * (1 - k));
+        h.obj.lookAt(h.center.x, pos.y, h.center.z);
+        h.obj.rotateX(0.25 * (1 - k)); // nose down while braking
+      } else if (e < IN + h.hold) {
+        const k = e - IN;
+        pos.copy(h.hover);
+        pos.x += Math.sin(k * 0.9 + h.t0) * 0.6;
+        pos.y += Math.sin(k * 1.7) * 0.25;
+        pos.z += Math.cos(k * 0.7 + h.t0) * 0.6;
+        // keep the nose on the crowd
+        const tgtZ = this.nearestTo(h.center, 12);
+        const look = tgtZ ? tgtZ.root.position : h.center;
+        const want = Math.atan2(look.x - pos.x, look.z - pos.z);
+        const cur = h.obj.rotation.y;
+        h.obj.rotation.set(0.08, cur + Math.atan2(Math.sin(want - cur), Math.cos(want - cur)) * (1 - Math.exp(-3 * dt)), 0, 'YXZ');
+        this.hoverFire(h, dt, tgtZ);
+      } else {
+        const k = (e - IN - h.hold) / OUT;
+        pos.lerpVectors(h.hover, h.exit, k * k);
+        h.obj.lookAt(h.exit);
+        h.obj.rotateX(0.2);
+      }
+      // rotor downwash
+      h.washT += dt;
+      if (h.washT > 0.06 && pos.y < 10) {
+        h.washT = 0;
+        const a0 = Math.random() * Math.PI * 2;
+        fx.emit('smoke', pos.x + Math.cos(a0) * 2.5, 0.3, pos.z + Math.sin(a0) * 2.5, { vx: Math.cos(a0) * 5, vz: Math.sin(a0) * 5, vy: 0.4, life: 0.9, s0: 0.8, s1: 2.4, color: 0x7a6e5c, a: 0.2, drag: 2.2 });
+      }
+    }
+  }
+
+  private nearestTo(at: THREE.Vector3, r: number): ZombieVisual | null {
+    let best: ZombieVisual | null = null;
+    let bd = r * r;
+    for (const z of this.ctx.zombies) {
+      if (z.hp <= 0) continue;
+      const d = z.root.position.distanceToSquared(at);
+      if (d < bd) {
+        bd = d;
+        best = z;
+      }
+    }
+    return best;
+  }
+
+  private hoverFire(h: Hover, dt: number, target: ZombieVisual | null): void {
+    const fx = this.ctx.fx;
+    h.rocketT -= dt;
+    if (target) {
+      h.gunT += dt;
+      h.tick += dt;
+      const muzzle = new THREE.Vector3();
+      while (h.gunT >= 0.06) {
+        h.gunT -= 0.06;
+        h.shots++;
+        const tgt = target.root.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.6, 0.2, (Math.random() - 0.5) * 1.6));
+        if (h.chin) {
+          h.chin.lookAt(tgt);
+          h.chin.getWorldPosition(muzzle);
+        } else muzzle.copy(h.obj.position);
+        fx.tracer(muzzle, tgt, 0xffc46a);
+        if (h.shots % 2 === 0) fx.emit('flash', muzzle.x, muzzle.y, muzzle.z, { life: 0.05, s0: 1, s1: 0.6, color: 0xffd080, spin: 0, a: 0.9 });
+        if (h.shots % 3 === 0) fx.sparks(tgt, 2, 0xffc070, 3);
+      }
+      if (h.tick >= 0.12) {
+        h.tick -= 0.12;
+        // 30 mm rounds: small splash around the aim point
+        for (const z of this.ctx.zombies) {
+          if (z.hp <= 0 || z.root.position.distanceToSquared(target.root.position) > 2.2 * 2.2) continue;
+          this.ctx.hit(z, h.dps * 0.12, z.root.position.clone().setY(1), h.obj.position);
+        }
+      }
+    }
+    if (h.rockets > 0 && h.rocketT <= 0) {
+      h.rocketT = 0.75;
+      h.rockets--;
+      const at = (target?.root.position ?? h.center).clone().setY(0);
+      at.x += (Math.random() - 0.5) * 3;
+      at.z += (Math.random() - 0.5) * 3;
+      const from = h.obj.localToWorld(new THREE.Vector3(h.rockets % 2 ? 1.4 : -1.4, -0.25, 1.2));
+      const r = this.bomb();
+      r.scale.setScalar(0.5);
+      r.position.copy(from);
+      r.lookAt(at);
+      this.ctx.scene.add(r);
+      fx.emit('flash', from.x, from.y, from.z, { life: 0.08, s0: 1.2, s1: 0.5, color: 0xffb060, spin: 0, a: 0.9 });
+      this.falls.push({ obj: r, from, to: at, t0: this.t, dur: 0.45, land: () => this.blast(at, 2.6, h.dps * 1.4, false) });
+    }
   }
 
   /** Zirai ilaçlama uçağı: low pass that leaves a poison cloud lane (damage over time). */
@@ -846,6 +1111,7 @@ export class SupportCalls {
   // ------------------------------------------------------------ tick
   update(dt: number): void {
     this.t += dt;
+    this.tickHovers(dt);
     for (let i = this.events.length - 1; i >= 0; i--) {
       const e = this.events[i]!;
       if (e.at > this.t) continue;
@@ -917,6 +1183,7 @@ export class SupportCalls {
     for (const m of this.movers) m.obj.removeFromParent();
     for (const f of this.falls) f.obj.removeFromParent();
     for (const c of this.crates) c.obj.removeFromParent();
+    for (const h of this.hovers) h.obj.removeFromParent();
     for (const d of this.decals) {
       d.obj.removeFromParent();
       d.mats.forEach((m) => m.dispose());

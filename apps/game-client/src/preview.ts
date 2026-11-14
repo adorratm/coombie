@@ -504,6 +504,23 @@ const renderHud = (hud: ArenaHudState) => {
   } else {
     el.pause.classList.remove('on');
   }
+  // co-op: shared pause shows who stopped it; resuming counts 3-2-1 on every screen
+  const pauseBy = document.getElementById('pauseBy');
+  if (pauseBy) pauseBy.textContent = hud.pausedBy ? `${hud.pausedBy} oyunu durdurdu` : '';
+  const rc = document.getElementById('resumeCount');
+  if (rc) {
+    const on = hud.pauseCountdown > 0 && !runCommitted;
+    rc.classList.toggle('on', on);
+    const n = String(Math.ceil(hud.pauseCountdown));
+    const b = rc.querySelector('b');
+    if (on && b && b.textContent !== n) {
+      b.textContent = n;
+      // restart the pop animation for each number
+      b.style.animation = 'none';
+      void b.offsetWidth;
+      b.style.animation = '';
+    }
+  }
 
   if (over) {
     if (!runCommitted) {
@@ -828,6 +845,8 @@ const loop = (t: number) => {
         m.banner,
         hud.pausedForUpgrade ? 1 : 0,
         hud.paused ? 1 : 0,
+        Math.ceil(hud.pauseCountdown),
+        hud.pausedBy,
         hud.choices.map((c) => c.id).join(','),
         hud.rerolls,
         hud.lockdowns,

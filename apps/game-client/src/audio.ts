@@ -139,6 +139,20 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
 
+/**
+ * Voice-chat priority (inside Dracord): the whole game sits a little lower, and drops
+ * further while someone in the call is talking. Applies to every live audio context.
+ */
+const VOICE_BASE = 0.8;
+const VOICE_DUCK = 0.3;
+let voiceMul = 1;
+const liveMasters = new Set<() => void>();
+
+export function setVoicePriority(opts: { embedded: boolean; talking: boolean }): void {
+  voiceMul = opts.embedded ? (opts.talking ? VOICE_DUCK : VOICE_BASE) : 1;
+  liveMasters.forEach((f) => f());
+}
+
 export function createGameAudio(): GameAudio {
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
@@ -158,8 +172,12 @@ export function createGameAudio(): GameAudio {
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = clamp01(levels.master);
+      master.gain.value = clamp01(levels.master) * voiceMul;
       master.connect(ctx.destination);
+      const m = master;
+      const c = ctx;
+      // glide so speech ducking doesn't click
+      liveMasters.add(() => m.gain.setTargetAtTime(clamp01(levels.master) * voiceMul, c.currentTime, voiceMul < 0.5 ? 0.08 : 0.4));
 
       (['weapons', 'combat', 'zombie', 'player', 'ui'] as const).forEach((id) => {
         const g = ctx!.createGain();
@@ -177,7 +195,7 @@ export function createGameAudio(): GameAudio {
   };
 
   const applyLevels = () => {
-    if (master) master.gain.value = clamp01(levels.master);
+    if (master) master.gain.value = clamp01(levels.master) * voiceMul;
     for (const [id, node] of buses) {
       const base = clamp01(levels[id]);
       if (id === 'zombie' && duckUntil > performance.now()) {

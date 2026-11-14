@@ -11,6 +11,7 @@ import { NetSession, type NetTransport } from './netSession';
 import { currentMission, loadProfile } from './loadout';
 import { rosterById } from './roster';
 import { DracordEmbed } from './dracord-embed';
+import { setVoicePriority } from './audio';
 
 /**
  * Co-op lobby panel (1–8 players): create a room or join by code, ready up, host starts.
@@ -110,6 +111,11 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
    * everyone in the same voice-channel session lands in the same room automatically.
    */
   const dracord = DracordEmbed.isEmbedded() ? new DracordEmbed({ allowedHostOrigins: dracordHostOrigins() }) : null;
+  if (dracord) {
+    // voice chat stays on top: the game is a bit quieter in Dracord and ducks while people talk
+    setVoicePriority({ embedded: true, talking: false });
+    dracord.onAudio(({ duck }) => setVoicePriority({ embedded: true, talking: duck }));
+  }
 
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const myName = () => (localStorage.getItem(NAME_KEY) || 'Operatör').slice(0, 24);

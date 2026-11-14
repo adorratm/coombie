@@ -6,6 +6,7 @@ import type { AbilitySlot } from './loadout';
 import { applyStatus, type StatusId } from './statusEffects';
 import type { SkillFx } from './skillFx';
 import { operativeAction, type OperativeActionKind } from './avatars';
+import { buildSentryTurret, buildTeslaTurret, kickBarrel, settleBarrel, type TurretModel } from './turretModels';
 
 /**
  * Per-hero Q / E / R abilities (8 heroes × 3 = 24), data-driven on a handful of
@@ -30,7 +31,16 @@ export type AbilityEffect =
   | { type: 'turret'; dur: number; damage: number; rate: number; range: number; chain?: number }
   | { type: 'chain'; targets: number; damage: number; range: number; status?: StatusId }
   | { type: 'strike'; count: number; radius: number; damage: number; delay: number; spacing: number; status?: StatusId; zone?: ZoneSpec }
-  | { type: 'volley'; shots: number };
+  | { type: 'volley'; shots: number }
+  /** ultimates (R): each one is its own mechanic */
+  | { type: 'beam'; dur: number; radius: number; dps: number; speed: number }
+  | { type: 'rampage'; dashes: number; dist: number; damage: number; gap: number }
+  | { type: 'bastion'; dur: number; radius: number; armor: number; dps: number }
+  | { type: 'nuke'; radius: number; damage: number; delay: number }
+  | { type: 'angels'; heal: number; drones: number; dur: number; damage: number }
+  | { type: 'reaper'; hits: number; damage: number; range: number; gap: number }
+  | { type: 'vortex'; radius: number; dur: number; dps: number; pull: number }
+  | { type: 'storm'; dur: number; radius: number; rate: number; damage: number };
 
 interface ZoneSpec {
   kind: ZoneKind;
@@ -57,42 +67,42 @@ export const HERO_ABILITIES: Record<OperativeId, Record<AbilitySlot, HeroAbility
   ironclad: {
     q: A({ id: 'frag', slot: 'q', name: 'Parça Bombası', desc: 'Nişan noktasına el bombası; alan hasarı.', icon: '💣', color: 0xffa040, cooldown: 7, anim: 'throw', effect: { type: 'grenade', radius: 3.4, damage: 9, mesh: 'frag' } }),
     e: A({ id: 'bulwark', slot: 'e', name: 'Balistik Kalkan', desc: '5 sn %60 hasar azaltma, etrafı iter.', icon: '🛡', color: 0x6ea8ff, cooldown: 14, anim: 'shout', effect: { type: 'buff', dur: 5, armor: 0.6, nova: 3.5 } }),
-    r: A({ id: 'kinetic_nova', slot: 'r', name: 'Kinetik Nova', desc: 'Büyük şok dalgası, ağır geri itme.', icon: '✸', color: 0x3dff9a, cooldown: 22, anim: 'cast', effect: { type: 'nova', radius: 7.5, damage: 14, knock: 3.2 } }),
+    r: A({ id: 'orbital_lance', slot: 'r', name: 'Yörünge Topu', desc: 'Uydudan dev lazer: 6 sn boyunca nişanı takip edip altındakini eritir.', icon: '☄', color: 0xff5040, cooldown: 26, anim: 'cast', effect: { type: 'beam', dur: 6, radius: 2.6, dps: 34, speed: 7 } }),
   },
   breaker: {
     q: A({ id: 'breach_dash', slot: 'q', name: 'Kapı Kırma Hamlesi', desc: 'İleri atıl, yoldakileri ez.', icon: '➤', color: 0xfbbf24, cooldown: 6, anim: 'dash', effect: { type: 'dash', dist: 7, damage: 7, invuln: 0.45 } }),
     e: A({ id: 'flashbang', slot: 'e', name: 'Flaş Bombası', desc: 'Kör eder: zombileri neredeyse durdurur.', icon: '✦', color: 0xfff6c0, cooldown: 12, anim: 'throw', effect: { type: 'grenade', radius: 5, damage: 2, status: 'chill', statusPower: 3.5, mesh: 'flash' } }),
-    r: A({ id: 'breach_overdrive', slot: 'r', name: 'Hücum Modu', desc: '6 sn ateş hızı ×1.8, hasar ×1.3.', icon: '⚡', color: 0xff9f1a, cooldown: 24, anim: 'shout', effect: { type: 'buff', dur: 6, fireRate: 1.8, damage: 1.3, move: 1.15 } }),
+    r: A({ id: 'bulldozer', slot: 'r', name: 'Buldozer', desc: 'Art arda 4 hücum: her biri yoldakileri ezer, sonunda yeri yarar. Hücum boyunca dokunulmaz.', icon: '⇉', color: 0xff9f1a, cooldown: 22, anim: 'dash', effect: { type: 'rampage', dashes: 4, dist: 7, damage: 16, gap: 0.32 } }),
   },
   warden: {
     q: A({ id: 'sentry', slot: 'q', name: 'Nöbetçi Taret', desc: '12 sn otomatik ateş eden taret.', icon: '⌖', color: 0x22d3ee, cooldown: 16, anim: 'cast', effect: { type: 'turret', dur: 12, damage: 1.3, rate: 0.14, range: 15 } }),
     e: A({ id: 'suppression', slot: 'e', name: 'Baskı Ateşi', desc: 'Nişan alanını dondurucu baskıyla yavaşlat.', icon: '❄', color: 0x9be7ff, cooldown: 13, anim: 'throw', effect: { type: 'zone', at: 'aim', zone: { kind: 'cryo', radius: 5, dps: 1.5, dur: 6 } } }),
-    r: A({ id: 'airstrike', slot: 'r', name: 'Hava Saldırısı', desc: 'Nişan hattına 7 patlamalı bombardıman.', icon: '✈', color: 0xff6a2a, cooldown: 28, anim: 'shout', effect: { type: 'strike', count: 7, radius: 3.2, damage: 15, delay: 0.9, spacing: 2.6 } }),
+    r: A({ id: 'bastion', slot: 'r', name: 'Kale Kalkanı', desc: '9 sn kubbe: içerideki ekip %65 az hasar alır, giren zombi itilir ve yanar.', icon: '⛨', color: 0x7cc4ff, cooldown: 28, anim: 'cast', effect: { type: 'bastion', dur: 9, radius: 5.5, armor: 0.65, dps: 9 } }),
   },
   havoc: {
     q: A({ id: 'molotov', slot: 'q', name: 'Molotof', desc: 'Yanan alan bırakır.', icon: '🔥', color: 0xff5a1f, cooldown: 8, anim: 'throw', effect: { type: 'grenade', radius: 2.6, damage: 3, status: 'burn', statusPower: 2, zone: { kind: 'fire', radius: 3.2, dps: 4.5, dur: 5 }, mesh: 'bottle' } }),
     e: A({ id: 'flame_nova', slot: 'e', name: 'Alev Halkası', desc: 'Etrafı tutuşturan alev patlaması.', icon: '◎', color: 0xff7a2a, cooldown: 11, anim: 'cast', effect: { type: 'nova', radius: 5.2, damage: 6, knock: 1.4, status: 'burn', statusPower: 3 } }),
-    r: A({ id: 'napalm', slot: 'r', name: 'Napalm', desc: 'Nişan hattını alev denizine çevir.', icon: '☄', color: 0xff3d1a, cooldown: 26, anim: 'shout', effect: { type: 'strike', count: 6, radius: 2.8, damage: 8, delay: 0.7, spacing: 2.4, status: 'burn', zone: { kind: 'fire', radius: 2.6, dps: 5, dur: 5 } } }),
+    r: A({ id: 'doomsday', slot: 'r', name: 'Kıyamet Füzesi', desc: 'Nişana gökten balistik füze: dev patlama ve yanan krater.', icon: '☢', color: 0xff3d1a, cooldown: 30, anim: 'shout', effect: { type: 'nuke', radius: 9, damage: 75, delay: 1.9 } }),
   },
   valkyrie: {
     q: A({ id: 'med_pulse', slot: 'q', name: 'Tıbbi Darbe', desc: 'Ekibi anında %30 iyileştir.', icon: '✚', color: 0x5ad46a, cooldown: 10, anim: 'cast', effect: { type: 'heal', radius: 12, amount: 0.3 } }),
     e: A({ id: 'adrenaline', slot: 'e', name: 'Adrenalin İğnesi', desc: 'Ekip: hız ×1.3, ateş hızı ×1.3.', icon: '➶', color: 0x38bdf8, cooldown: 16, anim: 'shout', effect: { type: 'buff', dur: 6, move: 1.3, fireRate: 1.3, squad: true } }),
-    r: A({ id: 'guardian_field', slot: 'r', name: 'Koruyucu Alan', desc: 'İyileştiren alan, düşenleri kaldırır.', icon: '❖', color: 0x7cffb2, cooldown: 30, anim: 'cast', effect: { type: 'heal', radius: 14, amount: 0.4, revive: true, zone: { kind: 'heal', radius: 6, dps: 6, dur: 8 } } }),
+    r: A({ id: 'guardian_wing', slot: 'r', name: 'Koruyucu Filo', desc: 'Ekibi %40 iyileştirir, düşenleri kaldırır; 4 sağlık dronu 10 sn etrafında ateş eder.', icon: '❖', color: 0x7cffb2, cooldown: 30, anim: 'cast', effect: { type: 'angels', heal: 0.4, drones: 4, dur: 10, damage: 2.2 } }),
   },
   ghost: {
     q: A({ id: 'shadow_blink', slot: 'q', name: 'Gölge Sıçrayışı', desc: 'Işınlan, kısa süre dokunulmaz ol.', icon: '◌', color: 0x88eeff, cooldown: 5, anim: 'dash', effect: { type: 'dash', dist: 8.5, damage: 0, invuln: 0.8 } }),
     e: A({ id: 'hunters_mark', slot: 'e', name: 'Avcı İşareti', desc: '7 sn kritik +%35, hasar ×1.25.', icon: '◎', color: 0xc4b5fd, cooldown: 15, anim: 'shout', effect: { type: 'buff', dur: 7, crit: 0.35, damage: 1.25 } }),
-    r: A({ id: 'piercing_volley', slot: 'r', name: 'Delici Yaylım', desc: '14 mermi her şeyi delip geçer.', icon: '⇶', color: 0x88eeff, cooldown: 20, anim: 'cast', effect: { type: 'volley', shots: 14 } }),
+    r: A({ id: 'death_dance', slot: 'r', name: 'Ölüm Dansı', desc: 'Gölgeye dönüş: 10 zombi arasında ışınlanıp her birini biçer.', icon: '✕', color: 0x88eeff, cooldown: 22, anim: 'dash', effect: { type: 'reaper', hits: 10, damage: 22, range: 13, gap: 0.11 } }),
   },
   tox: {
     q: A({ id: 'toxin_flask', slot: 'q', name: 'Zehir Şişesi', desc: 'Zehirli bulut bırakan şişe.', icon: '⚗', color: 0x9cff2e, cooldown: 7, anim: 'throw', effect: { type: 'grenade', radius: 2.2, damage: 2, status: 'toxin', statusPower: 2.5, zone: { kind: 'toxin', radius: 3.6, dps: 3.5, dur: 6 }, mesh: 'flask' } }),
     e: A({ id: 'corrosive_aura', slot: 'e', name: 'Aşındırıcı Aura', desc: 'Seni takip eden zehir halkası.', icon: '☣', color: 0x84cc16, cooldown: 14, anim: 'cast', effect: { type: 'zone', at: 'self', follow: true, zone: { kind: 'toxin', radius: 3.6, dps: 3, dur: 7 } } }),
-    r: A({ id: 'plague_burst', slot: 'r', name: 'Veba Patlaması', desc: 'Geniş zehir dalgası.', icon: '✺', color: 0xb6ff5a, cooldown: 24, anim: 'shout', effect: { type: 'nova', radius: 8.5, damage: 7, knock: 1, status: 'toxin', statusPower: 4 } }),
+    r: A({ id: 'black_plague', slot: 'r', name: 'Kara Veba', desc: 'Nişana zehirli girdap: 7 sn zombileri merkeze çeker ve çürütür.', icon: '🌀', color: 0x9cff2e, cooldown: 26, anim: 'throw', effect: { type: 'vortex', radius: 7.5, dur: 7, dps: 9, pull: 4.2 } }),
   },
   spark: {
     q: A({ id: 'tesla_coil', slot: 'q', name: 'Tesla Bobini', desc: '3 hedefe sıçrayan elektrik kulesi.', icon: 'ϟ', color: 0x7cd4ff, cooldown: 15, anim: 'cast', effect: { type: 'turret', dur: 10, damage: 2.2, rate: 0.45, range: 9, chain: 3 } }),
     e: A({ id: 'arc_chain', slot: 'e', name: 'Ark Zinciri', desc: '6 zombiye sıçrayan yıldırım.', icon: '⚡', color: 0x9be7ff, cooldown: 9, anim: 'cast', effect: { type: 'chain', targets: 6, damage: 6, range: 11 } }),
-    r: A({ id: 'emp', slot: 'r', name: 'EMP Aşırı Yük', desc: 'Dev elektrik patlaması, sersemletir.', icon: '✹', color: 0x5cc8ff, cooldown: 25, anim: 'shout', effect: { type: 'nova', radius: 8.5, damage: 9, knock: 1.6, status: 'chill', statusPower: 4 } }),
+    r: A({ id: 'thunderstorm', slot: 'r', name: 'Yıldırım Fırtınası', desc: '8 sn başının üstünde fırtına: çevredeki zombilere sürekli yıldırım düşer.', icon: '⛈', color: 0x5cc8ff, cooldown: 27, anim: 'shout', effect: { type: 'storm', dur: 8, radius: 10, rate: 5, damage: 10 } }),
   },
 };
 
@@ -165,6 +175,7 @@ interface Thrown {
 interface Turret {
   group: THREE.Group;
   head: THREE.Object3D;
+  model: TurretModel;
   life: number;
   cd: number;
   def: Extract<AbilityEffect, { type: 'turret' }>;
@@ -224,6 +235,12 @@ export function createHeroAbilityRuntime(
   const rings: Expanding[] = [];
   let shieldBubble: THREE.Mesh | null = null;
   let clock = 0;
+  // ultimates
+  const beams: { core: THREE.Mesh; glow: THREE.Mesh; scorch: THREE.Mesh; pos: THREE.Vector3; life: number; max: number; radius: number; dps: number; speed: number; tick: number }[] = [];
+  const bastions: { dome: THREE.Mesh; edge: THREE.Mesh; at: THREE.Vector3; life: number; max: number; radius: number; armor: number; dps: number; tick: number }[] = [];
+  const drones: { mesh: THREE.Group; rotors: THREE.Object3D[]; life: number; cd: number; ang: number; damage: number }[] = [];
+  const vortexes: { mesh: THREE.Mesh; at: THREE.Vector3; life: number; max: number; radius: number; dps: number; pull: number; tick: number }[] = [];
+  const storms: { cloud: THREE.Mesh; life: number; radius: number; rate: number; damage: number; acc: number }[] = [];
 
   // shared resources
   const discGeo = new THREE.CircleGeometry(1, 40);
@@ -407,37 +424,425 @@ export function createHeroAbilityRuntime(
     return hit.size;
   };
 
-  const buildTurret = (color: number, tesla: boolean) => {
-    const group = new THREE.Group();
-    const legMat = keep(solid(0x2a2e33));
-    for (let i = 0; i < 3; i++) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.9, 6), legMat);
-      const a = (i / 3) * Math.PI * 2;
-      leg.position.set(Math.cos(a) * 0.25, 0.4, Math.sin(a) * 0.25);
-      leg.rotation.set(Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4);
-      group.add(leg);
+  const buildTurret = (tesla: boolean) => {
+    const model = tesla ? buildTeslaTurret() : buildSentryTurret();
+    return { group: model.group, head: model.head, model };
+  };
+
+  // ---- ultimate helpers ---------------------------------------------------
+  const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 20, 1, true);
+  const domeGeo = new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2);
+  const droneBodyGeo = new THREE.BoxGeometry(0.34, 0.08, 0.34);
+  const droneArmGeo = new THREE.BoxGeometry(0.62, 0.03, 0.05);
+  const droneRotorGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.01, 12);
+  const missileGeo = new THREE.CylinderGeometry(0.22, 0.22, 2.2, 12);
+  const noseGeo = new THREE.ConeGeometry(0.22, 0.6, 12);
+  const glowMat = (color: number, opacity: number) =>
+    keep(new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+  const hitZ = (z: ZombieVisual, dmg: number, from: THREE.Vector3) => {
+    const dir = z.root.position.clone().sub(from).setY(0);
+    if (dir.lengthSq() < 1e-4) dir.set(1, 0, 0);
+    ctx.damageZombie(z, dmg, z.root.position.clone().setY(1.1), dir.normalize());
+  };
+  const nearestZombie = (at: THREE.Vector3, range: number, skip?: Set<ZombieVisual>) => {
+    let best: ZombieVisual | null = null;
+    let bd = range * range;
+    for (const z of ctx.zombies) {
+      if (z.hp <= 0 || skip?.has(z)) continue;
+      const d = z.root.position.distanceToSquared(at);
+      if (d < bd) {
+        bd = d;
+        best = z;
+      }
     }
-    const head = new THREE.Group();
-    head.position.y = 0.95;
-    if (tesla) {
-      const coil = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.6, 10), keep(solid(0x3a4250, color)));
-      const orb = new THREE.Mesh(sphereGeo, keep(addMat(color, 0.9)));
-      orb.scale.setScalar(0.2);
-      orb.position.y = 0.45;
-      head.add(coil, orb);
-    } else {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.5), keep(solid(0x30363c)));
-      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 8), keep(solid(0x15181b)));
-      barrel.rotation.x = Math.PI / 2;
-      barrel.position.z = 0.45;
-      const eye = new THREE.Mesh(sphereGeo, keep(addMat(color, 1)));
-      eye.scale.setScalar(0.05);
-      eye.position.set(0, 0.08, 0.26);
-      head.add(body, barrel, eye);
+    return best;
+  };
+  const skyBolt = (to: THREE.Vector3, color: number) => {
+    const from = to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, 13, (Math.random() - 0.5) * 3));
+    if (ctx.vfx) {
+      ctx.vfx.bolt(from, to, 0xe8f4ff, 0.12, 0.18, 12);
+      ctx.vfx.sparks(to, 8, 0xd8ecff, 5);
+      ctx.vfx.emit('flash', to.x, 0.4, to.z, { life: 0.1, s0: 1.4, s1: 2.4, color: 0xcfe8ff, spin: 0, a: 0.8 });
+    } else zap(from, to, color);
+  };
+
+  const castBeam = (eff: Extract<AbilityEffect, { type: 'beam' }>, power: number, size: number, color: number) => {
+    const at = aimPoint(18);
+    const core = new THREE.Mesh(cylGeo, glowMat(0xffe0c8, 0.85));
+    const glow = new THREE.Mesh(cylGeo, glowMat(color, 0.35));
+    const scorch = new THREE.Mesh(discGeo, glowMat(color, 0.5));
+    scorch.rotation.x = -Math.PI / 2;
+    const r = eff.radius * size * ctx.aoeMult();
+    scene.add(core, glow, scorch);
+    beams.push({ core, glow, scorch, pos: at, life: eff.dur * size, max: eff.dur * size, radius: r, dps: eff.dps * power, speed: eff.speed, tick: 0 });
+    ctx.shake(0.3);
+    ctx.sfx('zap');
+  };
+
+  const castRampage = (eff: Extract<AbilityEffect, { type: 'rampage' }>, power: number, size: number, color: number) => {
+    const p = ctx.player;
+    p.invuln = Math.max(p.invuln, eff.gap * eff.dashes + 0.5);
+    for (let i = 0; i < eff.dashes; i++) {
+      pending.push({
+        at: clock + i * eff.gap,
+        run: () => {
+          if (!p.alive) return;
+          // each hop re-aims: at the cursor, else at the nearest zombie
+          const near = nearestZombie(p.root.position, 12);
+          const aimAt = ctx.aim.clone().sub(p.root.position).setY(0).lengthSq() > 1 ? ctx.aim : near?.root.position ?? ctx.aim;
+          const dir = aimAt.clone().sub(p.root.position).setY(0);
+          if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+          dir.normalize();
+          p.root.rotation.y = Math.atan2(dir.x, dir.z);
+          const start = p.root.position.clone();
+          const dist = eff.dist * size;
+          for (let k = 0; k < 10; k++) ctx.moveWithCollision(p.root, (dir.x * dist) / 10, (dir.z * dist) / 10, 0.45);
+          const end = p.root.position.clone();
+          const seg = end.clone().sub(start);
+          const len2 = Math.max(1e-4, seg.lengthSq());
+          for (const z of ctx.zombies) {
+            if (z.hp <= 0) continue;
+            const t = THREE.MathUtils.clamp(z.root.position.clone().sub(start).dot(seg) / len2, 0, 1);
+            const closest = start.clone().addScaledVector(seg, t);
+            if (closest.distanceTo(z.root.position) > 1.9) continue;
+            const side = z.root.position.clone().sub(closest).setY(0);
+            if (side.lengthSq() < 1e-4) side.set(-dir.z, 0, dir.x);
+            side.normalize();
+            ctx.damageZombie(z, eff.damage * power, z.root.position.clone().setY(1.1), side);
+            z.root.position.addScaledVector(side, 2.2);
+            applyStatus(z, 'chill', 1.5);
+          }
+          if (ctx.vfx) {
+            for (let k = 0; k < 12; k++) {
+              const q = start.clone().lerp(end, Math.random());
+              ctx.vfx.emit('smoke', q.x, 0.2, q.z, { vx: -dir.x * 2, vz: -dir.z * 2, vy: 0.5, life: 0.9, s0: 0.4, s1: 1.3, color: 0x7a6e5c, a: 0.4, drag: 2 });
+            }
+          }
+          operativeAction(p, 'roll');
+          const last = i === eff.dashes - 1;
+          explode(end, (last ? 4.5 : 2.6) * size * ctx.aoeMult(), eff.damage * power * (last ? 1.3 : 0.5), color, undefined, 2, last ? 2.6 : 1.2, 'kinetic');
+        },
+      });
     }
-    group.add(head);
-    group.traverse((o) => (o.castShadow = true));
-    return { group, head };
+  };
+
+  const castBastion = (eff: Extract<AbilityEffect, { type: 'bastion' }>, power: number, size: number, color: number) => {
+    const at = ctx.player.root.position.clone().setY(0);
+    const r = eff.radius * size * ctx.aoeMult();
+    const dome = new THREE.Mesh(domeGeo, glowMat(color, 0.16));
+    dome.position.copy(at);
+    dome.scale.set(r, r * 0.75, r);
+    const edge = new THREE.Mesh(ringGeo, glowMat(color, 0.7));
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(at.x, 0.08, at.z);
+    edge.scale.setScalar(r);
+    scene.add(dome, edge);
+    bastions.push({ dome, edge, at, life: eff.dur * size, max: eff.dur * size, radius: r, armor: eff.armor, dps: eff.dps * power, tick: 0 });
+    shockRing(at, r, color, 0.5);
+    explode(at, r, 3 * power, color, undefined, 2, 2.4, 'kinetic');
+  };
+
+  const castNuke = (eff: Extract<AbilityEffect, { type: 'nuke' }>, power: number, size: number, color: number) => {
+    const at = aimPoint(18);
+    const r = eff.radius * size * ctx.aoeMult();
+    fx.spawnWarnRing(at, r, 0xff3a1a, eff.delay);
+    const m = new THREE.Group();
+    const body = new THREE.Mesh(missileGeo, keep(solid(0xd8d6cc)));
+    const nose = new THREE.Mesh(noseGeo, keep(solid(0x3a3d40)));
+    nose.position.y = -1.4;
+    nose.rotation.x = Math.PI;
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.06), keep(solid(0x3a3d40)));
+    fin.position.y = 1.0;
+    const fin2 = fin.clone();
+    fin2.rotation.y = Math.PI / 2;
+    m.add(body, nose, fin, fin2);
+    const from = at.clone().add(new THREE.Vector3(6, 40, -18));
+    m.position.copy(from);
+    m.lookAt(at);
+    m.rotateX(Math.PI / 2);
+    scene.add(m);
+    thrown.push({
+      mesh: m,
+      from,
+      to: at.clone(),
+      t: 0,
+      dur: eff.delay,
+      onLand: (pos) => {
+        explode(pos, r, eff.damage * power, color, 'burn', 4 * power, 3.2);
+        if (ctx.vfx) {
+          ctx.vfx.explosion(pos.clone(), r * 0.75, 0xff9a40);
+          for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            const q = pos.clone().add(new THREE.Vector3(Math.cos(a) * r * 0.55, 0, Math.sin(a) * r * 0.55));
+            pending.push({ at: clock + 0.12 + i * 0.05, run: () => ctx.vfx?.explosion(q, 1.8, 0xff7a30) });
+          }
+          // mushroom stem
+          for (let i = 0; i < 18; i++) ctx.vfx.emit('smoke', pos.x + (Math.random() - 0.5) * 2, 1 + i * 0.5, pos.z + (Math.random() - 0.5) * 2, { vy: 2.5, life: 3.5, s0: 1.5, s1: 4.5, color: 0x3a3430, a: 0.5, drag: 0.4 });
+        }
+        addZone(pos, { kind: 'fire', radius: eff.radius * 0.55, dps: 7, dur: 6 }, power, size, null);
+        ctx.shake(0.9);
+      },
+    });
+    ctx.sfx('buff');
+  };
+
+  const castAngels = (eff: Extract<AbilityEffect, { type: 'angels' }>, power: number, size: number, color: number) => {
+    const p = ctx.player;
+    for (const op of ctx.squad) {
+      if (op.root.position.distanceTo(p.root.position) > 16) continue;
+      if (!op.alive) {
+        ctx.revive(op);
+        continue;
+      }
+      op.hp = Math.min(op.maxHp, op.hp + op.maxHp * eff.heal * (0.8 + 0.2 * power));
+      op.healthBar.setRatio(op.hp / op.maxHp);
+      fx.spawnHitRing(op.root.position, color, 0.15);
+    }
+    shockRing(p.root.position, 8, color, 0.6);
+    const bodyMat = keep(solid(0xdfe3e6));
+    const armMat = keep(solid(0x2a2e33));
+    const lightMat = glowMat(color, 0.9);
+    for (let i = 0; i < eff.drones; i++) {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(droneBodyGeo, bodyMat));
+      const a1 = new THREE.Mesh(droneArmGeo, armMat);
+      a1.rotation.y = Math.PI / 4;
+      const a2 = new THREE.Mesh(droneArmGeo, armMat);
+      a2.rotation.y = -Math.PI / 4;
+      g.add(a1, a2);
+      const rotors: THREE.Object3D[] = [];
+      for (const [x, z] of [[0.22, 0.22], [-0.22, 0.22], [0.22, -0.22], [-0.22, -0.22]] as const) {
+        const rt = new THREE.Mesh(droneRotorGeo, glowMat(0x9aa4ad, 0.35));
+        rt.position.set(x, 0.05, z);
+        g.add(rt);
+        rotors.push(rt);
+      }
+      const led = new THREE.Mesh(fragGeo, lightMat);
+      led.position.y = -0.06;
+      led.scale.setScalar(0.5);
+      g.add(led);
+      g.traverse((o) => (o.castShadow = true));
+      g.position.copy(p.root.position).setY(2.2);
+      scene.add(g);
+      drones.push({ mesh: g, rotors, life: eff.dur * size, cd: 0.2 + i * 0.1, ang: (i / eff.drones) * Math.PI * 2, damage: eff.damage * power });
+    }
+    ctx.sfx('heal');
+  };
+
+  const castReaper = (eff: Extract<AbilityEffect, { type: 'reaper' }>, power: number, size: number, color: number) => {
+    const p = ctx.player;
+    const hits = Math.round(eff.hits * size);
+    const done = new Set<ZombieVisual>();
+    p.invuln = Math.max(p.invuln, hits * eff.gap + 0.6);
+    for (let i = 0; i < hits; i++) {
+      pending.push({
+        at: clock + i * eff.gap,
+        run: () => {
+          if (!p.alive) return;
+          const z = nearestZombie(p.root.position, eff.range * size, done);
+          if (!z) return;
+          done.add(z);
+          const from = p.root.position.clone();
+          const to = z.root.position;
+          const dir = to.clone().sub(from).setY(0);
+          if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1);
+          dir.normalize();
+          // land just past the target, facing back at it
+          const land = to.clone().addScaledVector(dir, 1.1);
+          ctx.moveWithCollision(p.root, land.x - from.x, land.z - from.z, 0.4);
+          p.root.rotation.y = Math.atan2(-dir.x, -dir.z);
+          hitZ(z, eff.damage * power, from);
+          applyStatus(z, 'chill', 2);
+          if (ctx.vfx) {
+            ctx.vfx.emit('smoke', from.x, 1, from.z, { vy: 0.4, life: 0.7, s0: 0.6, s1: 1.4, color: 0x20242c, a: 0.5 });
+            ctx.vfx.tracer(from.clone().setY(1.1), p.root.position.clone().setY(1.1), color);
+            ctx.vfx.sparks(to.clone().setY(1.2), 6, 0xcff6ff, 4);
+          } else zap(from.clone().setY(1.1), p.root.position.clone().setY(1.1), color);
+          fx.spawnBloodBurst(to.clone().setY(1.2), 1.2);
+          operativeAction(p, 'roll');
+        },
+      });
+    }
+    ctx.sfx('buff');
+  };
+
+  const castVortex = (eff: Extract<AbilityEffect, { type: 'vortex' }>, power: number, size: number, color: number) => {
+    const at = aimPoint(15);
+    const r = eff.radius * size * ctx.aoeMult();
+    throwTo(at, 'flask', color, (pos) => {
+      const mesh = new THREE.Mesh(ringGeo, glowMat(0x3a5a10, 0.55));
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(pos.x, 0.1, pos.z);
+      mesh.scale.setScalar(r);
+      scene.add(mesh);
+      vortexes.push({ mesh, at: pos.clone(), life: eff.dur * size, max: eff.dur * size, radius: r, dps: eff.dps * power, pull: eff.pull, tick: 0 });
+      ctx.shake(0.25);
+    });
+  };
+
+  const castStorm = (eff: Extract<AbilityEffect, { type: 'storm' }>, power: number, size: number) => {
+    const cloud = new THREE.Mesh(discGeo, keep(new THREE.MeshBasicMaterial({ color: 0x14181e, transparent: true, opacity: 0.0, depthWrite: false })));
+    cloud.rotation.x = -Math.PI / 2;
+    scene.add(cloud);
+    storms.push({ cloud, life: eff.dur * size, radius: eff.radius * size * ctx.aoeMult(), rate: eff.rate, damage: eff.damage * power, acc: 0 });
+    ctx.sfx('zap');
+  };
+
+  const tickUltimates = (dt: number) => {
+    const p = ctx.player;
+    for (let i = beams.length - 1; i >= 0; i--) {
+      const b = beams[i]!;
+      b.life -= dt;
+      // drift toward the cursor
+      const want = aimPoint(22);
+      const d = want.sub(b.pos).setY(0);
+      const step = Math.min(d.length(), b.speed * dt);
+      if (step > 1e-3) b.pos.addScaledVector(d.normalize(), step);
+      const fade = Math.min(1, b.life / 0.4, (b.max - b.life) / 0.25);
+      const flick = 0.85 + Math.random() * 0.3;
+      b.core.position.set(b.pos.x, 15, b.pos.z);
+      b.core.scale.set(b.radius * 0.28 * flick * fade, 30, b.radius * 0.28 * flick * fade);
+      b.glow.position.copy(b.core.position);
+      b.glow.scale.set(b.radius * 0.75 * fade, 30, b.radius * 0.75 * fade);
+      b.scorch.position.set(b.pos.x, 0.09, b.pos.z);
+      b.scorch.scale.setScalar(b.radius * (0.9 + Math.random() * 0.15));
+      if (ctx.vfx) {
+        if (Math.random() < 0.8) ctx.vfx.flame(b.pos.x + (Math.random() - 0.5) * b.radius, b.pos.z + (Math.random() - 0.5) * b.radius, 1);
+        if (Math.random() < 0.4) ctx.vfx.sparks(b.pos.clone().setY(0.3), 3, 0xffd0a0, 5);
+      }
+      b.tick -= dt;
+      if (b.tick <= 0) {
+        b.tick = 0.15;
+        forEachZombieIn(b.pos, b.radius, (z) => {
+          hitZ(z, b.dps * 0.15, b.pos);
+          applyStatus(z, 'burn', 1.5);
+        });
+        ctx.shake(0.06);
+      }
+      if (b.life <= 0) {
+        scene.remove(b.core, b.glow, b.scorch);
+        beams.splice(i, 1);
+      }
+    }
+    for (let i = bastions.length - 1; i >= 0; i--) {
+      const b = bastions[i]!;
+      b.life -= dt;
+      const fade = Math.min(1, b.life / 0.5);
+      (b.dome.material as THREE.MeshBasicMaterial).opacity = (0.12 + Math.sin(clock * 5) * 0.04) * fade;
+      (b.edge.material as THREE.MeshBasicMaterial).opacity = 0.7 * fade;
+      b.tick -= dt;
+      for (const z of ctx.zombies) {
+        if (z.hp <= 0) continue;
+        const dx = z.root.position.x - b.at.x;
+        const dz = z.root.position.z - b.at.z;
+        const d = Math.hypot(dx, dz);
+        if (d >= b.radius || d < 1e-3) continue;
+        // shoved back out to the wall
+        const push = Math.min(b.radius - d, 10 * dt);
+        z.root.position.x += (dx / d) * push;
+        z.root.position.z += (dz / d) * push;
+        if (b.tick <= 0) {
+          hitZ(z, b.dps * 0.3, b.at);
+          applyStatus(z, 'burn', 1);
+        }
+      }
+      if (b.tick <= 0) b.tick = 0.3;
+      if (b.life <= 0) {
+        scene.remove(b.dome, b.edge);
+        bastions.splice(i, 1);
+      }
+    }
+    for (let i = drones.length - 1; i >= 0; i--) {
+      const d = drones[i]!;
+      d.life -= dt;
+      d.cd -= dt;
+      d.ang += dt * 1.4;
+      const tgtPos = p.root.position.clone().add(new THREE.Vector3(Math.cos(d.ang) * 2.4, 2.3 + Math.sin(clock * 3 + d.ang) * 0.2, Math.sin(d.ang) * 2.4));
+      d.mesh.position.lerp(tgtPos, 1 - Math.exp(-6 * dt));
+      for (const r of d.rotors) r.rotation.y += dt * 40;
+      const z = nearestZombie(d.mesh.position, 13);
+      if (z) {
+        d.mesh.lookAt(z.root.position.x, d.mesh.position.y, z.root.position.z);
+        if (d.cd <= 0) {
+          d.cd = 0.22;
+          const to = z.root.position.clone().setY(1.1);
+          if (ctx.vfx) ctx.vfx.tracer(d.mesh.position, to, 0x9affc8);
+          else zap(d.mesh.position.clone(), to, 0x9affc8);
+          hitZ(z, d.damage, d.mesh.position);
+        }
+      }
+      // field medics: slow regen for the squad near the drones
+      for (const op of ctx.squad) {
+        if (!op.alive || op.root.position.distanceTo(p.root.position) > 6) continue;
+        op.hp = Math.min(op.maxHp, op.hp + op.maxHp * 0.006 * dt);
+      }
+      if (d.life < 0.6) d.mesh.position.y += dt * 4;
+      if (d.life <= 0) {
+        scene.remove(d.mesh);
+        drones.splice(i, 1);
+      }
+    }
+    for (let i = vortexes.length - 1; i >= 0; i--) {
+      const v = vortexes[i]!;
+      v.life -= dt;
+      v.mesh.rotation.z -= dt * 3;
+      v.mesh.scale.setScalar(v.radius * (0.9 + Math.sin(clock * 6) * 0.05));
+      (v.mesh.material as THREE.MeshBasicMaterial).opacity = 0.55 * Math.min(1, v.life / 0.5);
+      if (ctx.vfx && Math.random() < 0.9) {
+        const a = Math.random() * Math.PI * 2;
+        const rr = v.radius * (0.4 + Math.random() * 0.6);
+        // gas spiralling inward
+        ctx.vfx.emit('smoke', v.at.x + Math.cos(a) * rr, 0.3, v.at.z + Math.sin(a) * rr, { vx: -Math.cos(a) * 3 - Math.sin(a) * 3, vz: -Math.sin(a) * 3 + Math.cos(a) * 3, vy: 0.4, life: 1.1, s0: 0.6, s1: 1.6, color: 0x3c4a18, a: 0.4, drag: 0.8 });
+      }
+      v.tick -= dt;
+      forEachZombieIn(v.at, v.radius, (z, d) => {
+        if (d < 0.6) return;
+        const k = Math.min(d - 0.5, v.pull * dt * (z.kind === 'boss' ? 0.35 : 1));
+        z.root.position.x += ((v.at.x - z.root.position.x) / d) * k;
+        z.root.position.z += ((v.at.z - z.root.position.z) / d) * k;
+        if (v.tick <= 0) {
+          hitZ(z, v.dps * 0.35, v.at);
+          applyStatus(z, 'toxin', 1.6);
+        }
+      });
+      if (v.tick <= 0) v.tick = 0.35;
+      if (v.life <= 0) {
+        if (ctx.vfx) ctx.vfx.dustRing(v.at, v.radius * 0.6, 0x4a5a20);
+        explode(v.at, 3.2, v.dps * 1.5, 0x9cff2e, 'toxin', 3, 1.5);
+        scene.remove(v.mesh);
+        vortexes.splice(i, 1);
+      }
+    }
+    for (let i = storms.length - 1; i >= 0; i--) {
+      const st = storms[i]!;
+      st.life -= dt;
+      st.cloud.position.set(p.root.position.x, 9, p.root.position.z);
+      st.cloud.scale.setScalar(st.radius * 0.8);
+      (st.cloud.material as THREE.MeshBasicMaterial).opacity = 0.35 * Math.min(1, st.life / 0.6);
+      if (ctx.vfx && Math.random() < 0.5) {
+        const a = Math.random() * Math.PI * 2;
+        const rr = Math.random() * st.radius * 0.8;
+        ctx.vfx.emit('smoke', p.root.position.x + Math.cos(a) * rr, 8.5, p.root.position.z + Math.sin(a) * rr, { vy: 0, life: 1.6, s0: 2, s1: 3.5, color: 0x2a2e36, a: 0.35, drag: 0.5 });
+      }
+      st.acc += dt * st.rate;
+      while (st.acc >= 1) {
+        st.acc -= 1;
+        const list = ctx.zombies.filter((z) => z.hp > 0 && z.root.position.distanceToSquared(p.root.position) < st.radius * st.radius);
+        if (!list.length) break;
+        const z = list[Math.floor(Math.random() * list.length)]!;
+        const to = z.root.position.clone().setY(0.2);
+        skyBolt(to, 0x9be7ff);
+        forEachZombieIn(to, 1.8, (o) => {
+          hitZ(o, o === z ? st.damage : st.damage * 0.5, to);
+          applyStatus(o, 'chill', 1.4);
+        });
+        ctx.shake(0.08);
+      }
+      if (st.life <= 0) {
+        scene.remove(st.cloud);
+        storms.splice(i, 1);
+      }
+    }
   };
 
   const setBuff = (eff: Extract<AbilityEffect, { type: 'buff' }>, power: number, size: number, now: number, color: number) => {
@@ -571,11 +976,12 @@ export function createHeroAbilityRuntime(
       case 'turret': {
         const at = aimPoint(6);
         const tesla = !!eff.chain;
-        const { group, head } = buildTurret(def.color, tesla);
+        const { group, head, model } = buildTurret(tesla);
+        group.rotation.y = Math.atan2(at.x - p.root.position.x, at.z - p.root.position.z);
         group.position.copy(at);
         scene.add(group);
         shockRing(at, 1.6, def.color, 0.4);
-        turrets.push({ group, head, life: eff.dur * size, cd: 0.3, def: eff, power, range: eff.range * size, color: def.color });
+        turrets.push({ group, head, model, life: eff.dur * size, cd: 0.3, def: eff, power, range: eff.range * size, color: def.color });
         break;
       }
       case 'chain':
@@ -610,6 +1016,30 @@ export function createHeroAbilityRuntime(
         shockRing(p.root.position, 1.8, def.color, 0.35);
         ctx.sfx('buff');
         break;
+      case 'beam':
+        castBeam(eff, power, size, def.color);
+        break;
+      case 'rampage':
+        castRampage(eff, power, size, def.color);
+        break;
+      case 'bastion':
+        castBastion(eff, power, size, def.color);
+        break;
+      case 'nuke':
+        castNuke(eff, power, size, def.color);
+        break;
+      case 'angels':
+        castAngels(eff, power, size, def.color);
+        break;
+      case 'reaper':
+        castReaper(eff, power, size, def.color);
+        break;
+      case 'vortex':
+        castVortex(eff, power, size, def.color);
+        break;
+      case 'storm':
+        castStorm(eff, power, size);
+        break;
     }
     return true;
   };
@@ -618,6 +1048,7 @@ export function createHeroAbilityRuntime(
     clock += dt;
     for (const s of ['q', 'e', 'r'] as AbilitySlot[]) cooldowns[s] = Math.max(0, cooldowns[s] - dt);
 
+    tickUltimates(dt);
     for (let i = pending.length - 1; i >= 0; i--) {
       if (pending[i]!.at <= clock) {
         const job = pending[i]!;
@@ -706,16 +1137,27 @@ export function createHeroAbilityRuntime(
           target = z;
         }
       }
+      settleBarrel(t.model, dt);
+      if (t.def.chain) t.head.rotation.y += dt * 1.5;
       if (target) {
-        const yaw = Math.atan2(target.root.position.x - t.group.position.x, target.root.position.z - t.group.position.z);
-        t.head.rotation.y = THREE.MathUtils.lerp(t.head.rotation.y, yaw, 1 - Math.exp(-14 * dt));
+        if (!t.def.chain) {
+          // head yaw is local to the (rotated) tripod
+          const yaw = Math.atan2(target.root.position.x - t.group.position.x, target.root.position.z - t.group.position.z) - t.group.rotation.y;
+          const cur = t.head.rotation.y;
+          const delta = Math.atan2(Math.sin(yaw - cur), Math.cos(yaw - cur));
+          t.head.rotation.y = cur + delta * (1 - Math.exp(-14 * dt));
+        }
         if (t.cd <= 0) {
           t.cd = t.def.rate;
-          const muzzle = t.group.position.clone().setY(1.0);
-          if (t.def.chain) chainFrom(muzzle.setY(1.4), t.def.chain, t.def.damage * t.power, t.range, t.color);
+          const muzzle = t.model.muzzle.getWorldPosition(new THREE.Vector3());
+          if (t.def.chain) chainFrom(muzzle, t.def.chain, t.def.damage * t.power, t.range, t.color);
           else {
             const to = target.root.position.clone().setY(1.1);
-            zap(muzzle, to, 0xffe08a);
+            kickBarrel(t.model);
+            if (ctx.vfx) {
+              ctx.vfx.tracer(muzzle, to, 0xffc46a);
+              ctx.vfx.emit('flash', muzzle.x, muzzle.y, muzzle.z, { life: 0.05, s0: 0.5, s1: 0.8, color: 0xffd27a, spin: 0, a: 0.9 });
+            } else zap(muzzle, to, 0xffe08a);
             const dir = to.clone().sub(muzzle).setY(0).normalize();
             ctx.damageZombie(target, t.def.damage * t.power, to, dir);
           }
@@ -724,7 +1166,6 @@ export function createHeroAbilityRuntime(
       if (t.life < 1) t.group.scale.setScalar(Math.max(0.01, t.life));
       if (t.life <= 0) {
         scene.remove(t.group);
-        t.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
         turrets.splice(i, 1);
       }
     }
@@ -790,6 +1231,9 @@ export function createHeroAbilityRuntime(
       out.armor = Math.max(out.armor, b.armor);
       out.crit += b.crit;
     }
+    for (const b of bastions) {
+      if (op.root.position.distanceTo(b.at) <= b.radius) out.armor = Math.max(out.armor, b.armor);
+    }
     return out;
   };
 
@@ -810,7 +1254,13 @@ export function createHeroAbilityRuntime(
       for (const b of bolts) scene.remove(b.line);
       for (const r of rings) scene.remove(r.mesh);
       if (shieldBubble) scene.remove(shieldBubble);
+      for (const b of beams) scene.remove(b.core, b.glow, b.scorch);
+      for (const b of bastions) scene.remove(b.dome, b.edge);
+      for (const d of drones) scene.remove(d.mesh);
+      for (const v of vortexes) scene.remove(v.mesh);
+      for (const st of storms) scene.remove(st.cloud);
       owned.forEach((m) => m.dispose());
+      [cylGeo, domeGeo, droneBodyGeo, droneArmGeo, droneRotorGeo, missileGeo, noseGeo].forEach((g) => g.dispose());
       [discGeo, ringGeo, sphereGeo, fragGeo, bottleGeo, flaskGeo].forEach((g) => g.dispose());
     },
   };

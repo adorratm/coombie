@@ -72,3 +72,74 @@ export function zombieHpMul(wave: number): number {
 export function hordeSpeedMul(wave: number): number {
   return 1.15 + Math.min(0.15, Math.max(0, wave) * 0.005);
 }
+
+/*
+ * ───────── late game ─────────
+ * Heroes keep stacking levels, evolutions and items, so after the opening ~12 minutes
+ * zombies grow on two tracks: a fixed curve by run time, and an adaptive tuner that
+ * notices when the heroes clear the field faster than it fills.
+ */
+
+/** extra zombie health by run minute (1 until minute 12) */
+export function lateHpMul(min: number): number {
+  const a = Math.max(0, min - 12);
+  const b = Math.max(0, min - 30);
+  return 1 + a * 0.045 + b * b * 0.0012;
+}
+
+/** extra zombie damage by run minute (1 until minute 15) */
+export function lateDamageMul(min: number): number {
+  return 1 + Math.max(0, min - 15) * 0.03;
+}
+
+/** zombies get a little quicker late (capped at +30 %) */
+export function lateSpeedMul(min: number): number {
+  return 1 + Math.min(0.3, Math.max(0, min - 15) * 0.007);
+}
+
+export interface PressureSample {
+  simTime: number;
+  /** zombies alive now */
+  alive: number;
+  /** what the director wants alive */
+  target: number;
+  /** 0..1 hero health */
+  heroHp: number;
+}
+
+/**
+ * Adaptive late-game pressure. Every few seconds (after the opening) it checks how
+ * full the field is: if the heroes keep it mostly empty they are out-killing the
+ * spawns, so new zombies get tougher; if the field is packed and the hero is low,
+ * it eases off a little. Only health and damage of new spawns change.
+ */
+export class PressureTuner {
+  /** health multiplier for new spawns */
+  hpMul = 1;
+  /** damage multiplier for new spawns (grows slower than health) */
+  dmgMul = 1;
+  private acc = 0;
+  private fill = 0;
+  private samples = 0;
+  static readonly START_SECONDS = 600;
+  static readonly WINDOW = 10;
+  static readonly MAX = 12;
+
+  update(dt: number, s: PressureSample): void {
+    if (s.simTime < PressureTuner.START_SECONDS || s.target <= 0) return;
+    this.acc += dt;
+    this.fill += Math.min(1.5, s.alive / s.target);
+    this.samples++;
+    if (this.acc < PressureTuner.WINDOW) return;
+    const fill = this.fill / Math.max(1, this.samples);
+    this.acc = 0;
+    this.fill = 0;
+    this.samples = 0;
+    let k = 1;
+    if (fill < 0.45) k = 1.14;
+    else if (fill < 0.7) k = 1.06;
+    else if (fill > 0.95 && s.heroHp < 0.35) k = 0.92;
+    this.hpMul = Math.max(1, Math.min(PressureTuner.MAX, this.hpMul * k));
+    this.dmgMul = Math.pow(this.hpMul, 0.35);
+  }
+}

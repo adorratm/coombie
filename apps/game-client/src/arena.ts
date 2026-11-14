@@ -22,6 +22,8 @@ import { rosterById } from './roster';
 import { currentRunLoadout, type AbilitySlot, type RunLoadout } from './loadout';
 import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
 import { BOSS_VARIANT_IDS, BOSS_VARIANTS, pickBossVariant, type BossVariant, type BossVariantDef } from './bossVariants';
+import { giantBossCap, giantBossInterval, pickGiantBoss, rollSpawnType, TIER_XP, ZOMBIE_TYPES, zombieTypeIndex, type ZombieTypeDef } from './zombieTypes';
+import { resetTraitQueue, tickTraitQueue, tickZombieTraits, traitDamageMul, typeOf, zombieTraitDeath } from './zombieTraits';
 import { MELEE_STYLES, meleeStyleOf } from './meleeStyles';
 import { WEAPONS as ALL_WEAPONS, weaponByVariant, weaponIndexOfVariant, weaponVariantId, type WeaponFxDef } from './weapons';
 import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
@@ -40,6 +42,10 @@ import {
   earlyDamageMul,
   isHordeWave,
   zombieHpMul,
+  lateHpMul,
+  lateDamageMul,
+  lateSpeedMul,
+  PressureTuner,
   spawnRate,
   waveBudget,
 } from './spawnDirector';
@@ -201,6 +207,10 @@ export interface ArenaHudState {
   pausedForUpgrade: boolean;
   /** Player Esc pause (sim frozen; not upgrade draft). */
   paused: boolean;
+  /** co-op: seconds left on the shared 3-2-1 resume countdown (0 = none) */
+  pauseCountdown: number;
+  /** co-op: who paused the shared game */
+  pausedBy: string;
   choices: UpgradeCardDef[];
   unlockedWeapons: Array<{ id: WeaponId; label: string }>;
   modsSummary: string[];
@@ -533,6 +543,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   });
   let netZombieSeq = 0;
   let lastBossVariant: BossVariant | null = null;
+  /** late game: keeps zombies a match for the heroes' growing power */
+  const pressure = new PressureTuner();
+  let giantT = 0;
+  let lastGiant: string | null = null;
   /** a horde wave is draining its budget: faster zombies, all from one side */
   let hordeActive = false;
   let hordeAngle = 0;
@@ -576,6 +590,43 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     missionRuntime.banner = `☠ ${def.name.toLocaleUpperCase('tr')} — ${def.intro}`;
     missionRuntime.bannerUntil = simTime + 4;
   };
+  /** Stats, size, ground marker and (first sighting / boss) banner of a zombie type. */
+  const seenTypes = new Set<string>();
+  const applyZombieType = (z: ZombieVisual, def: ZombieTypeDef): void => {
+    z.maxHp = Math.ceil(z.maxHp * def.hpMul);
+    z.hp = z.maxHp;
+    z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * def.dmgMul));
+    z.speed *= def.speedMul;
+    applyTypeLook(z, def);
+    if (def.tier === 'boss') {
+      missionRuntime.banner = `☠ ${def.name.toLocaleUpperCase('tr')} — ${def.intro}`;
+      missionRuntime.bannerUntil = simTime + 4.5;
+      shake = Math.max(shake, 0.5);
+      audio.playAbility();
+    } else if (!seenTypes.has(def.id)) {
+      seenTypes.add(def.id);
+      missionRuntime.banner = `${def.tier === 'elite' ? '◆ ELİT' : '◇ YENİ TÜR'}: ${def.name.toLocaleUpperCase('tr')} — ${def.intro}`;
+      missionRuntime.bannerUntil = simTime + 3.2;
+    }
+  };
+  /** Size + coloured ground marker (shared with co-op replicas). */
+  const typeRingGeo = new THREE.RingGeometry(0.82, 1, 40);
+  const typeAuraMats = new Map<number, THREE.MeshBasicMaterial>();
+  const applyTypeLook = (z: ZombieVisual, def: ZombieTypeDef): void => {
+    z.root.userData.ztype = def.id;
+    z.root.scale.multiplyScalar(def.scaleMul);
+    let mat = typeAuraMats.get(def.color);
+    if (!mat) {
+      mat = new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+      typeAuraMats.set(def.color, mat);
+    }
+    const ring = new THREE.Mesh(typeRingGeo, mat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.06;
+    ring.scale.setScalar(def.tier === 'boss' ? 2 : def.tier === 'elite' ? 1.25 : 0.75);
+    ring.name = 'bossAura';
+    z.root.add(ring);
+  };
   /** Size and ground aura of a boss variant (also used for co-op replicas). */
   const applyBossLook = (z: ZombieVisual, def: BossVariantDef): void => {
     z.root.userData.bossVariant = def.id;
@@ -593,22 +644,29 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     kind: ZombieVisual['kind'] = 'grunt',
     nearPlayer = true,
     at?: { x: number; z: number; emerge?: boolean },
+    typeDef?: ZombieTypeDef | null,
   ) => {
     if (isGuest) return null; // guests only draw what the host spawned
-    if (zombies.length >= MAX_ZOMBIES && kind !== 'boss') return null;
+    const runMin = simTime / 60;
+    // ordinary director spawns may roll a special / elite type (later in the run)
+    let def = typeDef ?? null;
+    if (typeDef === undefined && !at && kind !== 'boss' && kind !== 'hooker') def = rollSpawnType(runMin);
+    if (def) kind = def.base;
+    if (zombies.length >= MAX_ZOMBIES && kind !== 'boss' && def?.tier !== 'boss') return null;
     const z = createZombie(kind);
     z.root.userData.netId = ++netZombieSeq;
     z.proxy.visible = true;
-    const waveMul = zombieHpMul(wave);
+    const waveMul = zombieHpMul(wave) * lateHpMul(runMin) * pressure.hpMul;
     z.maxHp = Math.ceil(z.maxHp * waveMul * diff.hp);
     z.hp = z.maxHp;
-    z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg * earlyDamageMul(simTime)));
-    z.speed *= diff.speed;
-    if (kind === 'boss') applyBossVariant(z);
+    z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg * earlyDamageMul(simTime) * lateDamageMul(runMin) * pressure.dmgMul));
+    z.speed *= diff.speed * lateSpeedMul(runMin);
+    if (def) applyZombieType(z, def);
+    else if (kind === 'boss') applyBossVariant(z);
     if (hordeActive && kind !== 'boss' && !at) z.speed *= hordeSpeedMul(wave);
     z.baseSpeed = z.speed;
     // later waves are worth more XP so long runs can climb toward the Lv 200 cap
-    z.xpValue = Math.max(1, Math.round(z.xpValue * (1 + (wave - 1) * 0.08)));
+    z.xpValue = Math.max(1, Math.round(z.xpValue * (1 + (wave - 1) * 0.08) * (def ? TIER_XP[def.tier] : 1)));
     z.healthBar.setRatio(1);
 
     const ang = Math.random() * Math.PI * 2;
@@ -633,7 +691,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     healthBars.push(z.healthBar);
     // some of the horde claws its way out of the ground
     if (kind === 'riot') addRiotShield(z);
-    const emerge = kind !== 'hooker' && (at?.emerge ?? (z.kind !== 'boss' && z.kind !== 'crawler' && Math.random() < 0.35));
+    const emerge = kind !== 'hooker' && def?.tier !== 'boss' && (at?.emerge ?? (z.kind !== 'boss' && z.kind !== 'crawler' && Math.random() < 0.35));
     if (emerge) {
       z.root.userData.spawnUntil = simTime + 2.1;
       queueZombieAnim(z, { kind: 'spawn', dur: 2.1 });
@@ -650,6 +708,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   for (const k of (new URLSearchParams(location.search).get('zk') ?? '').split(',').filter(Boolean)) {
     const a = Math.random() * Math.PI * 2;
     spawnZombie(k as ZombieVisual['kind'], true, { x: player.root.position.x + Math.cos(a) * 9, z: player.root.position.z + Math.sin(a) * 9, emerge: false });
+  }
+  // dev: ?zt=dev,saman spawns those zombie types near the player
+  for (const id of (new URLSearchParams(location.search).get('zt') ?? '').split(',').filter(Boolean)) {
+    const def = ZOMBIE_TYPES.find((d) => d.id === id);
+    if (!def) continue;
+    const a = Math.random() * Math.PI * 2;
+    spawnZombie(def.base, true, { x: player.root.position.x + Math.cos(a) * 10, z: player.root.position.z + Math.sin(a) * 10, emerge: false }, def);
   }
   // opening pressure stays low; the director below ramps it up over the first minutes
   for (let i = 0; i < initialSpawnCount(diff.count); i++) {
@@ -977,6 +1042,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (z.kind === 'bloater') bloaterExplode(z, zombieCtx, 0.8);
     z.root.getObjectByName('bossAura')?.removeFromParent();
     zombieDeathEffects(z, zombieCtx);
+    zombieTraitDeath(z, zombieCtx);
+    if (typeOf(z)?.tier === 'boss') shake = Math.max(shake, 0.7);
     z.hurtFlash = 0.001;
     updateZombieHurtFlash(z, 1);
     if (!spawnZombieCorpse(z, scene, corpses)) disposeZombieVrm(z);
@@ -1026,6 +1093,12 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         dmg *= 0.2;
         skillFx.sparks(hitPos, 4, 0xfff0c0, 3);
       }
+    }
+    // type traits: armour plating, phasing
+    const tm = traitDamageMul(z, zombieCtx.nowSec);
+    if (tm < 1) {
+      dmg *= tm;
+      if (Math.random() < 0.3) skillFx.sparks(hitPos, 3, tm === 0 ? 0xe8e8ff : 0xfff0c0, 3);
     }
     z.hp -= dmg;
     z.healthBar.setRatio(z.hp / z.maxHp);
@@ -1618,6 +1691,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         z.root.userData.netId = nz.id;
         const variant = BOSS_VARIANT_IDS[(nz.flags >> 3) - 1];
         if (variant) applyBossLook(z, BOSS_VARIANTS[variant]);
+        const ztype = ZOMBIE_TYPES[((nz.flags >> 6) & 63) - 1];
+        if (ztype) applyTypeLook(z, ztype);
         z.root.position.set(nz.x, 0, nz.z);
         scene.add(z.root);
         zombies.push(z);
@@ -1688,7 +1763,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           z: z.root.position.z,
           yaw: z.root.rotation.y,
           hp: z.hp / Math.max(1, z.maxHp),
-          flags: (z.attackAnim > 0 ? 1 : 0) | ((BOSS_VARIANT_IDS.indexOf(z.root.userData.bossVariant as BossVariant) + 1) << 3),
+          flags:
+            (z.attackAnim > 0 ? 1 : 0) |
+            ((BOSS_VARIANT_IDS.indexOf(z.root.userData.bossVariant as BossVariant) + 1) << 3) |
+            ((zombieTypeIndex(z.root.userData.ztype as string | undefined) + 1) << 6),
         })),
       obj: netObjectiveOut(),
     }));
@@ -1714,6 +1792,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   if (net) {
     net.handlers = {
       onEvent: (ev) => {
+        if (ev.k === 'pause') {
+          const by = String(ev.by ?? '').slice(0, 24);
+          applyNetPause(!!ev.on, by);
+          // the host relays a guest's pause to everyone else
+          if (isHost) net.send({ k: 'pause', on: !!ev.on, by });
+          return;
+        }
         if (isHost) {
           // a guest's ability damage: apply it as-is to the zombies it names
           if (ev.k !== 'hit' || !Array.isArray(ev.h)) return;
@@ -1933,8 +2018,34 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
 
   let userPaused = false;
+  /** co-op pause is shared: everyone freezes, resuming counts 3-2-1 for everyone */
+  const netPause = { on: false, by: '', resumeAt: 0 };
+  const NET_RESUME_COUNTDOWN = 3;
+  const wallSec = () => performance.now() / 1000;
+  const applyNetPause = (on: boolean, by: string) => {
+    if (on) {
+      netPause.on = true;
+      netPause.resumeAt = 0;
+      netPause.by = by;
+    } else if (netPause.on && !netPause.resumeAt) {
+      netPause.resumeAt = wallSec() + NET_RESUME_COUNTDOWN;
+      netPause.by = by;
+    }
+  };
+  const requestNetPause = (on: boolean) => {
+    if (!net) return;
+    const by = String(hero.name).slice(0, 24);
+    if (isHost) {
+      applyNetPause(on, by);
+      net.send({ k: 'pause', on, by });
+    } else net.send({ k: 'pause', on, by });
+  };
 
   const setPaused = (paused: boolean) => {
+    if (netPlay) {
+      if (paused !== (netPause.on && !netPause.resumeAt)) requestNetPause(paused);
+      return;
+    }
     if (!player.alive) {
       userPaused = false;
       return;
@@ -1947,12 +2058,18 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
 
   const togglePause = (): boolean => {
+    if (netPlay) {
+      // during the countdown Esc does nothing; otherwise flip the shared pause
+      if (netPause.resumeAt) return true;
+      requestNetPause(!netPause.on);
+      return !netPause.on;
+    }
     setPaused(!userPaused);
     return userPaused;
   };
 
   const handleHotkeys = () => {
-    if (userPaused) return;
+    if (userPaused || (netPlay && netPause.on)) return;
 
     const upgrading = progress.pendingPicks > 0 && progress.choices.length > 0;
 
@@ -2136,7 +2253,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       combo,
       alive: player.alive,
       pausedForUpgrade: progress.pendingPicks > 0,
-      paused: userPaused && progress.pendingPicks <= 0 && player.alive,
+      paused: netPlay ? netPause.on && !netPause.resumeAt : userPaused && progress.pendingPicks <= 0 && player.alive,
+      pauseCountdown: netPause.on && netPause.resumeAt ? Math.max(0, netPause.resumeAt - wallSec()) : 0,
+      pausedBy: netPause.on ? netPause.by : '',
       choices: [...progress.choices],
       unlockedWeapons: listUnlockedWeaponDefs(progress).map((w) => ({ id: w.id, label: weaponUnlockLabel(w.id) })),
       modsSummary: [
@@ -2411,7 +2530,11 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     // the shield lasts a few seconds per pick — sitting on an unspent upgrade is not god mode
     upgradeShieldT = netPlay && upgrading ? upgradeShieldT + rawDt : 0;
     if (netPlay && upgrading && upgradeShieldT < UPGRADE_SHIELD_SECONDS) player.invuln = Math.max(player.invuln, 0.3);
-    const frozen = (!netPlay && (upgrading || userPaused)) || !!runOver;
+    if (netPause.on && netPause.resumeAt && wallSec() >= netPause.resumeAt) {
+      netPause.on = false;
+      netPause.resumeAt = 0;
+    }
+    const frozen = (!netPlay && (upgrading || userPaused)) || (netPlay && netPause.on) || !!runOver;
     const dt = frozen ? 0 : rawDt;
     if (!frozen) simTime += dt;
     const t = simTime;
@@ -2509,6 +2632,21 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (hordeActive && spawnBudget <= 0) hordeActive = false;
     const aliveTarget = Math.min(MAX_ZOMBIES, directorAliveTarget(simTime, wave, diff.count, modeRt.spawnMul));
     spawnAcc = Math.min(3, spawnAcc + dt * spawnRate(simTime, wave, hordeActive));
+    if (!isGuest && dt > 0) {
+      const runMin = simTime / 60;
+      pressure.update(dt, { simTime, alive: zombies.length, target: aliveTarget, heroHp: player.alive ? player.hp / Math.max(1, player.maxHp) : 0 });
+      // giant bosses on their own clock (they are the 10 new ones; classic bosses still come with waves)
+      giantT += dt;
+      if (giantT >= giantBossInterval(runMin)) {
+        const alive = zombies.filter((z) => z.hp > 0 && typeOf(z)?.tier === 'boss').length;
+        const def = alive < giantBossCap(runMin) ? pickGiantBoss(runMin, lastGiant) : null;
+        if (def) {
+          giantT = 0;
+          lastGiant = def.id;
+          spawnZombie(def.base, true, undefined, def);
+        } else giantT -= 20;
+      }
+    }
     if (!modeRt.ownsSpawning && spawnBudget > 0 && spawnAcc >= 1 && zombies.length < Math.min(MAX_ZOMBIES, aliveTarget + aliveSlack(wave, hordeActive))) {
       spawnAcc -= 1;
       spawnBudget -= 1;
@@ -2711,6 +2849,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     for (const op of squad) tickOperativeSlow(op, nowSec);
 
     if (isGuest) applyNetWorld(dt, t);
+    if (!isGuest && dt > 0) tickTraitQueue(nowSec);
     const statusKills: ZombieVisual[] = [];
     for (const z of zombies) {
       if (z.hp <= 0 || isGuest) continue;
@@ -2751,6 +2890,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
 
       tickZombiePassive(z, dt, bestD, zombieCtx);
+      if (dt > 0 && z.root.userData.ztype) tickZombieTraits(z, dt, zombieCtx);
       tmp.copy(targetOp.root.position).sub(z.root.position);
       tmp.y = 0;
       let dist = tmp.length();
@@ -3079,6 +3219,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       document.removeEventListener('fullscreenchange', onFsChange);
       for (const z of zombies) disposeZombieVrm(z);
       zombies.length = 0;
+      resetTraitQueue();
       unmountTouch?.();
       input.dispose();
       audio.dispose();

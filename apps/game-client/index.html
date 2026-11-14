@@ -1003,6 +1003,28 @@
         body.touch #bottomHud { width: min(260px, calc(100vw - 2 * (max(10px, env(safe-area-inset-right)) + 116px))); }
         #weaponBox { padding: 2px 8px !important; }
       }
+      #resumeCount {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        pointer-events: none;
+        background: rgba(6, 8, 10, 0.35);
+      }
+      #resumeCount.on { display: flex; }
+      #resumeCount b {
+        font: 800 clamp(64px, 18vmin, 150px) / 1 Rajdhani, system-ui, sans-serif;
+        color: #3dff9a;
+        text-shadow: 0 0 30px rgba(61, 255, 154, 0.45), 0 4px 0 #000;
+        animation: rcPop 1s ease-out infinite;
+      }
+      #resumeCount span { font: 700 16px Rajdhani, system-ui, sans-serif; letter-spacing: 0.2em; color: #d8e4dc; text-transform: uppercase; }
+      @keyframes rcPop { 0% { transform: scale(1.4); opacity: 0.4; } 25% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.92); opacity: 0.9; } }
+      #pauseBy:empty { display: none; }
     </style>
   </head>
   <body>
@@ -1064,10 +1086,12 @@
     <div id="lowHp"></div>
     <div id="downed"><div class="box">YERE SERİLDİN</div></div>
 
+    <div id="resumeCount"><b></b><span>Oyun devam ediyor…</span></div>
     <div id="pause">
       <div class="panel">
         <h2>DURAKLATILDI</h2>
         <p class="sub">Esc ile devam</p>
+        <p id="pauseBy" class="sub"></p>
         <div id="pauseBuses"></div>
         <div id="pauseActions">
           <button id="btnResume" class="primary" type="button">DEVAM</button>

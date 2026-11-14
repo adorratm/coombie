@@ -4,6 +4,7 @@ import type { OperativeId } from './roster';
 import { applyStatus } from './statusEffects';
 import type { SkillFx } from './skillFx';
 import { SupportCalls, type SupportKind } from './support';
+import { buildSentryTurret, kickBarrel, settleBarrel, turretWarmObjects, type TurretModel } from './turretModels';
 
 /**
  * YAZS-style run skills: auto-firing abilities picked on level-up (max 6), each with
@@ -89,7 +90,7 @@ export const RUN_SKILLS: Record<RunSkillId, RunSkillDef> = {
   gravity: S({ id: 'gravity', name: 'Yem Bombası', icon: '📟', color: 0xc0504a, desc: 'Ses ve feromonla zombileri toplayıp patlayan cihaz.', levels: ['2.5 sn çekim', '+%30 hasar', '+%20 alan', '+süre', '+%40 patlama'], evo: { passive: 'duration', name: 'Feromon Bombası', desc: 'Çok geniş çekim, iki kat patlama.' } }),
   knives: S({ id: 'knives', name: 'Bıçak Fırtınası', icon: '✦', color: 0xe5e7eb, desc: 'Her yöne fırlatılan bıçaklar.', levels: ['5 bıçak', '+%30 hasar', '+2 bıçak', '+1 delme', '+2 bıçak'], evo: { passive: 'cooldown', name: 'Bıçak Kasırgası', desc: 'Sarmal 16 bıçak, 3 delme, çok sık.' } }),
   airstrike: S({ id: 'airstrike', heroes: ['ironclad'], name: 'Hava Desteği (F-16)', icon: '✈', color: 0xd9a066, desc: 'Telsizle F-16 çağırır: işaretli hatta bomba yağdırır.', levels: ['6 bomba', '+%30 hasar, +1 bomba', '+2 m hat', '+%30 hasar, +1 bomba', '−bekleme, +1 bomba'], evo: { passive: 'amount', name: 'Halı Bombardımanı', desc: 'İki jet yan yana geçer.' } }),
-  gunship: S({ id: 'gunship', heroes: ['warden'], name: 'Taarruz Helikopteri', icon: '🚁', color: 0xb8c4a0, desc: 'Telsizle helikopter çağırır: işaretli şeridi makineliyle tarar.', levels: ['22 m şerit', '+%30 hasar', '+2 m şerit', '+%30 hasar', '−bekleme'], evo: { passive: 'duration', name: 'Kirve Geliyor', desc: 'Daha uzun tarama, roket atışı da yapar.' } }),
+  gunship: S({ id: 'gunship', heroes: ['warden'], name: 'Taarruz Helikopteri', icon: '🚁', color: 0xb8c4a0, desc: 'H: iki taarruz helikopteri işaretli şeridi tarar. Ayrıca belli aralıklarla kendiliğinden gelip en kalabalık zombi grubunu döver.', levels: ['22 m şerit', '+%30 hasar', '+2 m şerit', '+%30 hasar', '−bekleme'], evo: { passive: 'duration', name: 'Kirve Geliyor', desc: 'Daha uzun tarama, roket atışı da yapar.' } }),
   barrage: S({ id: 'barrage', heroes: ['havoc'], name: 'Topçu Bataryası', icon: '🎯', color: 0xd9a066, desc: 'Telsizle topçu ateşi ister: işaretli alana obüs yağar.', levels: ['11 mermi', '+%30 hasar, +2 mermi', '+alan, +2 mermi', '+%30 hasar', '−bekleme, +2 mermi'], evo: { passive: 'area', name: 'Yoğun Baraj', desc: '+10 mermi.' } }),
   siha: S({ id: 'siha', heroes: ['ghost'], name: 'SİHA Desteği', icon: '🛩', color: 0xcfd8e0, desc: 'Silahlı insansız uçak en güçlü zombileri tek tek vurur.', levels: ['2 hedef', '+%35 hasar', '+1 hedef', '+%35 hasar', '+1 hedef'], evo: { passive: 'velocity', name: 'Sürü Taarruzu', desc: '+3 hedef.' } }),
   supplyDrop: S({ id: 'supplyDrop', heroes: ['valkyrie'], name: 'İkmal Paraşütü', icon: '🪂', color: 0x9ab07a, desc: 'Nakliye uçağı paraşütle ikmal sandığı atar (can + güçlendirme).', levels: ['1 sandık', '−bekleme', '−bekleme', '−bekleme', '−bekleme'], evo: { passive: 'cooldown', name: 'Çift Sandık', desc: 'Her seferinde 2 sandık.' } }),
@@ -109,6 +110,55 @@ const SUPPORT_SKILLS: Array<[RunSkillId, SupportKind, number]> = [
   ['dolmus', 'dolmus', 20],
   ['trafo', 'trafo', 22],
 ];
+
+/** Seconds between automatic gunship sorties. */
+export function autoHeliInterval(lv: number, evo: boolean): number {
+  return Math.max(12, 30 - 3 * (lv - 1)) * (evo ? 0.75 : 1);
+}
+
+/**
+ * Centre of the biggest crowd within `range` of `from`: for each candidate, count
+ * neighbours within `radius`; the winner's neighbourhood centroid is the aim point.
+ */
+export function densestCrowd(
+  zombies: readonly { hp: number; root: { position: { x: number; z: number } } }[],
+  from: { x: number; z: number },
+  range: number,
+  radius: number,
+): { at: THREE.Vector3; count: number } | null {
+  const cand: { x: number; z: number }[] = [];
+  for (const z of zombies) {
+    if (z.hp <= 0) continue;
+    const dx = z.root.position.x - from.x;
+    const dz = z.root.position.z - from.z;
+    if (dx * dx + dz * dz <= range * range) cand.push(z.root.position);
+    if (cand.length >= 140) break;
+  }
+  if (!cand.length) return null;
+  const r2 = radius * radius;
+  let best = -1;
+  let bx = 0;
+  let bz = 0;
+  for (const c of cand) {
+    let n = 0;
+    let sx = 0;
+    let sz = 0;
+    for (const o of cand) {
+      const dx = o.x - c.x;
+      const dz = o.z - c.z;
+      if (dx * dx + dz * dz > r2) continue;
+      n++;
+      sx += o.x;
+      sz += o.z;
+    }
+    if (n > best) {
+      best = n;
+      bx = sx / n;
+      bz = sz / n;
+    }
+  }
+  return { at: new THREE.Vector3(bx, 0, bz), count: best };
+}
 
 export const PASSIVES: Record<PassiveId, PassiveDef> = {
   core: { id: 'core', name: 'Güç Çekirdeği', icon: '◆', desc: 'Yetenek hasarı +%12.' },
@@ -317,6 +367,7 @@ interface Drone {
 interface Turret {
   mesh: THREE.Group;
   head: THREE.Object3D;
+  model: TurretModel;
   life: number;
   cd: number;
   rcd: number;
@@ -375,6 +426,8 @@ export class RunSkillRuntime {
 
   private readonly support: SupportCalls;
   private supportCd = 0;
+  /** gunship: seconds until the helicopters sweep the densest crowd on their own */
+  private autoHeliCd = 12;
   private supportMax = 1;
 
   constructor(ctx: RunSkillCtx) {
@@ -578,6 +631,21 @@ export class RunSkillRuntime {
     return 'ok';
   }
 
+  /** Gunship: every so often the pair hovers over the densest crowd near the hero. */
+  private tickAutoHeli(dt: number): void {
+    this.autoHeliCd -= dt;
+    if (this.autoHeliCd > 0) return;
+    const c = densestCrowd(this.ctx.zombies, this.ctx.player.root.position, 22, 5);
+    if (!c || c.count < 4) {
+      this.autoHeliCd = 2;
+      return;
+    }
+    const lv = this.lv('gunship');
+    const evo = this.evo('gunship');
+    this.support.heliHover(c.at, lv, evo, this.branchDmg('gunship'));
+    this.autoHeliCd = autoHeliInterval(lv, evo) * this.branchCd('gunship');
+  }
+
   /** Zombie with the most neighbours (cluster) within range. */
   private clusterTarget(range: number): THREE.Vector3 | null {
     const p = this.ctx.player.root.position;
@@ -627,6 +695,7 @@ export class RunSkillRuntime {
       if (st.skills.has('tesla')) this.tickTesla(dt);
     }
     this.supportCd = Math.max(0, this.supportCd - dt);
+    if (alive && st.skills.has('gunship')) this.tickAutoHeli(dt);
     this.support.update(dt);
     this.tickSaws(dt, alive && st.skills.has('saws'));
     this.tickAura(dt, alive && st.skills.has('fireAura'));
@@ -774,35 +843,16 @@ export class RunSkillRuntime {
     const evo = this.evo('turret');
     const n = evo ? 2 : 1;
     for (let i = 0; i < n; i++) {
-      const g = new THREE.Group();
-      for (let k = 0; k < 3; k++) {
-        const leg = new THREE.Mesh(this.g.cyl!, this.m.dark!);
-        leg.scale.set(0.03, 0.75, 0.03);
-        const a = (k / 3) * Math.PI * 2;
-        leg.position.set(Math.cos(a) * 0.22, 0.32, Math.sin(a) * 0.22);
-        leg.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
-        g.add(leg);
-      }
-      const head = new THREE.Group();
-      head.position.y = 0.78;
-      const body = new THREE.Mesh(this.g.box!, this.m.olive!);
-      body.scale.set(0.34, 0.24, 0.46);
-      const barrel = new THREE.Mesh(this.g.cyl!, this.m.dark!);
-      barrel.scale.set(0.04, 0.55, 0.04);
-      barrel.rotation.x = Math.PI / 2;
-      barrel.position.set(0, 0.02, 0.45);
-      const eye = new THREE.Mesh(this.g.box!, this.m.cyan!);
-      eye.scale.set(0.14, 0.04, 0.02);
-      eye.position.set(0, 0.06, 0.235);
-      head.add(body, barrel, eye);
-      g.add(head);
+      const model = buildSentryTurret({ rockets: evo });
+      const g = model.group;
+      const head = model.head;
       const p = this.ctx.player.root.position;
       g.position.set(p.x + (i === 0 ? 1.2 : -1.2), 0, p.z + 0.6);
       g.scale.setScalar(1.3);
       this.ctx.scene.add(g);
       this.ctx.fx.shockRing(g.position, 1.4, 0x22d3ee, 0.4);
       const L = this.lv('turret');
-      this.turrets.push({ mesh: g, head, life: (8 + (L >= 3 ? 3 : 0)) * this.durMul() * (evo ? 1.5 : 1), cd: 0, rcd: 1.5 });
+      this.turrets.push({ mesh: g, head, model, life: (8 + (L >= 3 ? 3 : 0)) * this.durMul() * (evo ? 1.5 : 1), cd: 0, rcd: 1.5 });
     }
   }
 
@@ -1176,10 +1226,13 @@ export class RunSkillRuntime {
       const tgt = this.nearest(t.mesh.position, 15);
       if (!tgt) continue;
       const want = Math.atan2(tgt.root.position.x - t.mesh.position.x, tgt.root.position.z - t.mesh.position.z);
-      t.head.rotation.y = want;
+      const delta = Math.atan2(Math.sin(want - t.head.rotation.y), Math.cos(want - t.head.rotation.y));
+      t.head.rotation.y += delta * (1 - Math.exp(-16 * dt));
+      settleBarrel(t.model, dt);
       if (t.cd <= 0) {
         t.cd = rate;
-        _a.set(Math.sin(want) * 0.9, 1.05, Math.cos(want) * 0.9).add(t.mesh.position);
+        t.model.muzzle.getWorldPosition(_a);
+        kickBarrel(t.model);
         const to = tgt.root.position.clone().setY(1.1);
         this.ctx.fx.tracer(_a, to);
         this.ctx.fx.emit('flash', _a.x, _a.y, _a.z, { life: 0.06, s0: 0.6, s1: 0.9, color: 0xffd27a });
@@ -1448,7 +1501,7 @@ export class RunSkillRuntime {
 
   /** Support-vehicle meshes for the loading-screen shader warm-up. */
   warmObjects(): THREE.Object3D[] {
-    return this.support.warmObjects();
+    return [...this.support.warmObjects(), ...turretWarmObjects()];
   }
 
   /** HUD summary */

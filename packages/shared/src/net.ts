@@ -119,6 +119,8 @@ export type NetEvent =
   /** host → all: xp for a kill, shared */
   | { k: 'xp'; amount: number; x: number; z: number }
   | { k: 'banner'; text: string; dur: number }
+  /** co-op pause: guest → host asks, host → all applies. `on: false` starts the 3-2-1 resume countdown */
+  | { k: 'pause'; on: boolean; by: string }
   /** guest → host: hero ability cast */
   | { k: 'cast'; slot: string; x: number; z: number; yaw: number }
   /** guest → host: ability / skill damage the guest dealt — flat [zombieId, amount, …] */

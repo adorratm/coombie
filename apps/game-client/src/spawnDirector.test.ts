@@ -68,3 +68,27 @@ describe('spawn field', () => {
     }
   });
 });
+
+describe('late game scaling', () => {
+  it('leaves the opening alone and grows after it', async () => {
+    const { lateHpMul, lateDamageMul, lateSpeedMul } = await import('./spawnDirector');
+    expect(lateHpMul(10)).toBe(1);
+    expect(lateDamageMul(10)).toBe(1);
+    expect(lateHpMul(60)).toBeGreaterThan(lateHpMul(30));
+    expect(lateHpMul(60)).toBeGreaterThan(3);
+    expect(lateSpeedMul(200)).toBeCloseTo(1.3);
+  });
+
+  it('pressure tuner toughens zombies when the field stays empty', async () => {
+    const { PressureTuner } = await import('./spawnDirector');
+    const p = new PressureTuner();
+    for (let i = 0; i < 600; i++) p.update(0.1, { simTime: 300 + i * 0.1, alive: 2, target: 40, heroHp: 1 });
+    expect(p.hpMul).toBe(1); // still in the opening
+    for (let i = 0; i < 3000; i++) p.update(0.1, { simTime: 700 + i * 0.1, alive: 4, target: 40, heroHp: 1 });
+    expect(p.hpMul).toBeGreaterThan(3);
+    expect(p.dmgMul).toBeLessThan(p.hpMul);
+    const before = p.hpMul;
+    for (let i = 0; i < 300; i++) p.update(0.1, { simTime: 1100 + i * 0.1, alive: 40, target: 40, heroHp: 0.2 });
+    expect(p.hpMul).toBeLessThan(before);
+  });
+});

@@ -32,6 +32,8 @@ const emptyHud: ArenaHudState = {
   heroAbilities: [],
   weaponSlots: [],
   paused: false,
+  pauseCountdown: 0,
+  pausedBy: '',
   weapon: 'Assault Rifle',
   weaponId: 'rifle',
   className: 'Assaulter',

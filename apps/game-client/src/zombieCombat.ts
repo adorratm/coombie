@@ -446,7 +446,7 @@ export class ZombieHazards {
   }
 }
 
-function slowOperative(op: OperativeVisual, mul: number, until: number): void {
+export function slowOperative(op: OperativeVisual, mul: number, until: number): void {
   const base = (op.root.userData.baseMoveSpeed as number | undefined) ?? op.moveSpeed;
   op.root.userData.baseMoveSpeed = base;
   op.moveSpeed = Math.min(op.moveSpeed, base * mul);
@@ -534,14 +534,14 @@ export interface ZombieCombatCtx {
 
 const _v = new THREE.Vector3();
 
-function knock(op: OperativeVisual, from: THREE.Vector3, dist: number, ctx: ZombieCombatCtx): void {
+export function knock(op: OperativeVisual, from: THREE.Vector3, dist: number, ctx: ZombieCombatCtx): void {
   _v.copy(op.root.position).sub(from).setY(0);
   if (_v.lengthSq() < 1e-4) _v.set(1, 0, 0);
   _v.normalize().multiplyScalar(dist);
   ctx.move(op.root, _v.x, _v.z, 0.55);
 }
 
-function stun(op: OperativeVisual, until: number): void {
+export function stun(op: OperativeVisual, until: number): void {
   op.root.userData.stunUntil = Math.max((op.root.userData.stunUntil as number | undefined) ?? 0, until);
 }
 
