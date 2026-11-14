@@ -93,7 +93,7 @@ export const WEAPONS: WeaponDef[] = [
   {
     id: 'rifle',
     variant: 'rifle', tier: 1, cost: 0, desc: 'Dengeli otomatik tüfek.', look: { body: 'rifle', mag: 'curved', scope: 'dot', stock: 'fixed', finish: 0x1c2228, trim: 0x2b3138 }, fx: { flash: 0xffd27a, flashScale: 1, tracer: 1, impact: 'flesh' },
-    name: 'Assault Rifle',
+    name: 'Piyade Tüfeği',
     sfx: 'rifle',
     grip: 'rifle',
     fireRate: 0.11,
@@ -110,7 +110,7 @@ export const WEAPONS: WeaponDef[] = [
   {
     id: 'smg',
     variant: 'smg', tier: 1, cost: 0, desc: 'Hızlı, kısa menzil.', look: { body: 'smg', mag: 'straight', stock: 'folding', finish: 0x22262b, trim: 0x111417 }, fx: { flash: 0xffc98a, flashScale: 0.7, tracer: 0.8, impact: 'flesh' },
-    name: 'SMG',
+    name: 'Makineli Tabanca',
     sfx: 'smg',
     grip: 'smg',
     fireRate: 0.06,
@@ -127,7 +127,7 @@ export const WEAPONS: WeaponDef[] = [
   {
     id: 'shotgun',
     variant: 'shotgun', tier: 1, cost: 0, desc: 'Yakın mesafe yıkım.', look: { body: 'shotgun', mag: 'tube', stock: 'fixed', finish: 0x1d2024, trim: 0x3a2a1e }, fx: { flash: 0xffb45e, flashScale: 1.5, tracer: 0.8, impact: 'heavy' },
-    name: 'Combat Shotgun',
+    name: 'Taktik Pompalı',
     sfx: 'shotgun',
     grip: 'rifle',
     fireRate: 0.55,
@@ -161,7 +161,7 @@ export const WEAPONS: WeaponDef[] = [
   {
     id: 'lmg',
     variant: 'lmg', tier: 2, cost: 600, desc: 'Uzun namlulu AK, ağır baskı ateşi.', look: { body: 'lmg', mag: 'box', scope: 'dot', stock: 'fixed', finish: 0x262a24, trim: 0x15170f }, fx: { flash: 0xffd06a, flashScale: 1.2, tracer: 1.1, impact: 'flesh' },
-    name: 'RPK Light MG',
+    name: 'RPK Hafif Makineli',
     sfx: 'lmg',
     grip: 'rifle',
     fireRate: 0.09,
@@ -178,7 +178,7 @@ export const WEAPONS: WeaponDef[] = [
   {
     id: 'pistol',
     variant: 'pistol', tier: 1, cost: 0, desc: 'Güvenilir yedek.', look: { body: 'pistol', mag: 'none', finish: 0x1b1e22, trim: 0x0f1113 }, fx: { flash: 0xffe0a0, flashScale: 0.6, tracer: 0.7, impact: 'flesh' },
-    name: 'Service Pistol',
+    name: 'Hizmet Tabancası',
     sfx: 'pistol',
     grip: 'pistol',
     fireRate: 0.18,
@@ -195,7 +195,7 @@ export const WEAPONS: WeaponDef[] = [
   {
     id: 'knife',
     variant: 'knife', tier: 1, cost: 0, desc: 'Sessiz ve hızlı.', look: { body: 'blade', finish: 0xb8c0c8, trim: 0x15181b }, fx: { flash: 0, flashScale: 0, tracer: 0, impact: 'flesh' },
-    name: 'Combat Knife',
+    name: 'Savaş Bıçağı',
     sfx: 'melee',
     grip: 'melee',
     fireRate: 0.38,
@@ -214,7 +214,7 @@ export const WEAPONS: WeaponDef[] = [
   {
     id: 'bat',
     variant: 'bat', tier: 1, cost: 150, desc: 'Geniş savuruş, geri itme.', look: { body: 'club', finish: 0x7a4a2a, trim: 0x15181b }, fx: { flash: 0, flashScale: 0, tracer: 0, impact: 'heavy' },
-    name: 'Riot Bat',
+    name: 'Beyzbol Sopası',
     sfx: 'melee',
     grip: 'melee',
     fireRate: 0.55,
@@ -233,7 +233,7 @@ export const WEAPONS: WeaponDef[] = [
   {
     id: 'axe',
     variant: 'axe', tier: 2, cost: 350, desc: 'Ağır, yüksek hasar.', look: { body: 'axe', finish: 0xc02a2a, trim: 0x4a3020 }, fx: { flash: 0, flashScale: 0, tracer: 0, impact: 'heavy' },
-    name: 'Fire Axe',
+    name: 'Yangın Baltası',
     sfx: 'melee',
     grip: 'melee',
     fireRate: 0.72,
@@ -277,7 +277,7 @@ WEAPONS.push(
     look: { body: 'smg', mag: 'drum', stock: 'fixed', finish: 0xdfe8ee, trim: 0x2b3a46, glow: 0x7fe0ff }, fx: { flash: 0xb8f0ff, flashScale: 0.7, tracer: 1, impact: 'cryo', statusChance: 0.35 } }),
   V({ id: 'smg', variant: 'bulldog_pdw', name: 'Bulldog PDW', sfx: 'smg', grip: 'smg', fireRate: 0.075, damage: 0.95, range: 19, spread: 0.04, pellets: 1, tracerColor: 0xffcc80, recoil: 0.07, auto: true, magSize: 50, reloadTime: 1.6, tier: 2, cost: 520, desc: 'Yüksek kapasiteli şarjör, delici mermi.',
     look: { body: 'smg', length: 1.05, mag: 'drum', scope: 'dot', stock: 'fixed', finish: 0x3b3a2e, trim: 0x1a1a14 }, fx: { flash: 0xffc070, flashScale: 0.8, tracer: 0.9, impact: 'flesh', pierce: 1 } }),
-  V({ id: 'smg', variant: 'toxin_smg', name: 'Plague Sprayer', sfx: 'smg', grip: 'smg', fireRate: 0.07, damage: 0.6, range: 15, spread: 0.07, pellets: 1, tracerColor: 0x9cff2e, recoil: 0.05, auto: true, magSize: 40, reloadTime: 1.4, tier: 3, cost: 680, desc: 'Zehirli mermi, zamanla hasar.',
+  V({ id: 'smg', variant: 'toxin_smg', name: 'Veba Püskürtücü', sfx: 'smg', grip: 'smg', fireRate: 0.07, damage: 0.6, range: 15, spread: 0.07, pellets: 1, tracerColor: 0x9cff2e, recoil: 0.05, auto: true, magSize: 40, reloadTime: 1.4, tier: 3, cost: 680, desc: 'Zehirli mermi, zamanla hasar.',
     look: { body: 'smg', mag: 'curved', stock: 'folding', finish: 0x2c3a22, trim: 0x101410, glow: 0x9cff2e }, fx: { flash: 0xb6ff5a, flashScale: 0.7, tracer: 0.9, impact: 'toxic', statusChance: 0.4 } }),
   // ——— Rifles (6) ———
   V({ id: 'rifle', variant: 'carbine_m4', name: 'H-17 Battle Rifle', sfx: 'rifle', grip: 'rifle', fireRate: 0.1, damage: 1.25, range: 30, spread: 0.018, pellets: 1, tracerColor: 0xffe08a, recoil: 0.11, auto: true, magSize: 30, reloadTime: 1.45, tier: 1, cost: 300, desc: 'Ağır kalibre muharebe tüfeği, isabetli.',
@@ -286,12 +286,12 @@ WEAPONS.push(
     look: { body: 'rifle', mag: 'curved', stock: 'wood', muzzle: 'brake', finish: 0x1d1f21, trim: 0x6a3a1c }, fx: { flash: 0xffb050, flashScale: 1.2, tracer: 1.1, impact: 'heavy' } }),
   V({ id: 'rifle', variant: 'bullpup_f2', name: 'Krinkov Carbine', sfx: 'rifle', grip: 'rifle', fireRate: 0.085, damage: 1.15, range: 29, spread: 0.02, pellets: 1, tracerColor: 0xfff0a0, recoil: 0.1, auto: true, magSize: 36, reloadTime: 1.6, tier: 2, cost: 520, desc: 'Katlanır dipçikli kısa AK, hızlı ateş.',
     look: { body: 'bullpup', mag: 'straight', scope: 'dot', finish: 0x4b4f36, trim: 0x15170f }, fx: { flash: 0xffe08a, flashScale: 0.9, tracer: 1, impact: 'flesh' } }),
-  V({ id: 'rifle', variant: 'dmr_burst', name: 'Marksman DMR', sfx: 'sniper', grip: 'rifle', fireRate: 0.26, damage: 2.8, range: 38, spread: 0.008, pellets: 1, tracerColor: 0xffffff, recoil: 0.2, auto: true, magSize: 20, reloadTime: 1.8, tier: 3, cost: 760, desc: 'Uzun namlu, delici atış.',
+  V({ id: 'rifle', variant: 'dmr_burst', name: 'Nişancı Tüfeği', sfx: 'sniper', grip: 'rifle', fireRate: 0.26, damage: 2.8, range: 38, spread: 0.008, pellets: 1, tracerColor: 0xffffff, recoil: 0.2, auto: true, magSize: 20, reloadTime: 1.8, tier: 3, cost: 760, desc: 'Uzun namlu, delici atış.',
     look: { body: 'rifle', length: 1.2, barrel: 1.3, mag: 'box', scope: 'long', stock: 'fixed', finish: 0x26292c, trim: 0x585e64 }, fx: { flash: 0xfff0c0, flashScale: 1, tracer: 1.4, impact: 'heavy', pierce: 1 } }),
   V({ id: 'rifle', variant: 'inferno_ar', name: 'Inferno AR', sfx: 'rifle', grip: 'rifle', fireRate: 0.11, damage: 1.2, range: 26, spread: 0.025, pellets: 1, tracerColor: 0xff7a2a, recoil: 0.12, auto: true, magSize: 30, reloadTime: 1.6, tier: 3, cost: 820, desc: 'Yanıcı mermi: tutuşturur.',
     look: { body: 'rifle', mag: 'curved', scope: 'dot', stock: 'fixed', muzzle: 'flash', finish: 0x2a1a14, trim: 0x111111, glow: 0xff6a1a }, fx: { flash: 0xff7a2a, flashScale: 1.2, tracer: 1.2, impact: 'incendiary', statusChance: 0.3 } }),
   // ——— Shotguns (4) ———
-  V({ id: 'shotgun', variant: 'double_barrel', name: 'Sawed-Off', sfx: 'shotgun', grip: 'rifle', fireRate: 0.32, damage: 1.4, range: 10, spread: 0.18, pellets: 9, tracerColor: 0xffaa66, recoil: 0.45, auto: true, magSize: 4, reloadTime: 1.6, tier: 1, cost: 260, desc: 'Kesik namlu pompalı, devasa saçma.',
+  V({ id: 'shotgun', variant: 'double_barrel', name: 'Kesik Namlu', sfx: 'shotgun', grip: 'rifle', fireRate: 0.32, damage: 1.4, range: 10, spread: 0.18, pellets: 9, tracerColor: 0xffaa66, recoil: 0.45, auto: true, magSize: 4, reloadTime: 1.6, tier: 1, cost: 260, desc: 'Kesik namlu pompalı, devasa saçma.',
     look: { body: 'double', stock: 'wood', finish: 0x2c2e30, trim: 0x6b3f2a }, fx: { flash: 0xffa04a, flashScale: 1.8, tracer: 0.8, impact: 'heavy' } }),
   V({ id: 'shotgun', variant: 'saiga_auto', name: 'Saiga Auto', sfx: 'shotgun', grip: 'rifle', fireRate: 0.26, damage: 0.95, range: 12, spread: 0.13, pellets: 6, tracerColor: 0xffb070, recoil: 0.3, auto: true, magSize: 12, reloadTime: 2.2, tier: 2, cost: 620, desc: 'Şarjörlü yarı otomatik av tüfeği.',
     look: { body: 'shotgun', mag: 'drum', stock: 'folding', finish: 0x1a1c1e, trim: 0x2d3034 }, fx: { flash: 0xffb45e, flashScale: 1.4, tracer: 0.8, impact: 'heavy' } }),
@@ -300,15 +300,15 @@ WEAPONS.push(
   // ——— Snipers (3) ———
   V({ id: 'sniper', variant: 'hunter_bolt', name: 'Bullpup .338', sfx: 'sniper', grip: 'rifle', fireRate: 1.0, damage: 7.5, range: 50, spread: 0.003, pellets: 1, tracerColor: 0xffffff, recoil: 0.42, auto: true, magSize: 5, reloadTime: 2.2, tier: 2, cost: 560, desc: 'Bullpup keskin nişancı, tek atış tek ölüm.',
     look: { body: 'sniper', mag: 'box', scope: 'long', stock: 'wood', finish: 0x2a2c2e, trim: 0x5a3a20 }, fx: { flash: 0xfff0c0, flashScale: 1.1, tracer: 1.5, impact: 'heavy', pierce: 2 } }),
-  V({ id: 'sniper', variant: 'anti_materiel', name: 'Anti-Materiel .50', sfx: 'sniper', grip: 'rifle', fireRate: 1.3, damage: 14, range: 60, spread: 0.002, pellets: 1, tracerColor: 0xffd27a, recoil: 0.7, auto: true, magSize: 4, reloadTime: 2.8, tier: 4, cost: 1500, desc: 'Her şeyi delip geçer, şok dalgası.',
+  V({ id: 'sniper', variant: 'anti_materiel', name: 'Ağır Keskin .50', sfx: 'sniper', grip: 'rifle', fireRate: 1.3, damage: 14, range: 60, spread: 0.002, pellets: 1, tracerColor: 0xffd27a, recoil: 0.7, auto: true, magSize: 4, reloadTime: 2.8, tier: 4, cost: 1500, desc: 'Her şeyi delip geçer, şok dalgası.',
     look: { body: 'sniper', length: 1.35, barrel: 1.5, mag: 'box', scope: 'long', stock: 'fixed', muzzle: 'brake', finish: 0x3a3d33, trim: 0x15170f }, fx: { flash: 0xffc070, flashScale: 2, tracer: 2.2, impact: 'explosive', aoe: 1.6, pierce: 8 } }),
   // ——— Heavy (3: LMG family) ———
-  V({ id: 'lmg', variant: 'shredder', name: 'Shredder Minigun', sfx: 'lmg', grip: 'rifle', fireRate: 0.035, damage: 0.9, range: 26, spread: 0.07, pellets: 1, tracerColor: 0xffcc55, recoil: 0.08, auto: true, magSize: 200, reloadTime: 3.4, tier: 4, cost: 1400, desc: 'Döner namlu, mermi yağmuru.',
+  V({ id: 'lmg', variant: 'shredder', name: 'Doğrayıcı Minigun', sfx: 'lmg', grip: 'rifle', fireRate: 0.035, damage: 0.9, range: 26, spread: 0.07, pellets: 1, tracerColor: 0xffcc55, recoil: 0.08, auto: true, magSize: 200, reloadTime: 3.4, tier: 4, cost: 1400, desc: 'Döner namlu, mermi yağmuru.',
     look: { body: 'minigun', mag: 'box', finish: 0x2a2c2e, trim: 0x2e3328 }, fx: { flash: 0xffd06a, flashScale: 1.1, tracer: 1, impact: 'flesh' } }),
-  V({ id: 'lmg', variant: 'thumper_gl', name: 'Thumper GL', sfx: 'shotgun', grip: 'rifle', fireRate: 0.75, damage: 4.5, range: 26, spread: 0.02, pellets: 1, tracerColor: 0xffaa33, recoil: 0.4, auto: true, magSize: 6, reloadTime: 2.6, tier: 3, cost: 980, desc: 'Bombaatar: alan hasarı.',
+  V({ id: 'lmg', variant: 'thumper_gl', name: 'Gümbür Bombaatar', sfx: 'shotgun', grip: 'rifle', fireRate: 0.75, damage: 4.5, range: 26, spread: 0.02, pellets: 1, tracerColor: 0xffaa33, recoil: 0.4, auto: true, magSize: 6, reloadTime: 2.6, tier: 3, cost: 980, desc: 'Bombaatar: alan hasarı.',
     look: { body: 'launcher', mag: 'drum', stock: 'fixed', finish: 0x3b4030, trim: 0x15170f }, fx: { flash: 0xffaa33, flashScale: 1.6, tracer: 3, impact: 'explosive', aoe: 3.2, speed: 0.45 } }),
   // ——— Melee (4th) ———
-  V({ id: 'knife', variant: 'machete', name: 'Machete', sfx: 'melee', grip: 'melee', fireRate: 0.42, damage: 5.6, range: 2.6, spread: 0, pellets: 1, tracerColor: 0xd0d8e0, recoil: 0.25, auto: true, magSize: 1, reloadTime: 0.01, melee: true, meleeArc: 1.1, tier: 2, cost: 300, desc: 'Uzun bıçak, geniş kesik.',
+  V({ id: 'knife', variant: 'machete', name: 'Pala', sfx: 'melee', grip: 'melee', fireRate: 0.42, damage: 5.6, range: 2.6, spread: 0, pellets: 1, tracerColor: 0xd0d8e0, recoil: 0.25, auto: true, magSize: 1, reloadTime: 0.01, melee: true, meleeArc: 1.1, tier: 2, cost: 300, desc: 'Uzun bıçak, geniş kesik.',
     look: { body: 'machete', finish: 0xc8d0d8, trim: 0x2a1a10 }, fx: { flash: 0, flashScale: 0, tracer: 0, impact: 'flesh' } }),
 );
 

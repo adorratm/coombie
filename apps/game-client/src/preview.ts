@@ -41,6 +41,12 @@ const el = {
   hud: document.getElementById('hud')!,
   timerPill: document.getElementById('timerPill')!,
   modRow: document.getElementById('modRow')!,
+  hpText: document.getElementById('hpText')!,
+  hpBar: document.getElementById('hpBar')!,
+  shieldBar: document.getElementById('shieldBar')!,
+  xpBox: document.getElementById('xpBox')!,
+  lowHp: document.getElementById('lowHp')!,
+  hint: document.getElementById('hint'),
   teamTop: document.getElementById('teamTop')!,
   objTitle: document.getElementById('objTitle')!,
   objText: document.getElementById('objText')!,
@@ -177,7 +183,7 @@ const formatTime = (sec: number): string => {
   const s = Math.max(0, Math.floor(sec));
   const m = Math.floor(s / 60);
   const r = s % 60;
-  return `${m}m ${r.toString().padStart(2, '0')}s`;
+  return `${m}:${r.toString().padStart(2, '0')}`;
 };
 
 const setBar = (node: HTMLElement, value: number, max: number) => {
@@ -228,6 +234,43 @@ const renderDiamonds = (host: HTMLElement, hud: ArenaHudState) => {
     d.innerHTML = `<span>${item.label.slice(0, 2)}</span><div class="cnt">${item.count}</div>`;
     host.appendChild(d);
   }
+};
+
+/** Play HUD, top left: every squad member with a health bar, you first. */
+const renderSquad = (host: HTMLElement, hud: ArenaHudState) => {
+  const key = hud.squad.map((m) => `${m.name}:${Math.ceil(m.hp)}:${m.maxHp}:${m.alive ? 1 : 0}`).join(',');
+  if (host.dataset.k === key) return;
+  host.dataset.k = key;
+  host.replaceChildren(
+    ...hud.squad.slice(0, 8).map((m, i) => {
+      const row = document.createElement('div');
+      const pct = m.alive ? Math.max(0, Math.min(100, (m.hp / Math.max(1, m.maxHp)) * 100)) : 0;
+      row.className = `mate${i === 0 ? ' you' : ''}${m.alive ? '' : ' dead'}`;
+      row.title = `${m.name} ${Math.ceil(m.hp)}/${m.maxHp}`;
+      const ic = document.createElement('span');
+      ic.className = 'ic';
+      ic.textContent = (m.icon ?? m.name.slice(0, 2)).toUpperCase().slice(0, 2);
+      const nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = i === 0 ? `${m.name} (sen)` : m.alive ? m.name : `${m.name} · düştü`;
+      const bar = document.createElement('span');
+      bar.className = 'bar';
+      bar.innerHTML = `<i class="${pct < 30 ? 'low' : pct < 60 ? 'mid' : ''}" style="width:${pct.toFixed(0)}%"></i>`;
+      row.append(ic, nm, bar);
+      return row;
+    }),
+  );
+};
+
+/** Play HUD, top right: kills, wave and the running combo. */
+const renderStats = (host: HTMLElement, hud: ArenaHudState) => {
+  const combo = hud.combo >= 5 ? hud.combo : 0;
+  const key = `${hud.kills}|${hud.wave}|${combo}`;
+  if (host.dataset.k === key) return;
+  host.dataset.k = key;
+  host.innerHTML =
+    (combo ? `<div class="stat combo">x${combo}<small>SERİ</small></div>` : '') +
+    `<div class="stat">${hud.kills}<small>LEŞ</small></div><div class="stat">${hud.wave}<small>DALGA</small></div>`;
 };
 
 const renderTeam = (host: HTMLElement, hud: ArenaHudState) => {
@@ -386,6 +429,20 @@ const ensurePauseBuses = () => {
   }
 };
 
+let lastHp = -1;
+let hurtUntil = 0;
+const renderVitals = (hud: ArenaHudState) => {
+  const hp = Math.max(0, hud.hp);
+  const max = Math.max(1, hud.maxHp);
+  el.hpText.textContent = `${Math.ceil(hp)} / ${Math.round(max)}`;
+  el.hpBar.style.width = `${(hp / max) * 100}%`;
+  el.shieldBar.style.width = hud.shieldMax > 0 ? `${Math.min(100, (hud.shield / hud.shieldMax) * 100)}%` : '0%';
+  if (lastHp >= 0 && hp < lastHp - 0.5) hurtUntil = performance.now() + 220;
+  lastHp = hp;
+  el.xpBox.classList.toggle('hurt', performance.now() < hurtUntil);
+  el.lowHp.classList.toggle('on', hud.alive && hp / max < 0.3);
+};
+
 const renderHud = (hud: ArenaHudState) => {
   renderHeroSkills(hud);
   renderRunSkills(hud);
@@ -424,8 +481,10 @@ const renderHud = (hud: ArenaHudState) => {
   setBar(el.abilityBar, abilityPct, 100);
   el.abilityBar.style.background = hud.abilityReady ? '#5ad46a' : '#4aa3ff';
 
-  renderDiamonds(el.modRow, hud);
-  renderTeam(el.teamTop, hud);
+  renderSquad(el.modRow, hud);
+  renderStats(el.teamTop, hud);
+  renderVitals(hud);
+  el.hint?.classList.toggle('gone', hud.runTimeSec > 30);
   renderDiamonds(el.upMods, hud);
   renderTeam(el.upTeam, hud);
 
@@ -434,6 +493,7 @@ const renderHud = (hud: ArenaHudState) => {
   const downedBox = el.downed.querySelector('.box');
   if (downedBox) downedBox.textContent = hud.revivesLeft === undefined || hud.revivesLeft === Infinity ? 'YERE SERİLDİN' : hud.revivesLeft > 0 ? `YERE SERİLDİN · ${hud.revivesLeft} dirilme hakkı` : 'YERE SERİLDİN · SON HAK';
   el.hud.classList.toggle('hidden', upgrading || runCommitted || paused);
+  if (upgrading || runCommitted || paused) el.lowHp.classList.remove('on');
 
   if (paused) {
     ensurePauseBuses();
@@ -703,6 +763,8 @@ const toMenu = () => {
   el.pause.classList.remove('on');
   el.upgrade.classList.remove('on');
   el.downed.classList.remove('on');
+  el.lowHp.classList.remove('on');
+  lastHp = -1;
   el.hud.style.display = 'none';
   lobby.show();
 };

@@ -426,7 +426,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   {
     id: 'mastery_rifle',
     name: 'Rifle Doctrine',
-    description: 'Assault Rifle +18% dmg',
+    description: 'Piyade Tüfeği +%18 hasar',
     rarity: 'rare',
     kind: 'weapon_mastery',
     masteryWeapon: 'rifle',
@@ -466,7 +466,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   {
     id: 'mastery_knife',
     name: 'Blade Doctrine',
-    description: 'Combat Knife +25% damage',
+    description: 'Savaş Bıçağı +%25 hasar',
     rarity: 'rare',
     kind: 'weapon_mastery',
     masteryWeapon: 'knife',
@@ -476,7 +476,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   {
     id: 'mastery_bat',
     name: 'Riot Doctrine',
-    description: 'Riot Bat +22% damage',
+    description: 'Beyzbol Sopası +%22 hasar',
     rarity: 'rare',
     kind: 'weapon_mastery',
     masteryWeapon: 'bat',
@@ -496,7 +496,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   {
     id: 'unlock_bat',
     name: 'Authorize Riot Kit',
-    description: 'Unlock Riot Bat',
+    description: 'Beyzbol Sopası açılır',
     rarity: 'epic',
     kind: 'unlock_weapon',
     unlockWeapon: 'bat',
@@ -706,7 +706,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   {
     id: 'evo_weapon_rifle',
     name: 'Pulse Lance',
-    description: 'Evolve Assault Rifle: +28% dmg, burn rounds',
+    description: 'Piyade Tüfeği evrimi: +%28 hasar, yakıcı mermi',
     rarity: 'epic',
     kind: 'evolution',
     icon: 'PL',
