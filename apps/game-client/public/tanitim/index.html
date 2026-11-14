@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>COOMBIE — 8 kişilik co-op zombi hayatta kalma</title>
+<meta name="description" content="Tarayıcıda ve Dracord içinde oynanan co-op zombi hayatta kalma oyunu. 8 operatör, 10 harita, 10 mod, 1–8 oyuncu." />
+<meta property="og:title" content="COOMBIE — co-op zombi hayatta kalma" />
+<meta property="og:description" content="8 operatör, 10 harita, 10 mod. Arkadaşlarınla 8 kişiye kadar, kurulum yok." />
+<meta property="og:image" content="/ui/maps/city.jpg" />
+<meta name="theme-color" content="#07090c" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #07090c; --panel: #0e1217; --panel-2: #131920; --line: rgba(220,230,240,.13); --line-2: rgba(220,230,240,.28);
+  --text: #f3f5f7; --dim: #9aa3ad; --ok: #5ad46a; --hp: #e23b2f; --gold: #e8b84a;
+  --display: Rajdhani, system-ui, sans-serif; --body: Barlow, system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.55 var(--body); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; line-height: 1; margin: 0; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+.wrap { width: min(1120px, 100% - 40px); margin-inline: auto; }
+.kicker { font: 600 12px/1 var(--display); letter-spacing: .22em; text-transform: uppercase; color: var(--ok); }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 26px; font: 700 17px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; text-decoration: none; border: 1px solid var(--line-2); transition: background .15s, border-color .15s, transform .15s; }
+.btn:hover { border-color: var(--text); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible, a:focus-visible { outline: 2px solid var(--ok); outline-offset: 3px; }
+.btn.go { background: var(--ok); border-color: var(--ok); color: #061008; }
+.btn.go:hover { background: #76e184; border-color: #76e184; }
+
+/* top bar */
+.top { position: absolute; inset: 0 0 auto 0; z-index: 2; }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.top .mark { font: 700 22px/1 var(--display); letter-spacing: .18em; text-decoration: none; }
+.top nav { display: flex; gap: 22px; font: 600 13px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; }
+.top nav a { text-decoration: none; color: var(--dim); padding: 14px 0; }
+.top nav a:hover { color: var(--text); }
+@media (max-width: 640px) { .top nav { display: none; } }
+
+/* hero */
+.hero { position: relative; min-height: min(92vh, 780px); display: grid; align-items: end; padding: 120px 0 64px; overflow: hidden; isolation: isolate; }
+.hero::before { content: ''; position: absolute; inset: 0; z-index: -2; background: url(/ui/maps/city.jpg) center/cover; filter: saturate(.8) contrast(1.05); transform: scale(1.04); }
+.hero::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(7,9,12,.55) 0%, rgba(7,9,12,.35) 35%, var(--bg) 96%), linear-gradient(90deg, rgba(7,9,12,.85) 0%, rgba(7,9,12,0) 70%); }
+.hero h1 { font-size: clamp(64px, 15vw, 168px); letter-spacing: .01em; margin: 14px 0 0 -4px; }
+.hero h1 span { color: var(--hp); }
+.hero .lead { max-width: 30em; margin-top: 18px; font-size: clamp(17px, 2.1vw, 20px); color: #d5dbe1; }
+.hero .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.hero .note { margin-top: 14px; font-size: 14px; color: var(--dim); }
+
+/* facts strip */
+.facts { border-block: 1px solid var(--line); background: var(--panel); }
+.facts .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+.facts div { padding: 22px 0 20px; }
+.facts div + div { border-left: 1px solid var(--line); padding-left: 24px; }
+.facts b { display: block; font: 700 clamp(34px, 5vw, 52px)/1 var(--display); font-variant-numeric: tabular-nums; }
+.facts span { font: 600 12px/1 var(--display); letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+@media (max-width: 640px) { .facts .wrap { grid-template-columns: repeat(2, 1fr); } .facts div:nth-child(3) { border-left: 0; padding-left: 0; } .facts div:nth-child(n+3) { border-top: 1px solid var(--line); } }
+
+section { padding: clamp(64px, 9vw, 112px) 0 0; }
+section > .wrap > h2 { font-size: clamp(34px, 5.4vw, 60px); margin-top: 12px; }
+section > .wrap > .sub { max-width: 38em; margin-top: 14px; color: var(--dim); }
+
+/* operatives */
+.ops { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 36px; background: var(--line); border: 1px solid var(--line); }
+.op { background: var(--panel); padding: 20px 18px 18px; display: grid; gap: 10px; align-content: start; border-top: 3px solid var(--c); }
+.op h3 { font-size: 26px; }
+.op .role { font: 600 12px/1 var(--display); letter-spacing: .18em; text-transform: uppercase; color: var(--c); }
+.op dl { margin: 4px 0 0; display: grid; gap: 8px; font-size: 14px; }
+.op dt { font: 600 11px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-bottom: 3px; }
+.op dd { margin: 0; }
+@media (max-width: 900px) { .ops { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .ops { grid-template-columns: 1fr; } }
+
+/* modes */
+.modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 48px; margin-top: 30px; }
+.mode { display: grid; grid-template-columns: 44px 1fr; gap: 4px 14px; padding: 18px 0; border-top: 1px solid var(--line); }
+.mode i { grid-row: span 2; font: normal 26px/1.1 var(--body); }
+.mode h3 { font-size: 22px; align-self: end; }
+.mode p { font-size: 15px; color: var(--dim); }
+.mode .new { margin-left: 8px; font: 700 10px/1 var(--display); letter-spacing: .16em; color: #061008; background: var(--ok); padding: 3px 6px 2px; vertical-align: 3px; }
+@media (max-width: 760px) { .modes { grid-template-columns: 1fr; } }
+
+/* maps */
+.maps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 36px; }
+.map { position: relative; aspect-ratio: 4 / 5; overflow: hidden; background: var(--panel-2) center/cover; outline: 1px solid var(--line); outline-offset: -1px; }
+.map::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,9,12,0) 40%, rgba(7,9,12,.92) 100%); }
+.map div { position: absolute; inset: auto 12px 12px 12px; z-index: 1; }
+.map b { display: block; font: 700 19px/1.05 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.map span { font-size: 12px; color: #c3cad1; }
+@media (max-width: 900px) { .maps { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 520px) { .maps { grid-template-columns: repeat(2, 1fr); } }
+
+/* bosses */
+.bosses { margin-top: 30px; border-top: 1px solid var(--line); }
+.boss { display: grid; grid-template-columns: 10px 190px 1fr 110px; gap: 18px; align-items: baseline; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.boss::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--c); align-self: center; }
+.boss h3 { font-size: 24px; }
+.boss p { color: var(--dim); font-size: 15px; }
+.boss em { font: 600 12px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) { .boss { grid-template-columns: 10px 1fr; } .boss p, .boss em { grid-column: 2; text-align: left; } }
+
+/* co-op */
+.coop { display: grid; grid-template-columns: 1.1fr .9fr; gap: 56px; align-items: start; }
+.coop ol { margin: 34px 0 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 22px; }
+.coop li { counter-increment: s; display: grid; grid-template-columns: 44px 1fr; gap: 14px; }
+.coop li::before { content: counter(s); font: 700 34px/1 var(--display); color: var(--ok); font-variant-numeric: tabular-nums; }
+.coop li b { display: block; font: 700 20px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.coop li span { color: var(--dim); font-size: 15px; }
+.coop aside { margin-top: 34px; background: var(--panel); border: 1px solid var(--line); padding: 26px 24px; }
+.coop aside h3 { font-size: 24px; }
+.coop aside p { margin-top: 10px; color: var(--dim); font-size: 15px; }
+.coop aside .btn { margin-top: 20px; }
+@media (max-width: 820px) { .coop { grid-template-columns: 1fr; gap: 0; } }
+
+/* closing */
+.end { text-align: center; padding-bottom: clamp(64px, 9vw, 112px); }
+.end h2 { font-size: clamp(40px, 8vw, 92px); }
+.end .btn { margin-top: 30px; min-height: 56px; padding: 0 40px; font-size: 20px; }
+footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--dim); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="#">COOMBIE</a>
+    <nav aria-label="Sayfa içi">
+      <a href="#operatorler">Operatörler</a>
+      <a href="#modlar">Modlar</a>
+      <a href="#haritalar">Haritalar</a>
+      <a href="#coop">Co-op</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <p class="kicker">Protocol-Z · co-op hayatta kalma</p>
+      <h1>COOM<span>BIE</span></h1>
+      <p class="lead">Sürü her dakika büyüyor. Timini kur, operatörünü seç, 8 kişiye kadar aynı haritada ayakta kalmaya çalış.</p>
+      <div class="cta">
+        <a class="btn go" href="/">Hemen oyna</a>
+        <a class="btn" href="#coop">Arkadaşlarınla oyna</a>
+      </div>
+      <p class="note">Tarayıcıda açılır. İndirme ve hesap gerekmez.</p>
+    </div>
+  </div>
+
+  <div class="facts" role="list">
+    <div class="wrap">
+      <div role="listitem"><b>8</b><span>Operatör</span></div>
+      <div role="listitem"><b>10</b><span>Harita</span></div>
+      <div role="listitem"><b>10</b><span>Oyun modu</span></div>
+      <div role="listitem"><b>1–8</b><span>Oyuncu</span></div>
+    </div>
+  </div>
+
+  <section id="operatorler">
+    <div class="wrap">
+      <p class="kicker">Tim</p>
+      <h2>Sekiz operatör, sekiz ayrı oyun</h2>
+      <p class="sub">Her birinin kendi başlangıç silahı, üç yeteneği ve H tuşuyla telsizden çağırdığı bir desteği var.</p>
+      <div class="ops">
+        <article class="op" style="--c:#6ea8ff"><div><h3>Ironclad</h3><span class="role">Taarruz</span></div><dl><div><dt>Silah</dt><dd>Piyade tüfeği</dd></div><div><dt>H desteği</dt><dd>F-16 hava saldırısı</dd></div></dl></article>
+        <article class="op" style="--c:#5ad46a"><div><h3>Valkyrie</h3><span class="role">Sıhhiye</span></div><dl><div><dt>Silah</dt><dd>Makineli tabanca (SMG)</dd></div><div><dt>H desteği</dt><dd>İkmal paraşütü</dd></div></dl></article>
+        <article class="op" style="--c:#f0a12b"><div><h3>Breaker</h3><span class="role">Kapı kıran</span></div><dl><div><dt>Silah</dt><dd>Pompalı tüfek</dd></div><div><dt>H desteği</dt><dd>Dolmuş: şeritten geçer, önüne çıkanı ezer</dd></div></dl></article>
+        <article class="op" style="--c:#b9a2ff"><div><h3>Ghost</h3><span class="role">Keşif</span></div><dl><div><dt>Silah</dt><dd>Keskin nişancı tüfeği</dd></div><div><dt>H desteği</dt><dd>SİHA hassas vuruş</dd></div></dl></article>
+        <article class="op" style="--c:#9cff2e"><div><h3>Tox</h3><span class="role">Simyacı</span></div><dl><div><dt>Silah</dt><dd>Sırt Pompası: zehir püskürtür</dd></div><div><dt>H desteği</dt><dd>İlaçlama uçağı</dd></div></dl></article>
+        <article class="op" style="--c:#5cc8ff"><div><h3>Spark</h3><span class="role">Mühendis</span></div><dl><div><dt>Silah</dt><dd>Çivi Tabancası: hedefi delip geçer</dd></div><div><dt>H desteği</dt><dd>Trafo: düşer, patlar, zincirleme çarpar</dd></div></dl></article>
+        <article class="op" style="--c:#e8b84a"><div><h3>Warden</h3><span class="role">Makineli</span></div><dl><div><dt>Silah</dt><dd>Hafif makineli tüfek</dd></div><div><dt>H desteği</dt><dd>Taarruz helikopteri</dd></div></dl></article>
+        <article class="op" style="--c:#e23b2f"><div><h3>Havoc</h3><span class="role">Yıkımcı</span></div><dl><div><dt>Silah</dt><dd>Boru Havan: alan patlaması</dd></div><div><dt>H desteği</dt><dd>Topçu bataryası</dd></div></dl></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="modlar">
+    <div class="wrap">
+      <p class="kicker">Görevler</p>
+      <h2>On mod, her haritada</h2>
+      <div class="modes">
+        <div class="mode"><i aria-hidden="true">⏱</i><h3>Hayatta Kal</h3><p>20–60 dakika dayan. Her 5 dakikada bir boss, sonda son boss.</p></div>
+        <div class="mode"><i aria-hidden="true">🧟</i><h3>Horde</h3><p>20 sürü dalgası. Biri bitmeden sonraki gelmez.</p></div>
+        <div class="mode"><i aria-hidden="true">⛨</i><h3>Savunma</h3><p>Jeneratörü süre dolana kadar koru.</p></div>
+        <div class="mode"><i aria-hidden="true">✚</i><h3>Kurtarma</h3><p>Üç hayatta kalanı bul, time kat, tahliye noktasını tut.</p></div>
+        <div class="mode"><i aria-hidden="true">⛽</i><h3>Tahliye</h3><p>Dört yakıt bidonu topla, helikopter gelene kadar dayan.</p></div>
+        <div class="mode"><i aria-hidden="true">☠</i><h3>Boss Avı</h3><p>Üç boss sırayla geliyor.</p></div>
+        <div class="mode"><i aria-hidden="true">⚑</i><h3>Bölge Kontrol<span class="new">Yeni</span></h3><p>Dört bölgeyi sırayla ele geçir. Halkadan çıkarsan ilerleme erir.</p></div>
+        <div class="mode"><i aria-hidden="true">🎯</i><h3>İnfaz Listesi<span class="new">Yeni</span></h3><p>Altı işaretli hedefi tek tek avla. Sonuncusu boss.</p></div>
+        <div class="mode"><i aria-hidden="true">⚡</i><h3>Katliam<span class="new">Yeni</span></h3><p>Yedi dakikada öldürme kotasını doldur. Boss öldürmek süre kazandırır.</p></div>
+        <div class="mode"><i aria-hidden="true">∞</i><h3>Sonsuz</h3><p>Bitiş yok. Ne kadar dayanabilirsin?</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="haritalar">
+    <div class="wrap">
+      <p class="kicker">Sahalar</p>
+      <h2>On harita</h2>
+      <div class="maps">
+        <div class="map" style="background-image:url(/ui/maps/city.jpg)"><div><b>Ölü Şehir</b><span>Gece · Yağmur</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/hospital.jpg)"><div><b>Karantina Hastanesi</b><span>Sis · Hafif yağmur</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/military.jpg)"><div><b>Askeri Üs Kartal</b><span>Gün batımı · Kül</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/harbor.jpg)"><div><b>Kuzey Limanı</b><span>Gece · Yoğun sis</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/forest.jpg)"><div><b>Kara Orman</b><span>Ay ışığı · Sis</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/highway.jpg)"><div><b>Otoyol 9</b><span>Bulutlu · Toz</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/industrial.jpg)"><div><b>Sanayi Bölgesi</b><span>Duman · Turuncu gök</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/snow.jpg)"><div><b>Kar Köyü</b><span>Kar fırtınası</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/desert.jpg)"><div><b>Çöl Kasabası</b><span>Yakıcı güneş · Kum</span></div></div>
+        <div class="map" style="background-image:url(/ui/maps/lab.jpg)"><div><b>Yeraltı Laboratuvarı</b><span>Acil durum ışıkları</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="bosslar">
+    <div class="wrap">
+      <p class="kicker">Tehdit</p>
+      <h2>Beş boss, art arda aynısı gelmez</h2>
+      <div class="bosses">
+        <div class="boss" style="--c:#b91c1c"><h3>Mutant</h3><p>Yeri döver, üstüne koşar. Diğerlerini tanımadan önce bununla tanışırsın.</p><em>1. dalga</em></div>
+        <div class="boss" style="--c:#ff7a1a"><h3>Kasap</h3><p>Hızlı ve sert vurur ama canı az. Mesafeni koru.</p><em>3. dalga</em></div>
+        <div class="boss" style="--c:#ff4d00"><h3>Kor</h3><p>Bastığı yeri yakar, ölünce geniş bir yangın bırakır.</p><em>5. dalga</em></div>
+        <div class="boss" style="--c:#b8a000"><h3>Ana Kovan</h3><p>Yürürken sürüngen doğurur. Önce onu indir.</p><em>7. dalga</em></div>
+        <div class="boss" style="--c:#5cc8ff"><h3>Şalter</h3><p>Yerde mavi halka belirince çık: şok dalgası sersemletir.</p><em>9. dalga</em></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="coop">
+    <div class="wrap coop">
+      <div>
+        <p class="kicker">Co-op</p>
+        <h2 style="font-size:clamp(34px,5.4vw,60px);margin-top:12px">8 kişiye kadar, tek kodla</h2>
+        <ol>
+          <li><div><b>Oda kur</b><span>Lobide CO-OP'a bas, oda kodunu al.</span></div></li>
+          <li><div><b>Kodu paylaş</b><span>Arkadaşların aynı sayfadan kodu girip katılır.</span></div></li>
+          <li><div><b>Hazır ol, başlat</b><span>Herkes operatörünü seçer, oda sahibi görevi başlatır.</span></div></li>
+        </ol>
+      </div>
+      <aside>
+        <h3>Dracord içinde oyna</h3>
+        <p>Oyunu Dracord'daki bir oyun kanalından açarsan o kanaldaki herkes aynı odaya düşer, kod gerekmez. Masaüstü, web ve mobilde çalışır.</p>
+        <a class="btn" href="https://dracord.com.tr" rel="noopener">Dracord'a git</a>
+      </aside>
+    </div>
+  </section>
+
+  <section class="end">
+    <div class="wrap">
+      <h2>Sürü bekliyor</h2>
+      <a class="btn go" href="/">Hemen oyna</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>COOMBIE · Protocol-Z</span>
+    <span>Bir <a href="https://dracord.com.tr" rel="noopener">Dracord</a> oyunu</span>
+  </div>
+</footer>
+</body>
+</html>
