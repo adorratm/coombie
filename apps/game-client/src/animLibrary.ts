@@ -116,6 +116,9 @@ export function retargetLibrary(vrm: VRM, lib: AnimLibraryJson, cacheKey: string
     const full: THREE.KeyframeTrack[] = [];
     const upper: THREE.KeyframeTrack[] = [];
     for (const [boneName, tr] of Object.entries(c.tracks)) {
+      // an empty track makes three.js throw, and one throw used to drop every clip for the
+      // character (procedural fallback pose: arms and gun up). Skip it instead.
+      if (!tr.t?.length || tr.q.length !== tr.t.length * 4) continue;
       const node = vrm.humanoid?.getNormalizedBoneNode(boneName as VRMHumanBoneName);
       if (!node) continue;
       const values = isVrm0 ? tr.q.map((v, i) => (i % 2 === 0 ? -v : v)) : tr.q;
@@ -127,7 +130,7 @@ export function retargetLibrary(vrm: VRM, lib: AnimLibraryJson, cacheKey: string
       const node = vrm.humanoid?.getNormalizedBoneNode('hips' as VRMHumanBoneName);
       if (node) {
         const values = c.hipsPos.v.map((v, i) => (isVrm0 && i % 3 !== 1 ? -v : v) * hipsH);
-        full.push(new THREE.VectorKeyframeTrack(`${node.name}.position`, c.hipsPos.t, values));
+        if (c.hipsPos.t.length) full.push(new THREE.VectorKeyframeTrack(`${node.name}.position`, c.hipsPos.t, values));
       }
     }
     set.set(id, {
