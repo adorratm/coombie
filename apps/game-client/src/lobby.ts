@@ -373,6 +373,55 @@ const CSS = /* css */ `
   #lobby .hero { min-width: 150px; }
   #lobby .lb-side { border-left: 0; border-top: 1px solid var(--line); }
 }
+/* ---------- phones in landscape (down to iPhone 5s, 568x320): everything on one screen ---------- */
+@media (max-height: 560px) and (orientation: landscape) {
+  #lobby.on { grid-template-columns: 92px minmax(0, 0.85fr) minmax(0, 1.35fr); grid-template-rows: 36px minmax(0, 1fr) 44px; }
+  #lobby .lb-top { padding: 0 8px 0 max(8px, env(safe-area-inset-left)); gap: 6px; }
+  #lobby .lb-logo { font-size: 17px; letter-spacing: .08em; }
+  #lobby .lb-logo .lb-co { display: none; }
+  #lobby .lb-top .achb { margin-right: 0; padding: 0 9px; min-height: 28px; font-size: 14px; }
+  #lobby .lb-top .achb .tx { display: none; }
+  #lobby .lb-top #lbCoop .tx { display: inline; font-size: 11px; }
+  #lobby .lb-cr { font-size: 13px; white-space: nowrap; }
+  #lobby .lb-heroes { flex-direction: column; overflow-x: hidden; overflow-y: auto; padding: 5px 5px 5px max(5px, env(safe-area-inset-left)); gap: 4px; border-right: 1px solid var(--line); border-bottom: 0; }
+  #lobby .hero { min-width: 0; grid-template-columns: 1fr; gap: 2px; padding: 4px; text-align: center; }
+  #lobby .hero:hover { transform: none; }
+  #lobby .hero .por { width: 100%; height: 42px; }
+  #lobby .hero .nm { font-size: 11px; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lobby .hero .rl, #lobby .hero .hs, #lobby .hero .ab { display: none; }
+  #lobby .lb-name { left: 8px; top: 6px; }
+  #lobby .lb-name h1 { font-size: 18px; }
+  #lobby .lb-name p { font-size: 10px; margin-top: 2px; max-width: 30ch; }
+  #lobby .lb-side { border-left: 1px solid var(--line); border-top: 0; padding-right: env(safe-area-inset-right); }
+  #lobby .stepper { padding: 5px 6px 0; gap: 3px; }
+  #lobby .stepper .sg { gap: 3px; padding-bottom: 5px; }
+  #lobby .stepper .sg .gl { font-size: 0; justify-content: center; }
+  #lobby .stepper .sg .gl .gi { font-size: 14px; }
+  #lobby .stephead { padding: 5px 8px 3px; gap: 0 8px; }
+  #lobby .stephead .big { width: 26px; height: 26px; font-size: 14px; }
+  #lobby .stephead h2 { font-size: 15px; }
+  #lobby .stephead h2 small { font-size: 9px; }
+  #lobby .stephead p { display: none; }
+  #lobby .panel { padding: 6px 8px 10px; }
+  #lobby h3 { margin: 8px 0 5px; font-size: 11px; }
+  #lobby .maps { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 5px; }
+  #lobby .mapc { padding: 6px 8px; }
+  #lobby .mapc b { font-size: 12px; }
+  #lobby .mapc small, #lobby .mapc .md { display: none; }
+  #lobby .diffs { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  #lobby .diff small { display: none; }
+  #lobby .tcols { grid-template-columns: 1fr; }
+  #lobby .wdet .pic { height: 70px; }
+  #lobby .wdet .hd b { font-size: 15px; }
+  #lobby .stepnav { padding: 4px 8px; gap: 6px; }
+  #lobby .stepnav button { padding: 6px 12px; font-size: 12px; min-height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48%; }
+  #lobby .stepnav .pg { display: none; }
+  #lobby .lb-heroes .rhd { display: none; }
+  #lobby .lb-bot { padding: 0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left)); gap: 8px; }
+  #lobby .lb-bot .sum { font-size: 10px; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  #lobby .start { padding: 8px 18px; font-size: 15px; letter-spacing: .1em; white-space: nowrap; }
+  #lobby .toast { top: 40px; font-size: 12px; }
+}
 `;
 
 export interface Lobby {
@@ -389,7 +438,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     document.head.appendChild(st);
   }
   host.innerHTML = `
-    <div class="lb-top"><div class="lb-logo">COOM<b>BIE</b></div><button type="button" class="achb" id="lbCoop" title="Arkadaşlarınla oyna (1-8 kişi)">👥 CO-OP</button><button type="button" class="achb" id="lbFs" title="Tam ekranda Ctrl+W sekmeyi kapatmaz">⛶ TAM EKRAN</button><button type="button" class="achb" id="lbAch" style="margin-left:0">🏆 BAŞARIMLAR</button><div class="lb-cr" id="lbCr"></div></div>
+    <div class="lb-top"><div class="lb-logo">COOM<b>BIE</b></div><button type="button" class="achb" id="lbCoop" title="Arkadaşlarınla oyna (1-8 kişi)">👥<span class="tx"> CO-OP</span></button><button type="button" class="achb" id="lbFs" title="Tam ekranda Ctrl+W sekmeyi kapatmaz">⛶<span class="tx"> TAM EKRAN</span></button><button type="button" class="achb" id="lbAch" style="margin-left:0">🏆<span class="tx"> BAŞARIMLAR</span></button><div class="lb-cr" id="lbCr"></div></div>
     <div class="lb-heroes" id="lbHeroes"></div>
     <div class="lb-stage" id="lbStage"><div class="lb-name"><h1 id="lbName"></h1><p id="lbRole"></p></div><div class="toast" id="lbToast"></div></div>
     <div class="lb-side">

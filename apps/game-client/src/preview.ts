@@ -1,3 +1,4 @@
+import { preferLandscape, wantsTouchControls } from './touchControls';
 import { thumbImg, weaponThumb } from './thumbs';
 import { createArena, type ArenaHandle, type ArenaHudState } from './arena';
 import { createLobby } from './lobby';
@@ -114,6 +115,7 @@ const renderHeroSkills = (hud: ArenaHudState) => {
   list.forEach((a, i) => {
     const d = el.heroSkills.children[i] as HTMLElement;
     d.classList.toggle('radio', a.slot === 'H');
+    d.dataset.slot = a.slot;
     const ready = a.cooldown <= 0.01;
     d.classList.toggle('ready', ready);
     d.style.setProperty('--sk', hex(a.color));
@@ -493,6 +495,7 @@ const renderHud = (hud: ArenaHudState) => {
   const downedBox = el.downed.querySelector('.box');
   if (downedBox) downedBox.textContent = hud.revivesLeft === undefined || hud.revivesLeft === Infinity ? 'YERE SERİLDİN' : hud.revivesLeft > 0 ? `YERE SERİLDİN · ${hud.revivesLeft} dirilme hakkı` : 'YERE SERİLDİN · SON HAK';
   el.hud.classList.toggle('hidden', upgrading || runCommitted || paused);
+  document.body.classList.toggle('hud-off', upgrading || runCommitted || paused);
   if (upgrading || runCommitted || paused) el.lowHp.classList.remove('on');
 
   if (paused) {
@@ -766,11 +769,15 @@ const toMenu = () => {
   el.lowHp.classList.remove('on');
   lastHp = -1;
   el.hud.style.display = 'none';
+  document.body.classList.add('hud-off');
   lobby.show();
 };
 const lobbyHost = document.getElementById('lobby')!;
 const coopPanel = createCoopPanel((start) => restartRun(start));
+if (wantsTouchControls()) document.body.classList.add('touch-device');
 const lobby = createLobby(lobbyHost, () => {
+  // phones: go fullscreen + landscape on the tap that starts the run (needs a user gesture)
+  if (wantsTouchControls()) void preferLandscape();
   // in a co-op room the run is started from the room (by the host), not solo
   if (coopPanel.inRoom()) coopPanel.open();
   else restartRun();

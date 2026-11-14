@@ -2,7 +2,9 @@
 <html lang="tr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>COOMBIE</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -868,9 +870,143 @@
         #upgradeCards { grid-template-columns: repeat(2, minmax(0, 210px)); }
         .pcard { min-height: 360px; }
       }
+
+      /* ——— TOUCH (phones / tablets): stick on the left, ability cluster on the right ——— */
+      #touchUi { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+      body.hud-off #touchUi, body.hud-off.touch #abilityBox { visibility: hidden; }
+      #tStickZone {
+        position: absolute; left: 0; bottom: 0; width: 46vw; height: 64vh;
+        pointer-events: auto; touch-action: none;
+      }
+      #tStickBase {
+        position: absolute; left: 0; top: 0; width: 112px; height: 112px; margin: -56px 0 0 -56px;
+        border-radius: 50%; border: 2px solid rgba(255,255,255,0.22); background: rgba(8,10,14,0.35);
+        opacity: 0; transition: opacity .12s;
+      }
+      #tStickBase.on { opacity: 1; }
+      #tStickKnob {
+        position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; transform: translate(-50%, -50%);
+        border-radius: 50%; background: rgba(255,255,255,0.32); border: 2px solid rgba(255,255,255,0.55);
+      }
+      #tBtns {
+        position: absolute; right: max(10px, env(safe-area-inset-right)); bottom: 140px; width: 120px;
+        display: flex; justify-content: space-around; gap: 8px; pointer-events: auto;
+      }
+      .tb, #tPause {
+        width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--line-strong);
+        background: rgba(8,10,14,0.66); color: var(--text); font: 700 20px var(--display);
+        display: grid; place-items: center; touch-action: none; -webkit-tap-highlight-color: transparent;
+      }
+      .tb:active, #tPause:active { background: rgba(255,255,255,0.18); }
+      #tPause {
+        position: absolute; top: max(6px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right));
+        width: 38px; height: 38px; font-size: 13px; pointer-events: auto; border-radius: 10px;
+      }
+      body.touch #hint, body.touch #slotBar { display: none; }
+      body.touch #topHud { right: calc(max(8px, env(safe-area-inset-right)) + 46px); left: max(8px, env(safe-area-inset-left)); top: 6px; }
+      body.touch #bottomHud {
+        left: 0; right: 0; margin: 0 auto; bottom: 8px;
+        width: min(300px, calc(100vw - 2 * (max(10px, env(safe-area-inset-right)) + 136px))); grid-template-columns: 1fr; gap: 4px;
+      }
+      body.touch #weaponBox { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 4px 8px; }
+      body.touch #weaponBox .label, body.touch #weaponPic { display: none; }
+      body.touch #weaponName { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      body.touch #ammoText { font-size: 14px; margin: 0; }
+      body.touch #xpBox { padding: 5px 8px; }
+      body.touch #abilityBox {
+        position: fixed; right: max(10px, env(safe-area-inset-right)); bottom: 10px;
+        background: none; border: 0; padding: 0; pointer-events: auto;
+      }
+      body.touch #abilityBox > .label { display: none; }
+      body.touch #heroSkills { display: grid; grid-template-columns: repeat(2, 56px); gap: 8px; margin: 0; }
+      body.touch .skill { width: 56px; height: 56px; border-radius: 50%; touch-action: none; -webkit-tap-highlight-color: transparent; }
+      body.touch .skill:active { transform: scale(0.94); }
+      body.touch .skill .lv { display: none; }
+      body.touch .skill .key { top: 4px; left: 50%; transform: translateX(-50%); font-size: 10px; opacity: .8; }
+      body.touch #runSkillBar { left: max(8px, env(safe-area-inset-left)); bottom: auto; top: 50%; transform: translateY(-50%) scale(0.8); transform-origin: left center; max-width: 140px; }
+      body.touch #pickFeed { bottom: auto; top: 30%; left: max(8px, env(safe-area-inset-left)); }
+      body.touch #subtitle { bottom: 84px; max-width: 56vw; }
+      body.touch #objChip { top: 52px; right: calc(max(8px, env(safe-area-inset-right)) + 2px); max-width: 190px; }
+      /* short landscape screens (iPhone 5s: 568x320) */
+      @media (max-height: 560px) {
+        #topHud { top: 6px; gap: 6px; }
+        #hud #modRow { width: 150px; gap: 3px; }
+        #hud #modRow .mate:nth-child(n+4) { display: none; }
+        .mate { grid-template-columns: 20px 1fr; padding: 2px 6px 3px 3px; }
+        .mate .ic { width: 20px; height: 20px; font-size: 9px; }
+        .mate .nm { font-size: 11px; }
+        #timerPill { font-size: 18px; padding: 3px 10px; }
+        .stat { min-width: 44px; padding: 3px 6px 2px; font-size: 16px; }
+        .stat small { font-size: 7px; margin-top: 1px; }
+        #objChip { padding: 5px 8px; }
+        #objChip .t { font-size: 12px; margin: 1px 0 4px; }
+        #objChip #sector { display: none; }
+        #hpText { font-size: 12px; }
+        #hpTrack { height: 10px; }
+        #xpMeta { margin-top: 4px; }
+        #buffBar { top: 46px; transform: translateX(-50%) scale(0.8); }
+        #banner { font-size: 22px !important; }
+      }
+      #rotateHint {
+        position: fixed; inset: 0; z-index: 1000; display: none; place-items: center; text-align: center;
+        background: #07090c; color: var(--text); font: 700 18px var(--display); letter-spacing: .06em; padding: 24px;
+      }
+      #rotateHint i { display: block; font-style: normal; font-size: 54px; margin-bottom: 14px; animation: rotHint 1.6s ease-in-out infinite; }
+      @keyframes rotHint { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+      @media (orientation: portrait) { body.touch-device #rotateHint { display: grid; } }
+      @media (prefers-reduced-motion: reduce) { #rotateHint i { animation: none; } }
+
+      /* short landscape screens: level-up picker, pause and results fit without scrolling the page */
+      @media (max-height: 560px) {
+        #results .panel, #pause .panel { max-height: calc(100vh - 12px); overflow-y: auto; padding: 10px 14px; width: min(520px, 94vw); }
+        #pause h2, #resultsTitle { font-size: 20px; margin-bottom: 2px; }
+        #pause .sub { margin-bottom: 6px; }
+        #pauseBuses { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+        #pauseBuses * { font-size: 11px !important; }
+        #pauseBuses input { height: 18px; }
+        #pauseActions button, #results button { padding: 7px 10px !important; font-size: 13px !important; min-height: 36px; }
+        #resultsStats, #metaShop { font-size: 12px; }
+        #upTop { top: 6px; left: 8px; right: 8px; }
+        #upTimer { font-size: 18px; padding: 3px 10px; min-width: 64px; grid-column: 2; }
+        #upMods, #upTeam { display: none; }
+        #upMain { inset: 40px 8px 70px 8px; gap: 6px; }
+        #upgradeTitle { font-size: 12px; }
+        #upgradeCards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; max-width: none; }
+        .pcard { min-height: 0; padding: 6px 6px 8px; }
+        .pcard .gem { width: 34px; height: 34px; margin: 4px auto 8px; }
+        .pcard .gem > b { font-size: 12px; margin: 0; }
+        .pcard .name { font-size: 13px; min-height: 0; margin-bottom: 4px; }
+        .pcard .desc { font-size: 10px; min-height: 0; margin-bottom: 4px; }
+        .pcard .stat { font-size: 10px; }
+        .pcard .tier { margin: 4px auto 0; width: auto; height: auto; transform: none; border: 0; background: none; }
+        .pcard .tier > span { transform: none; font-size: 9px; }
+        .pcard .key { display: none; }
+        .pcard .stats { margin-top: 2px; }
+        #upgradeTitle { display: none; }
+        #upMain { justify-content: flex-start; }
+        #upActions { bottom: 6px; gap: 10px; }
+        .act { width: 52px; gap: 2px; }
+        .act .ico { width: 38px; height: 38px; }
+        .act .lbl { font-size: 9px; }
+        #sidePanel { display: none; }
+      }
+      body.touch-device #pause .sub { display: none; }
+
+      /* very short: iPhone 5s Safari landscape with its bars (~568x270) */
+      @media (max-height: 300px) {
+        body.touch #heroSkills { grid-template-columns: repeat(2, 48px); gap: 6px; }
+        body.touch .skill { width: 48px; height: 48px; font-size: 18px; }
+        #tBtns { bottom: 118px; width: 102px; }
+        .tb { width: 40px; height: 40px; font-size: 17px; }
+        #objChip { top: 44px; }
+        #objChip #objTitle { display: none; }
+        body.touch #bottomHud { width: min(260px, calc(100vw - 2 * (max(10px, env(safe-area-inset-right)) + 116px))); }
+        #weaponBox { padding: 2px 8px !important; }
+      }
     </style>
   </head>
   <body>
+    <div id="rotateHint" role="alert"><div><i aria-hidden="true">📱</i>Oynamak için telefonunu yan çevir</div></div>
     <div id="app"></div>
     <div id="lobby"></div>
     <div id="banner"></div>

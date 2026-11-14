@@ -6,6 +6,9 @@ export function createInput(target: Window | HTMLElement = window) {
   let zoomDelta = 0;
   let weaponWheel = 0;
   let wheelAcc = 0;
+  /** virtual stick from touchControls.ts, -1..1 on both axes (screen right = +x, screen down = +z) */
+  const touchMove = { x: 0, z: 0 };
+  let touchUsed = false;
 
   const onKeyDown = (e: KeyboardEvent) => {
     keys[e.code] = true;
@@ -29,11 +32,14 @@ export function createInput(target: Window | HTMLElement = window) {
   const onKeyUp = (e: KeyboardEvent) => {
     keys[e.code] = false;
   };
+  // Touches belong to the on-screen controls; they must not move the aim cursor or "click".
   const onPointerMove = (e: PointerEvent) => {
+    if (e.pointerType === 'touch') return;
     mouse.x = e.clientX;
     mouse.y = e.clientY;
   };
-  const onPointerDown = () => {
+  const onPointerDown = (e: PointerEvent) => {
+    if (e.pointerType === 'touch') return;
     mouse.down = true;
   };
   const onPointerUp = () => {
@@ -64,6 +70,12 @@ export function createInput(target: Window | HTMLElement = window) {
   target.addEventListener('wheel', onWheel as EventListener, { passive: false });
 
   const moveAxis = () => {
+    const tl = Math.hypot(touchMove.x, touchMove.z);
+    if (tl > 0.12) {
+      // analog: partial tilt walks slower, full tilt runs
+      const k = Math.min(1, tl) / tl;
+      return { x: touchMove.x * k, z: touchMove.z * k };
+    }
     let x = 0;
     let z = 0;
     if (keys.KeyW || keys.ArrowUp) z -= 1;
@@ -99,5 +111,25 @@ export function createInput(target: Window | HTMLElement = window) {
     target.removeEventListener('wheel', onWheel as EventListener);
   };
 
-  return { keys, mouse, moveAxis, consumeZoomDelta, consumeWeaponWheel, dispose };
+  /** Called by the touch layer. */
+  const touch = {
+    setMove(x: number, z: number) {
+      touchMove.x = x;
+      touchMove.z = z;
+      touchUsed = true;
+    },
+    press(code: string, down: boolean) {
+      keys[code] = down;
+      touchUsed = true;
+    },
+    wheel(step: number) {
+      weaponWheel += step;
+    },
+    /** true once the player has used the on-screen controls (aim then follows the action, not a cursor) */
+    get active() {
+      return touchUsed;
+    },
+  };
+
+  return { keys, mouse, moveAxis, consumeZoomDelta, consumeWeaponWheel, dispose, touch };
 }

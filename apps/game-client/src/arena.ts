@@ -1,3 +1,4 @@
+import { mountTouchControls, wantsTouchControls } from './touchControls';
 import * as THREE from 'three';
 import { ensureWeaponEnvironment } from './weaponAssets';
 import { castAbility, createAbilityRuntime } from './abilities';
@@ -256,6 +257,7 @@ export interface ArenaHandle {
   scene: THREE.Scene;
   devGoto: (label: string) => boolean;
   devHurtPlayer: (amount: number) => void;
+  devGainXp: (amount: number) => void;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   dispose: () => void;
@@ -1176,6 +1178,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
 
   const input = createInput(window);
+  const heroSkillsEl = typeof document !== 'undefined' ? document.getElementById('heroSkills') : null;
+  const unmountTouch = wantsTouchControls() && heroSkillsEl ? mountTouchControls(input.touch, heroSkillsEl) : null;
+  /** touch play: last stick direction, so abilities aim ahead when nothing is near */
+  const lastMoveDir = new THREE.Vector3(0, 0, -1);
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1917,6 +1923,15 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (raycaster.ray.intersectPlane(groundPlane, hit)) mouseAim.copy(hit);
   };
 
+  /** No cursor on a phone: abilities and H support go to the nearest threat, else ahead of the player. */
+  const updateAimFromTouch = () => {
+    const ax = input.moveAxis();
+    if (Math.hypot(ax.x, ax.z) > 0.2) lastMoveDir.set(ax.x, 0, ax.z).normalize();
+    const near = findNearestZombie(player.root.position, 18);
+    if (near) mouseAim.copy(near.root.position).setY(0);
+    else mouseAim.copy(player.root.position).addScaledVector(lastMoveDir, 6).setY(0);
+  };
+
   let userPaused = false;
 
   const setPaused = (paused: boolean) => {
@@ -2406,7 +2421,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       audioUnlocked = true;
     }
 
-    updateAimFromMouse();
+    if (input.touch.active) updateAimFromTouch();
+    else updateAimFromMouse();
     handleHotkeys();
 
     if (frozen) {
@@ -3008,6 +3024,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     animate,
     getWeaponName: () => player.weapon.name,
     /** dev (?god=1): hit the player (god mode scales it by 0.02, so pass a big number) */
+    /** dev (?god=1): grant XP (opens the level-up picker) */
+    devGainXp: (amount: number): void => {
+      if (DEV_GOD) gainXp(amount);
+    },
     devHurtPlayer: (amount: number): void => {
       if (DEV_GOD) damageOperative(player, amount, player.root.position.clone());
     },
@@ -3059,6 +3079,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       document.removeEventListener('fullscreenchange', onFsChange);
       for (const z of zombies) disposeZombieVrm(z);
       zombies.length = 0;
+      unmountTouch?.();
       input.dispose();
       audio.dispose();
       fx.dispose();
