@@ -21,6 +21,7 @@ import { rosterById } from './roster';
 import { currentRunLoadout, type AbilitySlot, type RunLoadout } from './loadout';
 import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
 import { BOSS_VARIANT_IDS, BOSS_VARIANTS, pickBossVariant, type BossVariant, type BossVariantDef } from './bossVariants';
+import { MELEE_STYLES, meleeStyleOf } from './meleeStyles';
 import { WEAPONS as ALL_WEAPONS, weaponByVariant, weaponIndexOfVariant, weaponVariantId, type WeaponFxDef } from './weapons';
 import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
 import { waveKindForLevel } from '@protocol-z/shared';
@@ -1350,8 +1351,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       op.gun.updateWorldMatrix(true, true);
       op.muzzlePoint.getWorldPosition(muzzleWorld);
       audio.playGunshot('melee', pan);
-      fx.spawnHitRing(muzzleWorld, weapon.tracerColor);
-      shake = Math.max(shake, 0.08);
+      const style = meleeStyleOf(weaponVariantId(weapon));
+      fx.spawnSlash(op.root.position, forward, style, weapon.range, weapon.meleeArc ?? 1, weapon.tracerColor);
+      if (style === 'chop') fx.spawnHitRing(op.root.position.clone().addScaledVector(forward, weapon.range * 0.8), weapon.tracerColor);
+      if (op.isPlayer) shake = Math.max(shake, MELEE_STYLES[style].shake);
 
       const arc = weapon.meleeArc ?? 1;
       const range = weapon.range;

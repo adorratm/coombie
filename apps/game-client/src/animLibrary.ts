@@ -1,3 +1,4 @@
+import { MELEE_STYLES, type MeleeStyle } from './meleeStyles';
 import * as THREE from 'three';
 import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 
@@ -157,6 +158,9 @@ export interface OperativeAnimInput {
   castSerial?: number;
   /** melee weapon equipped: "shot" plays an overhead swing instead of the rifle fire clip */
   melee?: boolean;
+  /** which swing the equipped melee weapon uses, and how long one swing may take */
+  meleeStyle?: MeleeStyle;
+  meleeSeconds?: number;
   reloading: boolean;
   /** Seconds the weapon takes to reload (scales the reload clip). */
   reloadTime: number;
@@ -305,7 +309,8 @@ export class OperativeAnimator {
       this.last.shot = inp.shotSerial;
       this.aimHold = 1.1;
       if (inp.melee) {
-        if (!this.playAction('castMelee', 0.3, 1.6, 0.5)) this.trigger('ability', 3.2, 1);
+        const seg = MELEE_STYLES[inp.meleeStyle ?? 'swing'].clip;
+        if (!this.playAction(seg.id, seg.from, seg.to, inp.meleeSeconds ?? seg.dur)) this.trigger('ability', 3.2, 1);
       }
       else if (!inp.reloading) this.trigger('fire', 1.6, 0.55);
     }

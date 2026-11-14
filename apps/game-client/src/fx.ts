@@ -1,3 +1,4 @@
+import type { MeleeStyle } from './meleeStyles';
 import * as THREE from 'three';
 
 export interface HealthBar {
@@ -107,6 +108,8 @@ export interface CombatFx {
     critOrOpts?: boolean | { crit?: boolean; style?: DamageNumberStyle },
   ) => void;
   spawnHitRing: (pos: THREE.Vector3, color?: number, y?: number) => void;
+  /** short trail for a melee swing; its shape follows the weapon's style */
+  spawnSlash: (origin: THREE.Vector3, forward: THREE.Vector3, style: MeleeStyle, range: number, arc: number, color?: number) => void;
   /** Ground telegraph that expands to radius before a heavy attack lands. */
   spawnWarnRing: (pos: THREE.Vector3, radius: number, color?: number, duration?: number) => void;
   update: (dt: number) => void;
@@ -239,6 +242,32 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
     });
   };
 
+  const slashes: { root: THREE.Group; mat: THREE.MeshBasicMaterial; life: number }[] = [];
+  const slashGeo = new Map<string, THREE.BufferGeometry>();
+  const SLASH_LIFE = 0.2;
+  const spawnSlash = (origin: THREE.Vector3, forward: THREE.Vector3, style: MeleeStyle, range: number, arc: number, color = 0xdfe6ee) => {
+    const key = `${style}:${arc.toFixed(2)}`;
+    let geo = slashGeo.get(key);
+    if (!geo) {
+      // unit-radius shapes in the XY plane with +X as "forward"; scaled by range below
+      if (style === 'stab') geo = new THREE.PlaneGeometry(1, 0.1).translate(0.5, 0, 0);
+      else if (style === 'chop') geo = new THREE.RingGeometry(0.72, 1, 20, 1, -0.5, 2.1);
+      else geo = new THREE.RingGeometry(0.7, 1, 24, 1, -arc, arc * 2);
+      slashGeo.set(key, geo);
+    }
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+    const mesh = new THREE.Mesh(geo, mat);
+    // stab and bat swing lie flat, the chop stands upright, the machete cuts on a slant
+    mesh.rotation.x = style === 'chop' ? 0 : style === 'slash' ? -Math.PI / 4 : -Math.PI / 2;
+    const root = new THREE.Group();
+    root.add(mesh);
+    root.position.set(origin.x, style === 'chop' ? 0.9 : 1.15, origin.z);
+    root.rotation.y = Math.atan2(-forward.z, forward.x);
+    root.scale.setScalar(range);
+    scene.add(root);
+    slashes.push({ root, mat, life: SLASH_LIFE });
+  };
+
   const ringGeo = new THREE.RingGeometry(0.2, 0.45, 16);
   const spawnHitRing = (pos: THREE.Vector3, color = 0xff4444, y = 0.08) => {
     if (rings.length > 16) {
@@ -330,6 +359,17 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
       }
     }
 
+    for (let i = slashes.length - 1; i >= 0; i--) {
+      const sl = slashes[i]!;
+      sl.life -= dt;
+      sl.mat.opacity = Math.max(0, sl.life / SLASH_LIFE) * 0.55;
+      if (sl.life <= 0) {
+        scene.remove(sl.root);
+        sl.mat.dispose();
+        slashes.splice(i, 1);
+      }
+    }
+
     for (let i = rings.length - 1; i >= 0; i--) {
       const r = rings[i]!;
       r.life -= dt;
@@ -363,6 +403,7 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
     spawnBloodBurst,
     spawnDamageNumber,
     spawnHitRing,
+    spawnSlash,
     spawnWarnRing,
     update,
     dispose: () => {

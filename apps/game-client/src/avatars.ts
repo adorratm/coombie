@@ -1,3 +1,4 @@
+import { MELEE_STYLES, meleeClipSeconds, meleeStyleOf, type MeleeStyle } from './meleeStyles';
 import * as THREE from 'three';
 import { preloadWeaponModels } from './weaponAssets';
 import { holdGun } from './gunHold';
@@ -34,6 +35,9 @@ export const AVATAR_PATHS: Record<AvatarGender, string> = {
 export interface VrmPoseOpts {
   grip?: string;
   meleeSwing?: number;
+  meleeStyle?: MeleeStyle;
+  /** seconds one melee swing may take */
+  meleeSeconds?: number;
   /** Recoil kick 0–1 for arm/shoulder punch */
   fireKick?: number;
   /** Clip-driven operatives: locomotion + one-shot triggers */
@@ -512,26 +516,37 @@ function applyMeleeHoldPose(
   swingPhase: number,
   m: number,
   walkSwing: number,
+  style: MeleeStyle = 'swing',
 ): void {
   const s = THREE.MathUtils.clamp(swingPhase, 0, 1);
   const wind = s < 0.35 ? s / 0.35 : s < 0.55 ? 1 : Math.max(0, 1 - (s - 0.55) / 0.45);
   const strike = s >= 0.35 && s < 0.55 ? (s - 0.35) / 0.2 : s >= 0.55 ? 1 : 0;
+  // the old single swing is raise 1, sweep 1, thrust 0, twist 1; styles scale each part
+  const p = MELEE_STYLES[style].pose;
+  const follow = s >= 0.35 ? strike * (1 - Math.max(0, s - 0.75) * 4) : 0;
 
   dampBone(
     vrm,
     VRMHumanBoneName.RightUpperArm,
-    THREE.MathUtils.lerp(0.15, 0.55, wind) + strike * 0.1,
-    THREE.MathUtils.lerp(-0.25, 0.35, strike),
-    THREE.MathUtils.lerp(-1.25, -1.15, wind),
+    THREE.MathUtils.lerp(0.15, 0.15 + 0.4 * p.raise, wind) + strike * 0.1,
+    THREE.MathUtils.lerp(-0.25 * p.sweep, 0.35 * p.sweep, strike) + follow * 0.45 * p.thrust,
+    THREE.MathUtils.lerp(-1.25, -1.25 + 0.1 + 0.5 * Math.max(0, p.raise - 1), wind),
     dt,
     20,
   );
-  dampBone(vrm, VRMHumanBoneName.RightLowerArm, THREE.MathUtils.lerp(-0.45, -1.05, wind), 0.06, -0.03, dt, 18);
+  // a thrust straightens the elbow on the strike; a swing keeps it bent
+  dampBone(vrm, VRMHumanBoneName.RightLowerArm, THREE.MathUtils.lerp(-0.45, -1.05, wind) * (1 - follow * 0.7 * Math.min(1, p.thrust)), 0.06, -0.03, dt, 18);
   dampBone(vrm, VRMHumanBoneName.RightHand, 0.1 + strike * 0.15, 0.06, 0.05, dt, 16);
 
-  dampBone(vrm, VRMHumanBoneName.LeftUpperArm, 0.05 + walkSwing * 0.08 * m, 0.1, 1.28, dt, 12);
-  dampBone(vrm, VRMHumanBoneName.LeftLowerArm, -0.45, 0.04, 0.03, dt, 12);
-  dampBone(vrm, VRMHumanBoneName.Spine, strike * 0.08, 0, strike * -0.04, dt, 14);
+  if (style === 'swing' || style === 'chop') {
+    // two-handed: the left hand follows the grip
+    dampBone(vrm, VRMHumanBoneName.LeftUpperArm, 0.1 + 0.3 * p.raise * wind, -0.5 - follow * 0.3, 1.0, dt, 16);
+    dampBone(vrm, VRMHumanBoneName.LeftLowerArm, -0.9, 0.04, 0.03, dt, 16);
+  } else {
+    dampBone(vrm, VRMHumanBoneName.LeftUpperArm, 0.05 + walkSwing * 0.08 * m, 0.1, 1.28, dt, 12);
+    dampBone(vrm, VRMHumanBoneName.LeftLowerArm, -0.45, 0.04, 0.03, dt, 12);
+  }
+  dampBone(vrm, VRMHumanBoneName.Spine, strike * 0.08 * (1 + p.thrust), (wind - strike * 2) * -0.12 * p.twist, strike * -0.04 * p.twist, dt, 14);
   dampBone(vrm, VRMHumanBoneName.Head, 0.02, 0, 0, dt, 10);
 }
 
@@ -547,13 +562,14 @@ function applyWeaponPose(
   reloadProgress: number,
   meleeSwing: number,
   fireKick = 0,
+  meleeStyle: MeleeStyle = 'swing',
 ): void {
   if (reloading && grip !== 'melee') {
     applyReloadPose(vrm, reloadProgress, dt);
     return;
   }
   if (grip === 'melee') {
-    applyMeleeHoldPose(vrm, dt, meleeSwing, m, swing);
+    applyMeleeHoldPose(vrm, dt, meleeSwing, m, swing, meleeStyle);
     return;
   }
   if (grip === 'pistol') {
@@ -809,7 +825,7 @@ export async function createVrmAvatar(opts: {
       return;
     }
     if (animator && poseOpts?.anim) {
-      animator.update(dt, { ...poseOpts.anim, melee: poseOpts.grip === 'melee' });
+      animator.update(dt, { ...poseOpts.anim, melee: poseOpts.grip === 'melee', meleeStyle: poseOpts.meleeStyle, meleeSeconds: poseOpts.meleeSeconds });
       // Weapon-specific recoil on top of the clip: chest/head pitch back + right arm kick.
       const kick = THREE.MathUtils.clamp(poseOpts.fireKick ?? 0, 0, 1);
       if (kick > 0.01 && poseOpts.grip !== 'melee') {
@@ -908,6 +924,7 @@ export async function createVrmAvatar(opts: {
         reloadProgress,
         poseOpts?.meleeSwing ?? 0,
         poseOpts?.fireKick ?? 0,
+        poseOpts?.meleeStyle,
       );
     }
 
@@ -1488,6 +1505,8 @@ export function updateOperativeVrm(
   avatar.update(dt, moving, aiming, op.animPhase, op.breathPhase, reloading, reloadProgress, {
     grip: op.weapon.grip,
     meleeSwing: op.meleeSwing,
+    meleeStyle: op.weapon.melee ? meleeStyleOf(op.weapon.variant ?? op.weapon.id) : undefined,
+    meleeSeconds: op.weapon.melee ? meleeClipSeconds(meleeStyleOf(op.weapon.variant ?? op.weapon.id), op.weapon.fireRate) : undefined,
     fireKick: Math.min(1, op.recoil * 2.2),
     anim: avatar.animator ? operativeAnimInput(op, dt) : undefined,
   });
