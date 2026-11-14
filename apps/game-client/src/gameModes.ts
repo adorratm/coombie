@@ -5,6 +5,7 @@ import type { MissionHudState } from './mission';
 import { MAPS, type MapId, type ModeId } from './mapDefs';
 import type { GameMap } from './gameMap';
 import type { IndicatorSrc } from './powerups';
+import { BLITZ_BOSS_BONUS, BLITZ_SECONDS, blitzTarget, HUNT_RESPITE_SECONDS, HUNT_TARGET_HP_MUL, HUNT_TARGETS, huntTargetKind, pickNextZone, ZONE_COUNT, ZONE_HOLD_SECONDS, ZONE_RADIUS, zoneProgress } from './modeRules';
 
 /**
  * Game modes, difficulties and the per-run objective runtime.
@@ -16,6 +17,9 @@ import type { IndicatorSrc } from './powerups';
  *  evac      collect 4 fuel cans, then hold the evac zone until the chopper lands
  *  boss      three bosses hunt you one after another
  *  endless   no end — the horde keeps scaling; score = time + kills
+ *  zones     capture four zones one after another by standing in them
+ *  hunt      six marked infected, one at a time; the last one is a boss
+ *  blitz     reach the kill quota before the clock runs out
  */
 
 export type DifficultyId = 'easy' | 'normal' | 'hard' | 'nightmare' | 'apocalypse';
@@ -57,6 +61,9 @@ export const MODES: Record<ModeId, ModeDef> = {
   evac: { id: 'evac', name: 'Tahliye', icon: '⛽', desc: '4 yakıt bidonu topla, helikopter gelene kadar dayan.' },
   boss: { id: 'boss', name: 'Boss Avı', icon: '☠', desc: 'Üç dev mutant sırayla geliyor.' },
   endless: { id: 'endless', name: 'Sonsuz', icon: '∞', desc: 'Bitiş yok. Ne kadar dayanabilirsin?' },
+  zones: { id: 'zones', name: 'Bölge Kontrol', icon: '⚑', desc: `${ZONE_COUNT} bölgeyi sırayla ele geçir: halkanın içinde ${ZONE_HOLD_SECONDS} sn dur, çıkarsan ilerleme erir.` },
+  hunt: { id: 'hunt', name: 'İnfaz Listesi', icon: '🎯', desc: `${HUNT_TARGETS} işaretli hedefi sırayla avla. Sonuncusu boss.` },
+  blitz: { id: 'blitz', name: 'Katliam', icon: '⚡', desc: `${BLITZ_SECONDS / 60} dakikada öldürme kotasını doldur. Her boss +${BLITZ_BOSS_BONUS} sn kazandırır.` },
 };
 
 export interface MissionSelection {
@@ -135,6 +142,18 @@ export class ModeRuntime {
   private hordeSpawnT = 0;
   private hordeBreak = 0;
   private readonly hordeAlive = new Set<ZombieVisual>();
+  // zones mode
+  private zoneMarker: THREE.Group | null = null;
+  private readonly zonesUsed = new Set<number>();
+  private zonesDone = 0;
+  private zoneT = 0;
+  // hunt mode
+  private huntTarget: ZombieVisual | null = null;
+  private huntKills = 0;
+  // blitz mode
+  private blitzKills0 = -1;
+  private blitzKills = 0;
+  private blitzBonus = 0;
 
   /** Horde mode spawns every zombie itself; the arena's wave/ambient spawner stays off. */
   get ownsSpawning(): boolean {
@@ -156,6 +175,28 @@ export class ModeRuntime {
     if (sel.mode === 'evac') this.spawnPickups();
     if (sel.mode === 'rescue') this.spawnSurvivors();
     if (sel.mode === 'defense') ctx.map.core.visible = true;
+    if (sel.mode === 'zones') this.nextZone();
+  }
+
+  /** Candidate zone centres: every objective anchor the map has. */
+  private zoneCandidates(): THREE.Vector3[] {
+    const a = this.ctx.map.anchors;
+    return [a.core, a.evac, a.boss, ...a.pickups, ...a.rescues];
+  }
+
+  private nextZone(): void {
+    const candidates = this.zoneCandidates();
+    const from = this.zoneMarker?.position ?? this.ctx.player.root.position;
+    let i = pickNextZone(candidates, this.zonesUsed, from);
+    if (i < 0) {
+      // small map: allow revisits rather than stalling the mission
+      this.zonesUsed.clear();
+      i = pickNextZone(candidates, this.zonesUsed, from);
+    }
+    this.zonesUsed.add(i);
+    this.zoneMarker ??= this.beacon(0x38bdf8, ZONE_RADIUS);
+    this.zoneMarker.position.copy(candidates[i]!).setY(0);
+    this.zoneT = 0;
   }
 
   private banner(s: string): void {
@@ -211,11 +252,24 @@ export class ModeRuntime {
     const ev = this.ctx.map.evacMarker;
     if (ev.visible) out.push({ pos: ev.position, color: 0xffd23c, icon: '🚁', label: 'Tahliye', urgent: true });
     for (const b of this.bosses) if (b.hp > 0) out.push({ pos: b.root.position, color: 0xff3a30, icon: '☠', label: 'Mutant' });
+    if (this.zoneMarker && !this.outcome) out.push({ pos: this.zoneMarker.position, color: 0x38bdf8, icon: '⚑', label: 'Bölge', urgent: true });
+    if (this.huntTarget && this.huntTarget.hp > 0) out.push({ pos: this.huntTarget.root.position, color: 0xffd23c, icon: '🎯', label: 'Hedef', urgent: true });
     return out;
   }
 
   onZombieKilled(z: ZombieVisual): void {
     if (z.kind === 'boss') this.bossKills++;
+    if (z.kind === 'boss' && this.sel.mode === 'blitz') {
+      this.blitzBonus += BLITZ_BOSS_BONUS;
+      this.banner(`Boss düştü: +${BLITZ_BOSS_BONUS} sn`);
+    }
+    if (z === this.huntTarget) {
+      this.huntTarget = null;
+      this.huntKills += 1;
+      this.stageT = 0;
+      this.ctx.sfx('pickup');
+      if (this.huntKills < HUNT_TARGETS) this.banner(`Hedef indirildi (${this.huntKills}/${HUNT_TARGETS})`);
+    }
     if (this.bosses.delete(z) && this.sel.mode === 'boss') this.banner(`Boss düştü! (${this.bossKills}/3)`);
   }
 
@@ -417,6 +471,63 @@ export class ModeRuntime {
       case 'horde':
         this.tickHorde(dt);
         break;
+      case 'zones': {
+        const zone = this.zoneMarker!.position;
+        const held = this.ctx.squad.some((op) => op.alive && op.root.position.distanceTo(zone) < ZONE_RADIUS);
+        this.zoneT = zoneProgress(this.zoneT, dt, held);
+        this.spawnMul = held ? 1.5 + this.zonesDone * 0.15 : 1 + this.zonesDone * 0.1;
+        if (this.zoneT < ZONE_HOLD_SECONDS) break;
+        this.zonesDone += 1;
+        this.ctx.sfx('pickup');
+        if (this.zonesDone >= ZONE_COUNT) {
+          this.zoneMarker!.visible = false;
+          this.win(`${ZONE_COUNT} bölgenin hepsi sizde.`);
+          break;
+        }
+        this.banner(`Bölge alındı (${this.zonesDone}/${ZONE_COUNT}) — sıradakine git!`);
+        if (this.zonesDone === ZONE_COUNT - 1) this.spawnBoss();
+        this.nextZone();
+        break;
+      }
+      case 'hunt': {
+        if (this.huntKills >= HUNT_TARGETS) {
+          this.win('Listedeki herkes indirildi.');
+          break;
+        }
+        this.spawnMul = 1 + this.huntKills * 0.12;
+        if (this.huntTarget) {
+          // despawned without dying (should not happen): put it back on the list
+          if (!this.huntTarget.root.parent && this.huntTarget.hp > 0) this.huntTarget = null;
+          break;
+        }
+        if (this.stageT < HUNT_RESPITE_SECONDS) break;
+        const a = Math.random() * Math.PI * 2;
+        const kind = huntTargetKind(this.huntKills);
+        const target = this.ctx.spawnZombieAt(kind, pl.x + Math.cos(a) * 28, pl.z + Math.sin(a) * 28);
+        if (!target) break; // alive cap: try again next step
+        target.maxHp = Math.ceil(target.maxHp * (kind === 'boss' ? 1.3 : HUNT_TARGET_HP_MUL));
+        target.hp = target.maxHp;
+        this.huntTarget = target;
+        this.ctx.warn(target.root.position.clone(), 4, 0xffd23c, 2);
+        this.ctx.sfx('alarm');
+        this.banner(kind === 'boss' ? 'SON HEDEF — listedeki boss!' : `Hedef ${this.huntKills + 1}/${HUNT_TARGETS} işaretlendi`);
+        break;
+      }
+      case 'blitz': {
+        if (this.blitzKills0 < 0) this.blitzKills0 = kills;
+        this.blitzKills = kills - this.blitzKills0;
+        const limit = BLITZ_SECONDS + this.blitzBonus;
+        this.spawnMul = 1.5 + Math.min(0.4, this.t / limit * 0.4);
+        if (this.stageT > 120) {
+          this.stageT = 0;
+          this.spawnBoss();
+          this.banner('Boss geliyor — öldürürsen süre kazanırsın!');
+        }
+        const quota = blitzTarget(this.diff.count);
+        if (this.blitzKills >= quota) this.win(`${quota} zombi, ${fmt(this.t)} içinde.`);
+        else if (this.t >= limit) this.fail(`Süre doldu: ${this.blitzKills}/${quota}.`);
+        break;
+      }
       case 'endless':
         this.spawnMul = 1 + this.t / 300;
         if (this.stageT > 150) {
@@ -478,6 +589,23 @@ export class ModeRuntime {
         prog = this.bossKills;
         target = 3;
         break;
+      case 'zones':
+        label = `Bölge ${Math.min(ZONE_COUNT, this.zonesDone + 1)}/${ZONE_COUNT} · ${Math.floor(this.zoneT)}/${ZONE_HOLD_SECONDS} sn`;
+        prog = this.zonesDone * ZONE_HOLD_SECONDS + this.zoneT;
+        target = ZONE_COUNT * ZONE_HOLD_SECONDS;
+        break;
+      case 'hunt':
+        label = this.huntTarget ? `Hedef ${this.huntKills + 1}/${HUNT_TARGETS} · işareti takip et` : `Hedef ${this.huntKills}/${HUNT_TARGETS} · sıradaki aranıyor…`;
+        prog = this.huntKills;
+        target = HUNT_TARGETS;
+        break;
+      case 'blitz': {
+        const quota = blitzTarget(this.diff.count);
+        label = `Leş ${this.blitzKills}/${quota} · ${fmt(BLITZ_SECONDS + this.blitzBonus - this.t)}`;
+        prog = this.blitzKills;
+        target = quota;
+        break;
+      }
       case 'endless':
         label = `Dayanma süresi ${fmt(this.t)}`;
         prog = 0;
@@ -510,6 +638,7 @@ export class ModeRuntime {
   dispose(): void {
     for (const p of this.pickups) p.mesh.removeFromParent();
     for (const r of this.rescueMarkers) r.removeFromParent();
+    this.zoneMarker?.removeFromParent();
     this.owned.forEach((m) => m.dispose());
   }
 }

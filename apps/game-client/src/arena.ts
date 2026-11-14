@@ -253,6 +253,7 @@ export interface ArenaHudState {
 
 export interface ArenaHandle {
   scene: THREE.Scene;
+  devGoto: (label: string) => boolean;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   dispose: () => void;
@@ -2939,6 +2940,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     setSize,
     animate,
     getWeaponName: () => player.weapon.name,
+    /** dev (?god=1): jump to the objective marker with this label */
+    devGoto: (label: string): boolean => {
+      const src = DEV_GOD ? modeRt.indicators().find((i) => i.label === label) : undefined;
+      if (!src) return false;
+      player.root.position.set(src.pos.x, 0, src.pos.z);
+      return true;
+    },
     getHudState,
     getRunSummary: (): RunSummary => ({
       kills,
