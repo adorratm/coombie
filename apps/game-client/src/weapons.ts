@@ -304,7 +304,7 @@ WEAPONS.push(
     look: { body: 'sniper', length: 1.35, barrel: 1.5, mag: 'box', scope: 'long', stock: 'fixed', muzzle: 'brake', finish: 0x3a3d33, trim: 0x15170f }, fx: { flash: 0xffc070, flashScale: 2, tracer: 2.2, impact: 'explosive', aoe: 1.6, pierce: 8 } }),
   // ——— Heavy (3: LMG family) ———
   V({ id: 'lmg', variant: 'shredder', name: 'Shredder Minigun', sfx: 'lmg', grip: 'rifle', fireRate: 0.035, damage: 0.9, range: 26, spread: 0.07, pellets: 1, tracerColor: 0xffcc55, recoil: 0.08, auto: true, magSize: 200, reloadTime: 3.4, tier: 4, cost: 1400, desc: 'Döner namlu, mermi yağmuru.',
-    look: { body: 'minigun', mag: 'box', finish: 0x2a2c2e, trim: 0x6b6f72 }, fx: { flash: 0xffd06a, flashScale: 1.1, tracer: 1, impact: 'flesh' } }),
+    look: { body: 'minigun', mag: 'box', finish: 0x2a2c2e, trim: 0x2e3328 }, fx: { flash: 0xffd06a, flashScale: 1.1, tracer: 1, impact: 'flesh' } }),
   V({ id: 'lmg', variant: 'thumper_gl', name: 'Thumper GL', sfx: 'shotgun', grip: 'rifle', fireRate: 0.75, damage: 4.5, range: 26, spread: 0.02, pellets: 1, tracerColor: 0xffaa33, recoil: 0.4, auto: true, magSize: 6, reloadTime: 2.6, tier: 3, cost: 980, desc: 'Bombaatar: alan hasarı.',
     look: { body: 'launcher', mag: 'drum', stock: 'fixed', finish: 0x3b4030, trim: 0x15170f }, fx: { flash: 0xffaa33, flashScale: 1.6, tracer: 3, impact: 'explosive', aoe: 3.2, speed: 0.45 } }),
   // ——— Melee (4th) ———

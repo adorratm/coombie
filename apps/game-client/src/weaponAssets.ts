@@ -45,7 +45,7 @@ export function addSupportPoint(group: THREE.Group, muzzle: THREE.Vector3, frac:
   return p;
 }
 
-/** 26 of the 30 catalogue variants use a real model; heavy/melee stay procedural (PBR-textured). */
+/** Every variant except the minigun and the grenade launcher uses a real model; those two stay procedural. */
 export const VARIANT_MODELS: Record<string, GunModelDef> = {
   // pistols
   pistol: { file: 'pistol_full_west' },
@@ -78,6 +78,15 @@ export const VARIANT_MODELS: Record<string, GunModelDef> = {
   anti_materiel: { file: 'sniper_material_west', tint: 0x8a8f78 },
   // heavy: RPK-style long AK
   lmg: { file: 'rifle_assault_east', tint: 0x8a8f70, scale: 1.2 },
+  // melee: CC0 Flat Shaded Melee Weapons (scripts/weapons/convert-melee.py)
+  knife: { file: 'melee_knife' },
+  bat: { file: 'melee_bat' },
+  axe: { file: 'melee_axe' },
+  machete: { file: 'melee_machete' },
+  // class signature weapons: real receivers in work-tool colours
+  sirt_pompasi: { file: 'smg_compact_east', tint: 0x9aa63a, glow: 0x9cff2e, gripZ: 0.14 },
+  civi_tabancasi: { file: 'smg_full_west', tint: 0xd9a514, scale: 1.08 },
+  boru_havan: { file: 'shotgun_pump_west', tint: 0x8a6a52, scale: 1.22 },
 };
 
 const RAW_FILES = ['pistol_full_west', 'pistol_compact_west', 'pistol_full_east', 'pistol_compact_east', 'smg_full_west', 'smg_compact_west', 'smg_full_east', 'smg_compact_east', 'rifle_assault_west', 'rifle_battle_west', 'rifle_assault_east', 'rifle_battle_east', 'shotgun_pump_west', 'shotgun_auto_west', 'shotgun_pump_east', 'shotgun_auto_east', 'sniper_rifle_west', 'sniper_material_west', 'sniper_rifle_east', 'sniper_material_east'];
