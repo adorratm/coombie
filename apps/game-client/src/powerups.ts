@@ -44,6 +44,8 @@ export interface IndicatorSrc {
   timer?: number;
   /** bigger, pulsing arrow */
   urgent?: boolean;
+  /** ground ring radius for objectives that are a place (co-op guests draw it) */
+  radius?: number;
 }
 
 const caseGeo = new THREE.BoxGeometry(0.75, 0.32, 0.5);

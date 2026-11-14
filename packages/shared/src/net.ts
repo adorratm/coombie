@@ -81,6 +81,36 @@ export interface NetSnapshot {
   heroes: NetHero[];
   /** flat quantised zombie records, see packZombies */
   z: number[];
+  /** what the squad is doing right now; guests draw it instead of running their own objectives */
+  obj?: NetObjective;
+}
+
+/** One objective marker: x, z, colour, ground-ring radius (0 = arrow only), icon, label. */
+export type NetMark = [x: number, z: number, color: number, radius: number, icon: string, label: string];
+
+export interface NetObjective {
+  label: string;
+  prog: number;
+  target: number;
+  marks: NetMark[];
+}
+
+export const NET_MAX_MARKS = 12;
+
+const finite = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+
+/** Guests never trust the shape of what arrives: clamp it or drop it. */
+export function sanitizeObjective(raw: unknown): NetObjective | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Partial<NetObjective>;
+  const marks: NetMark[] = [];
+  if (Array.isArray(o.marks)) {
+    for (const m of o.marks.slice(0, NET_MAX_MARKS)) {
+      if (!Array.isArray(m)) continue;
+      marks.push([finite(m[0]), finite(m[1]), finite(m[2], 0xffffff) & 0xffffff, Math.max(0, Math.min(20, finite(m[3]))), String(m[4] ?? '').slice(0, 4), String(m[5] ?? '').slice(0, 40)]);
+    }
+  }
+  return { label: String(o.label ?? '').slice(0, 120), prog: finite(o.prog), target: Math.max(1e-6, finite(o.target, 1)), marks };
 }
 
 export type NetEvent =
@@ -107,7 +137,7 @@ export interface NetZombie {
   yaw: number;
   /** 0..1 */
   hp: number;
-  /** bit 0 attacking · bit 1 emerging · bit 2 stunned */
+  /** bit 0 attacking · bit 1 emerging · bit 2 stunned · bits 3-5 boss variant (0 = none, else index + 1) */
   flags: number;
 }
 

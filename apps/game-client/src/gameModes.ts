@@ -199,6 +199,11 @@ export class ModeRuntime {
     this.zoneT = 0;
   }
 
+  /** Is a player-controlled hero (local or co-op teammate, not an AI ally) within `r` of `pos`? */
+  private humanWithin(pos: THREE.Vector3, r: number): boolean {
+    return this.ctx.squad.some((op) => op.alive && (op.isPlayer || op.root.userData.netPlayer) && op.root.position.distanceTo(pos) < r);
+  }
+
   private banner(s: string): void {
     this.bannerText = s;
     this.bannerT = 3.2;
@@ -242,17 +247,27 @@ export class ModeRuntime {
     }
   }
 
+  /** Co-op guest: the host owns the objectives, so this client's own copies are hidden. */
+  goRemote(): void {
+    for (const p of this.pickups) p.mesh.visible = false;
+    for (const r of this.rescueMarkers) r.visible = false;
+    if (this.zoneMarker) this.zoneMarker.visible = false;
+    this.pickups = [];
+    this.rescueMarkers.length = 0;
+    this.zoneMarker = null;
+  }
+
   /** Objective markers for the off-screen arrow HUD. */
   indicators(): IndicatorSrc[] {
     const out: IndicatorSrc[] = [];
-    for (const p of this.pickups) if (!p.taken) out.push({ pos: p.pos, color: 0xffb020, icon: '⛽', label: 'Yakıt bidonu' });
+    for (const p of this.pickups) if (!p.taken) out.push({ pos: p.pos, color: 0xffb020, icon: '⛽', label: 'Yakıt bidonu', radius: 1.4 });
     this.rescueMarkers.forEach((g) => {
-      if (g.visible && g.parent) out.push({ pos: g.position, color: 0x3cff6a, icon: '✚', label: 'Hayatta kalan' });
+      if (g.visible && g.parent) out.push({ pos: g.position, color: 0x3cff6a, icon: '✚', label: 'Hayatta kalan', radius: 2.6 });
     });
     const ev = this.ctx.map.evacMarker;
-    if (ev.visible) out.push({ pos: ev.position, color: 0xffd23c, icon: '🚁', label: 'Tahliye', urgent: true });
+    if (ev.visible) out.push({ pos: ev.position, color: 0xffd23c, icon: '🚁', label: 'Tahliye', urgent: true, radius: 6 });
     for (const b of this.bosses) if (b.hp > 0) out.push({ pos: b.root.position, color: 0xff3a30, icon: '☠', label: 'Mutant' });
-    if (this.zoneMarker && !this.outcome) out.push({ pos: this.zoneMarker.position, color: 0x38bdf8, icon: '⚑', label: 'Bölge', urgent: true });
+    if (this.zoneMarker && !this.outcome) out.push({ pos: this.zoneMarker.position, color: 0x38bdf8, icon: '⚑', label: 'Bölge', urgent: true, radius: ZONE_RADIUS });
     if (this.huntTarget && this.huntTarget.hp > 0) out.push({ pos: this.huntTarget.root.position, color: 0xffd23c, icon: '🎯', label: 'Hedef', urgent: true });
     return out;
   }
@@ -410,7 +425,7 @@ export class ModeRuntime {
             for (const p of this.pickups) {
               if (p.taken) continue;
               p.mesh.rotation.y += dt * 1.5;
-              if (p.pos.distanceTo(pl) < 2) {
+              if (this.humanWithin(p.pos, 2)) {
                 p.taken = true;
                 p.mesh.visible = false;
                 this.ctx.sfx('pickup');
@@ -419,7 +434,7 @@ export class ModeRuntime {
               }
             }
           } else {
-            const near = this.ctx.map.anchors.rescues.findIndex((p, i) => this.rescueMarkers[i]!.visible && p.distanceTo(pl) < 3);
+            const near = this.ctx.map.anchors.rescues.findIndex((p, i) => this.rescueMarkers[i]!.visible && this.humanWithin(p, 3));
             if (near >= 0) {
               this.freeT += dt;
               if (this.freeT >= 3) {
@@ -442,7 +457,7 @@ export class ModeRuntime {
           this.ctx.sfx('alarm');
         }
         const hold = this.sel.mode === 'evac' ? 50 : 40;
-        if (m.anchors.evac.distanceTo(pl) < 6) {
+        if (this.humanWithin(m.anchors.evac, 6)) {
           this.holdT += dt;
           this.spawnMul = 1.9;
           if (this.stage === 0 && this.holdT > hold * 0.4) {
@@ -473,7 +488,7 @@ export class ModeRuntime {
         break;
       case 'zones': {
         const zone = this.zoneMarker!.position;
-        const held = this.ctx.squad.some((op) => op.alive && op.root.position.distanceTo(zone) < ZONE_RADIUS);
+        const held = this.humanWithin(zone, ZONE_RADIUS);
         this.zoneT = zoneProgress(this.zoneT, dt, held);
         this.spawnMul = held ? 1.5 + this.zonesDone * 0.15 : 1 + this.zonesDone * 0.1;
         if (this.zoneT < ZONE_HOLD_SECONDS) break;

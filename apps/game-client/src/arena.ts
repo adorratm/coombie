@@ -20,14 +20,14 @@ import { allAvatarUrls } from './roster';
 import { rosterById } from './roster';
 import { currentRunLoadout, type AbilitySlot, type RunLoadout } from './loadout';
 import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
-import { BOSS_VARIANTS, pickBossVariant, type BossVariant } from './bossVariants';
+import { BOSS_VARIANT_IDS, BOSS_VARIANTS, pickBossVariant, type BossVariant, type BossVariantDef } from './bossVariants';
 import { WEAPONS as ALL_WEAPONS, weaponByVariant, weaponIndexOfVariant, weaponVariantId, type WeaponFxDef } from './weapons';
 import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
 import { waveKindForLevel } from '@protocol-z/shared';
 import { buildSpawnField } from './spawnField';
 import type { NetSession } from './netSession';
 import { tickDowned } from './coopRules';
-import type { NetHero } from '@protocol-z/shared';
+import { NET_MAX_MARKS, type NetHero, type NetMark, type NetObjective } from '@protocol-z/shared';
 import {
   HORDE_WARN_SECONDS,
   aliveSlack,
@@ -568,6 +568,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     z.hp = z.maxHp;
     z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * def.damageMul));
     z.speed *= def.speedMul;
+    applyBossLook(z, def);
+    missionRuntime.banner = `☠ ${def.name.toLocaleUpperCase('tr')} — ${def.intro}`;
+    missionRuntime.bannerUntil = simTime + 4;
+  };
+  /** Size and ground aura of a boss variant (also used for co-op replicas). */
+  const applyBossLook = (z: ZombieVisual, def: BossVariantDef): void => {
+    z.root.userData.bossVariant = def.id;
     z.root.scale.multiplyScalar(def.scaleMul);
     const aura = new THREE.Mesh(
       new THREE.RingGeometry(1.5, 1.9, 40),
@@ -577,8 +584,6 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     aura.position.y = 0.06;
     aura.name = 'bossAura';
     z.root.add(aura);
-    missionRuntime.banner = `☠ ${def.name.toLocaleUpperCase('tr')} — ${def.intro}`;
-    missionRuntime.bannerUntil = simTime + 4;
   };
   const spawnZombie = (
     kind: ZombieVisual['kind'] = 'grunt',
@@ -741,6 +746,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       else audio.playLevelUp();
     },
   });
+  if (isGuest) modeRt.goRemote();
   if (Number.isFinite(modeRt.revivesLeft)) modeRt.revivesLeft += tree.revives;
   let runOver: RunOutcome | null = null;
   const snapshotRunStats = (): RunStats => {
@@ -1532,9 +1538,63 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
 
   /** guest: draw the host's world */
+  /** guest: objective text and progress come from the host */
+  const guestMission = (local: MissionHudState): MissionHudState => {
+    const o = isGuest ? net?.objective : null;
+    return o ? { ...local, objectiveLabel: o.label, objectiveProgress: o.prog, objectiveTarget: o.target } : local;
+  };
+  /** host: the objective as guests should see it */
+  const netObjectiveOut = (): NetObjective => {
+    const hud = modeRt.hud(missionHud);
+    return {
+      label: hud.objectiveLabel,
+      prog: Math.round(hud.objectiveProgress * 10) / 10,
+      target: hud.objectiveTarget,
+      marks: modeRt
+        .indicators()
+        .slice(0, NET_MAX_MARKS)
+        .map((i): NetMark => [Math.round(i.pos.x * 10) / 10, Math.round(i.pos.z * 10) / 10, i.color, i.radius ?? 0, i.icon, i.label]),
+    };
+  };
+  /** guest: ground rings for the host's place objectives, reused between frames */
+  const netRings: THREE.Mesh[] = [];
+  const netMarkSrcs: IndicatorSrc[] = [];
+  const drawNetObjective = (): void => {
+    const marks = net?.objective?.marks ?? [];
+    netMarkSrcs.length = 0;
+    let used = 0;
+    let evac = false;
+    for (const [x, z, color, radius, icon, label] of marks) {
+      netMarkSrcs.push({ pos: new THREE.Vector3(x, 0, z), color, icon, label, urgent: icon === '🚁' || icon === '⚑' || icon === '🎯' });
+      if (icon === '🚁') {
+        evac = true; // the map's own evac marker is drawn instead
+        continue;
+      }
+      if (radius <= 0) continue;
+      let ring = netRings[used];
+      if (!ring) {
+        ring = new THREE.Mesh(
+          new THREE.RingGeometry(0.92, 1, 40),
+          new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }),
+        );
+        ring.rotation.x = -Math.PI / 2;
+        scene.add(ring);
+        netRings.push(ring);
+      }
+      used += 1;
+      ring.visible = true;
+      ring.position.set(x, 0.07, z);
+      ring.scale.setScalar(radius);
+      (ring.material as THREE.MeshBasicMaterial).color.setHex(color);
+    }
+    for (let i = used; i < netRings.length; i++) netRings[i]!.visible = false;
+    map.evacMarker.visible = evac;
+  };
+
   const applyNetWorld = (dt: number, t: number) => {
     const frame = net!.sampleWorld();
     if (!frame) return;
+    drawNetObjective();
     wave = Math.max(1, frame.wave);
     kills = frame.kills;
     syncNetAllies(frame.heroes);
@@ -1546,6 +1606,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         z = createZombie(NET_ZOMBIE_KINDS[nz.kind] ?? 'grunt');
         z.proxy.visible = true;
         z.root.userData.netId = nz.id;
+        const variant = BOSS_VARIANT_IDS[(nz.flags >> 3) - 1];
+        if (variant) applyBossLook(z, BOSS_VARIANTS[variant]);
         z.root.position.set(nz.x, 0, nz.z);
         scene.add(z.root);
         zombies.push(z);
@@ -1616,8 +1678,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           z: z.root.position.z,
           yaw: z.root.rotation.y,
           hp: z.hp / Math.max(1, z.maxHp),
-          flags: z.attackAnim > 0 ? 1 : 0,
+          flags: (z.attackAnim > 0 ? 1 : 0) | ((BOSS_VARIANT_IDS.indexOf(z.root.userData.bossVariant as BossVariant) + 1) << 3),
         })),
+      obj: netObjectiveOut(),
     }));
     netFlushT += dt;
     if (netFlushT >= 0.1) {
@@ -1984,7 +2047,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     for (const sl of rescueSlots) {
       if (sl.status === 'active' && sl.captive) srcs.push({ pos: sl.captive.root.position, color: 0x3cff6a, icon: '✚', label: sl.template.name, timer: sl.timer, urgent: sl.timer < 12 });
     }
-    srcs.push(...modeRt.indicators(), ...powerUps.indicators());
+    srcs.push(...(isGuest ? netMarkSrcs : modeRt.indicators()), ...powerUps.indicators());
     const cw = renderer.domElement.clientWidth || 1;
     const ch = renderer.domElement.clientHeight || 1;
     const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
@@ -2110,7 +2173,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       reloadProgress: player.reloading
         ? 1 - player.reloadTimer / Math.max(0.01, player.weapon.reloadTime)
         : 1,
-      mission: modeRt.hud(missionHud),
+      mission: guestMission(modeRt.hud(missionHud)),
       runOver,
       revivesLeft: modeRt.revivesLeft,
       runStats: snapshotRunStats(),

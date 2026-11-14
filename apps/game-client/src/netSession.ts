@@ -3,6 +3,8 @@ import {
   NetEvents,
   packZombies,
   unpackZombies,
+  sanitizeObjective,
+  type NetObjective,
   type NetEvent,
   type NetHero,
   type NetInput,
@@ -42,6 +44,8 @@ export class NetSession {
   ended: string | null = null;
   /** host: latest reported state of every guest hero */
   readonly remoteHeroes = new Map<string, NetHero & { at: number; seq: number }>();
+  /** guest: the host's current objective (latest snapshot, not interpolated) */
+  objective: NetObjective | null = null;
   private readonly buffer = new SnapshotBuffer();
   private seq = 0;
   private lastSent = -1;
@@ -79,6 +83,7 @@ export class NetSession {
         heroes: Array.isArray(s.heroes) ? s.heroes.filter(validHero) : [],
       };
       this.buffer.push(frame, this.clock());
+      this.objective = sanitizeObjective(s.obj);
     });
     this.listen(NetEvents.Event, (m: { from: string; d: NetEvent }) => {
       if (m && m.d && typeof m.d.k === 'string') this.handlers.onEvent?.(m.d, String(m.from));
@@ -121,10 +126,11 @@ export class NetSession {
   }
 
   /** host: broadcast the world (throttled). `build` is only called when a packet is due. */
-  hostPublish(build: () => { t: number; wave: number; kills: number; heroes: NetHero[]; zombies: NetZombie[] }): boolean {
+  hostPublish(build: () => { t: number; wave: number; kills: number; heroes: NetHero[]; zombies: NetZombie[]; obj?: NetObjective }): boolean {
     if (this.role !== 'host' || this.ended || !this.due(NET_LIMITS.snapshotHz)) return false;
     const w = build();
     const snap: NetSnapshot = { seq: ++this.seq, t: Math.round(w.t * 1000) / 1000, wave: w.wave, kills: w.kills, heroes: w.heroes.map(roundHero), z: packZombies(w.zombies) };
+    if (w.obj) snap.obj = w.obj;
     this.io.emit(NetEvents.Snapshot, snap);
     return true;
   }
