@@ -8,10 +8,11 @@ import type { SkillFx } from './skillFx';
  *  radio call (animation + voice line + subtitles + ground telegraph)
  *   → pilot / battery reply on the radio
  *   → the vehicle arrives (F-16 bomb run, gunship strafe, artillery barrage,
- *     armed UAV precision strikes, cargo plane supply drop)
+ *     armed UAV precision strikes, cargo plane supply drop,
+ *     crop duster poison run, dolmuş ram, transformer drop)
  */
 
-export type SupportKind = 'jet' | 'heli' | 'artillery' | 'siha' | 'supply';
+export type SupportKind = 'jet' | 'heli' | 'artillery' | 'siha' | 'supply' | 'duster' | 'dolmus' | 'trafo';
 
 export interface SupportCtx {
   scene: THREE.Scene;
@@ -33,6 +34,9 @@ export const SUPPORT_LINES: Record<SupportKind, [string, string]> = {
   artillery: ['Topçu abi, koordinatları attım, yak gitsin!', 'Atış serbest, mermiler yolda!'],
   siha: ['SİHA, hedefler işaretli. Vur hepsini!', 'Hedefler kilitlendi, angajman başladı.'],
   supply: ['Kardeşim bir paket at, mermi bitti burada!', 'Paket yolda, sinyal dumanını yakın!'],
+  duster: ['Dayı, şu tarlayı bir ilaçla, haşere bastı!', 'İlaçlama başlıyor yeğenim, maskeni tak!'],
+  dolmus: ['Kaptan, müsait bir yerde zombileri indir!', 'Arkaya doğru ilerleyelim beyler, basıyorum!'],
+  trafo: ['Usta, şalteri indir, trafoyu sal!', 'Trafo geliyor, sigortalar atacak, uzak dur!'],
 };
 
 interface Ev {
@@ -86,7 +90,7 @@ export class SupportCalls {
   private readonly crates: Crate[] = [];
   private readonly geo: Record<string, THREE.BufferGeometry> = {};
   private readonly mat: Record<string, THREE.Material> = {};
-  private protos: Partial<Record<'jet' | 'heli' | 'uav' | 'cargo' | 'bomb' | 'crate', THREE.Group>> = {};
+  private protos: Partial<Record<'jet' | 'heli' | 'uav' | 'cargo' | 'bomb' | 'crate' | 'duster' | 'dolmus' | 'trafo', THREE.Group>> = {};
 
   constructor(private readonly ctx: SupportCtx) {
     const std = (c: number, r = 0.55, m = 0.35) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
@@ -96,6 +100,11 @@ export class SupportCalls {
     this.mat.glass = new THREE.MeshStandardMaterial({ color: 0x1a2228, roughness: 0.1, metalness: 0.6 });
     this.mat.black = std(0x15171a, 0.6, 0.3);
     this.mat.white = std(0xd9dcdf, 0.5, 0.2);
+    this.mat.yellow = std(0xe0b020, 0.55, 0.2);
+    this.mat.cream = std(0xe8e0c8, 0.6, 0.15);
+    this.mat.blue = std(0x2a5aa8, 0.5, 0.25);
+    this.mat.rust = std(0x7a5236, 0.8, 0.3);
+    this.mat.rubber = std(0x101112, 0.9, 0.05);
     this.mat.chute = new THREE.MeshStandardMaterial({ color: 0x6a7a4a, roughness: 0.9, side: THREE.DoubleSide });
     this.mat.flame = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
     this.mat.blur = new THREE.MeshBasicMaterial({ color: 0x1a1c1e, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
@@ -125,6 +134,63 @@ export class SupportCalls {
     m.castShadow = true;
     g.add(m);
     return m;
+  }
+
+  /** Yellow crop duster (high wing, radial nose), nose +Z. */
+  private duster(): THREE.Group {
+    if (!this.protos.duster) {
+      const g = new THREE.Group();
+      this.part(g, 'cyl', 'yellow', 1.1, 1.1, 6);
+      this.part(g, 'cyl', 'black', 1.2, 1.2, 0.7, 0, 0, 3.2);
+      this.part(g, 'box', 'yellow', 9.5, 0.14, 1.5, 0, 0.75, 0.6); // wing
+      this.part(g, 'box', 'darkGrey', 9.0, 0.08, 0.1, 0, -0.5, -0.2); // spray boom
+      this.part(g, 'box', 'yellow', 3.2, 0.1, 0.9, 0, 0.2, -2.8); // tailplane
+      this.part(g, 'box', 'yellow', 0.1, 1.3, 1.0, 0, 0.8, -2.8); // fin
+      this.part(g, 'sphere', 'glass', 0.8, 0.7, 1.3, 0, 0.7, 0.4);
+      this.part(g, 'cyl', 'rubber', 0.5, 0.5, 0.2, 0.9, -0.9, 1.4);
+      this.part(g, 'cyl', 'rubber', 0.5, 0.5, 0.2, -0.9, -0.9, 1.4);
+      const prop = this.part(g, 'box', 'black', 2.6, 0.16, 0.05, 0, 0, 3.6);
+      prop.name = 'prop';
+      prop.castShadow = false;
+      this.protos.duster = g;
+    }
+    return this.protos.duster.clone();
+  }
+
+  /** Cream-and-blue minibus, nose +Z, ~6 m long. */
+  private dolmus(): THREE.Group {
+    if (!this.protos.dolmus) {
+      const g = new THREE.Group();
+      this.part(g, 'box', 'cream', 2.2, 1.9, 5.8, 0, 1.45, 0);
+      this.part(g, 'box', 'blue', 2.24, 0.45, 5.84, 0, 0.95, 0); // stripe
+      this.part(g, 'box', 'glass', 2.26, 0.7, 4.6, 0, 1.85, -0.3);
+      this.part(g, 'box', 'glass', 2.0, 0.8, 0.1, 0, 1.8, 2.9); // windscreen
+      this.part(g, 'box', 'yellow', 1.0, 0.24, 0.12, 0, 2.5, 2.86); // route sign
+      this.part(g, 'box', 'darkGrey', 2.3, 0.3, 0.3, 0, 0.55, 2.95); // bumper
+      for (const [x, z] of [[1.05, 1.9], [-1.05, 1.9], [1.05, -1.9], [-1.05, -1.9]] as const) {
+        const w = this.part(g, 'cyl', 'rubber', 0.85, 0.85, 0.3, x, 0.45, z);
+        w.rotation.y = Math.PI / 2;
+        w.name = 'wheel';
+      }
+      this.protos.dolmus = g;
+    }
+    return this.protos.dolmus.clone();
+  }
+
+  /** Pole transformer: grey tank, cooling fins, three insulators. */
+  private trafo(): THREE.Group {
+    if (!this.protos.trafo) {
+      const g = new THREE.Group();
+      this.part(g, 'box', 'grey', 1.5, 1.7, 1.1);
+      for (let i = -2; i <= 2; i++) this.part(g, 'box', 'darkGrey', 0.08, 1.4, 1.5, i * 0.3, 0, 0);
+      for (const x of [-0.45, 0, 0.45]) {
+        const ins = this.part(g, 'cyl', 'rust', 0.22, 0.22, 0.55, x, 1.1, 0);
+        ins.rotation.x = Math.PI / 2;
+      }
+      this.part(g, 'box', 'yellow', 0.5, 0.4, 0.04, 0, 0.1, 0.57); // warning plate
+      this.protos.trafo = g;
+    }
+    return this.protos.trafo.clone();
   }
 
   /** F-16-like fighter, nose +Z, ~15 m long. */
@@ -374,6 +440,9 @@ export class SupportCalls {
     else if (kind === 'heli') this.heliRun(T, lv, evo, power);
     else if (kind === 'artillery') this.barrage(T, lv, evo, power);
     else if (kind === 'siha') this.sihaRun(strongest, lv, evo, power);
+    else if (kind === 'duster') this.dusterRun(T, lv, evo, power);
+    else if (kind === 'dolmus') this.dolmusRun(T, lv, evo, power);
+    else if (kind === 'trafo') this.trafoDrop(T, lv, evo, power);
     else this.supplyRun(T, evo);
     return true;
   }
@@ -513,6 +582,163 @@ export class SupportCalls {
       },
     });
     this.at(start - 2.6, () => this.ctx.sample('s_heli', { gain: 1, pan: -0.4 }));
+  }
+
+  /** Zirai ilaçlama uçağı: low pass that leaves a poison cloud lane (damage over time). */
+  private dusterRun(T: THREE.Vector3, lv: number, evo: boolean, power: number): void {
+    const dir = this.screenDir();
+    const len = 20 + lv * 2;
+    const w = evo ? 7.5 : 5;
+    const a = T.clone().addScaledVector(dir, -len / 2);
+    const b = T.clone().addScaledVector(dir, len / 2);
+    const start = 4.6;
+    const SPEED = 15;
+    const linger = (evo ? 9 : 6) + lv * 0.5;
+    this.markStrip(a, b, w, start + len / SPEED + linger);
+    const plane = this.duster();
+    const from = a.clone().addScaledVector(dir, -SPEED * 2).setY(4.2);
+    const to = b.clone().addScaledVector(dir, SPEED * 2.4).setY(5.5);
+    const fx = this.ctx.fx;
+    const sideV = new THREE.Vector3(dir.z, 0, -dir.x);
+    let sprayT = 0;
+    let sprayedTo = 0;
+    this.fly(plane, from, to, start - 2, from.distanceTo(to) / SPEED, {
+      spin: [plane.getObjectByName('prop')!],
+      bank: 0.08,
+      onTick: (_k, pos, dt) => {
+        const along = (pos.x - a.x) * dir.x + (pos.z - a.z) * dir.z;
+        if (along < 0 || along > len) return;
+        sprayedTo = Math.max(sprayedTo, along);
+        sprayT += dt;
+        while (sprayT >= 0.03) {
+          sprayT -= 0.03;
+          const s = (Math.random() - 0.5) * w;
+          fx.emit('smoke', pos.x + sideV.x * s, pos.y - 0.6, pos.z + sideV.z * s, { vy: -2.2, life: 1.6, s0: 0.5, s1: 2.6, color: 0x8fc93a, a: 0.4, drag: 1.2 });
+        }
+      },
+    });
+    // the cloud: ticks on everything standing in the sprayed part of the lane
+    const dps = 16 * (1 + 0.3 * (lv - 1)) * power;
+    const ticks = Math.round(linger / 0.25);
+    for (let i = 0; i < ticks; i++) {
+      this.at(start + 0.4 + i * 0.25, () => {
+        for (const z of this.ctx.zombies) {
+          if (z.hp <= 0) continue;
+          const r = z.root.position.clone().sub(a);
+          const al = r.dot(dir);
+          if (al < -1 || al > sprayedTo + 1) continue;
+          if (Math.abs(r.dot(sideV)) > w / 2 + 0.3) continue;
+          this.ctx.hit(z, dps * 0.25, z.root.position.clone().setY(1));
+        }
+        // keep the cloud visible while it works
+        for (let n = 0; n < 3; n++) {
+          const al = Math.random() * sprayedTo;
+          const s = (Math.random() - 0.5) * w;
+          fx.emit('smoke', a.x + dir.x * al + sideV.x * s, 0.5, a.z + dir.z * al + sideV.z * s, { vy: 0.3, life: 1.4, s0: 1.2, s1: 2.8, color: 0x7fb82e, a: 0.22, drag: 1.5 });
+        }
+      });
+    }
+    this.at(start - 2.4, () => this.ctx.sample('s_heli', { gain: 0.7, rate: 1.5, pan: -0.3 }));
+  }
+
+  /** Dolmuş: a minibus barrels down the lane on the ground and runs the horde over. */
+  private dolmusRun(T: THREE.Vector3, lv: number, evo: boolean, power: number): void {
+    const dir = this.screenDir();
+    const len = 24 + lv * 2;
+    const w = 3.4;
+    const a = T.clone().addScaledVector(dir, -len / 2);
+    const b = T.clone().addScaledVector(dir, len / 2);
+    const start = 4.4;
+    const SPEED = 24;
+    this.markStrip(a, b, w, start + len / SPEED + 1.2);
+    const dmg = 46 * (1 + 0.3 * (lv - 1)) * power;
+    const fx = this.ctx.fx;
+    const passes = evo ? 2 : 1;
+    for (let p = 0; p < passes; p++) {
+      // the second bus ("arkadan gelen boş") comes back the other way
+      const d = p === 0 ? dir : dir.clone().multiplyScalar(-1);
+      const s0 = p === 0 ? a : b;
+      const bus = this.dolmus();
+      const from = s0.clone().addScaledVector(d, -SPEED * 1.4).setY(0);
+      const to = s0.clone().addScaledVector(d, len + SPEED * 1.6).setY(0);
+      const hitOnce = new Set<ZombieVisual>();
+      const sideV = new THREE.Vector3(d.z, 0, -d.x);
+      let dustT = 0;
+      const t0 = start - 1.4 + p * 2.6;
+      this.fly(bus, from, to, t0, from.distanceTo(to) / SPEED, {
+        spinX: bus.children.filter((c) => c.name === 'wheel'),
+        onTick: (_k, pos, dt) => {
+          dustT += dt;
+          if (dustT > 0.04) {
+            dustT = 0;
+            fx.emit('smoke', pos.x - d.x * 2.6, 0.3, pos.z - d.z * 2.6, { vy: 0.8, life: 0.8, s0: 0.6, s1: 2.2, color: 0x8a7a62, a: 0.3, drag: 2 });
+          }
+          for (const z of this.ctx.zombies) {
+            if (z.hp <= 0 || hitOnce.has(z)) continue;
+            const r = z.root.position.clone().sub(pos);
+            const al = r.dot(d);
+            if (al < -2.6 || al > 3.2) continue;
+            if (Math.abs(r.dot(sideV)) > w / 2 + 0.2) continue;
+            hitOnce.add(z);
+            this.ctx.hit(z, dmg, z.root.position.clone().setY(1), pos);
+            fx.debris(z.root.position.clone().setY(0.6), 3, 0.5);
+          }
+        },
+      });
+      this.at(t0 - 0.2, () => {
+        // engine rumble (no horn sample yet)
+        this.ctx.sample('s_heli', { gain: 0.6, rate: 0.6, bus: 'combat' });
+        this.ctx.shake(0.2);
+      });
+    }
+  }
+
+  /** Trafo: a transformer is dropped on the mark, blows up and arcs through the crowd. */
+  private trafoDrop(T: THREE.Vector3, lv: number, evo: boolean, power: number): void {
+    const R = 5.5 + lv * 0.5 + (evo ? 2 : 0);
+    const land = 4.8;
+    this.markX(T, R * 0.6, land + 1.4);
+    const dmg = 60 * (1 + 0.3 * (lv - 1)) * power;
+    const box = this.trafo();
+    const fx = this.ctx.fx;
+    const from = T.clone().setY(34);
+    const to = T.clone().setY(0.9);
+    box.position.copy(from);
+    box.visible = false;
+    this.ctx.scene.add(box);
+    this.at(land - 1.6, () => this.ctx.sample('s_whistle', { gain: 0.8, pan: this.pan(T) }));
+    this.falls.push({ obj: box, from, to, t0: this.t + land - 1.3, dur: 1.3, land: () => {
+      this.blast(T, R, dmg, true);
+      // arcs: each jump hits the nearest zombie not hit yet, a little weaker
+      const jumps = 4 + lv + (evo ? 4 : 0);
+      const done = new Set<ZombieVisual>();
+      let src = T.clone().setY(1.2);
+      let power2 = dmg * 0.55;
+      for (let j = 0; j < jumps; j++) {
+        let best: ZombieVisual | null = null;
+        let bd = (R * 2.2) ** 2;
+        for (const z of this.ctx.zombies) {
+          if (z.hp <= 0 || done.has(z)) continue;
+          const d2 = (z.root.position.x - src.x) ** 2 + (z.root.position.z - src.z) ** 2;
+          if (d2 < bd) {
+            bd = d2;
+            best = z;
+          }
+        }
+        if (!best) break;
+        done.add(best);
+        const at = best.root.position.clone().setY(1.2);
+        fx.tracer(src, at, 0x9fd8ff);
+        fx.sparks(at, 6, 0xbfe6ff, 4);
+        this.ctx.hit(best, power2, at, src);
+        src = at;
+        power2 *= 0.88;
+      }
+      this.ctx.sample('s_explosion', { gain: 0.6, rate: 1.6 });
+      // the wreck sparks for a moment, then is cleared away
+      for (let i = 1; i <= 6; i++) this.at(i * 0.35, () => fx.sparks(T.clone().setY(1.2), 4, 0xbfe6ff, 3));
+      this.at(2.6, () => this.ctx.scene.remove(box));
+    } });
   }
 
   private barrage(T: THREE.Vector3, lv: number, evo: boolean, power: number): void {

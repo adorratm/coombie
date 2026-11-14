@@ -36,7 +36,10 @@ export type RunSkillId =
   | 'gunship'
   | 'barrage'
   | 'siha'
-  | 'supplyDrop';
+  | 'supplyDrop'
+  | 'cropDuster'
+  | 'dolmus'
+  | 'trafo';
 
 export type PassiveId = 'core' | 'area' | 'cooldown' | 'amount' | 'duration' | 'velocity' | 'capacitor' | 'fuel';
 
@@ -86,10 +89,13 @@ export const RUN_SKILLS: Record<RunSkillId, RunSkillDef> = {
   gravity: S({ id: 'gravity', name: 'Yem Bombası', icon: '📟', color: 0xc0504a, desc: 'Ses ve feromonla zombileri toplayıp patlayan cihaz.', levels: ['2.5 sn çekim', '+%30 hasar', '+%20 alan', '+süre', '+%40 patlama'], evo: { passive: 'duration', name: 'Feromon Bombası', desc: 'Çok geniş çekim, iki kat patlama.' } }),
   knives: S({ id: 'knives', name: 'Bıçak Fırtınası', icon: '✦', color: 0xe5e7eb, desc: 'Her yöne fırlatılan bıçaklar.', levels: ['5 bıçak', '+%30 hasar', '+2 bıçak', '+1 delme', '+2 bıçak'], evo: { passive: 'cooldown', name: 'Bıçak Kasırgası', desc: 'Sarmal 16 bıçak, 3 delme, çok sık.' } }),
   airstrike: S({ id: 'airstrike', heroes: ['ironclad'], name: 'Hava Desteği (F-16)', icon: '✈', color: 0xd9a066, desc: 'Telsizle F-16 çağırır: işaretli hatta bomba yağdırır.', levels: ['6 bomba', '+%30 hasar, +1 bomba', '+2 m hat', '+%30 hasar, +1 bomba', '−bekleme, +1 bomba'], evo: { passive: 'amount', name: 'Halı Bombardımanı', desc: 'İki jet yan yana geçer.' } }),
-  gunship: S({ id: 'gunship', heroes: ['warden', 'breaker'], name: 'Taarruz Helikopteri', icon: '🚁', color: 0xb8c4a0, desc: 'Telsizle helikopter çağırır: işaretli şeridi makineliyle tarar.', levels: ['22 m şerit', '+%30 hasar', '+2 m şerit', '+%30 hasar', '−bekleme'], evo: { passive: 'duration', name: 'Kirve Geliyor', desc: 'Daha uzun tarama, roket atışı da yapar.' } }),
+  gunship: S({ id: 'gunship', heroes: ['warden'], name: 'Taarruz Helikopteri', icon: '🚁', color: 0xb8c4a0, desc: 'Telsizle helikopter çağırır: işaretli şeridi makineliyle tarar.', levels: ['22 m şerit', '+%30 hasar', '+2 m şerit', '+%30 hasar', '−bekleme'], evo: { passive: 'duration', name: 'Kirve Geliyor', desc: 'Daha uzun tarama, roket atışı da yapar.' } }),
   barrage: S({ id: 'barrage', heroes: ['havoc'], name: 'Topçu Bataryası', icon: '🎯', color: 0xd9a066, desc: 'Telsizle topçu ateşi ister: işaretli alana obüs yağar.', levels: ['11 mermi', '+%30 hasar, +2 mermi', '+alan, +2 mermi', '+%30 hasar', '−bekleme, +2 mermi'], evo: { passive: 'area', name: 'Yoğun Baraj', desc: '+10 mermi.' } }),
   siha: S({ id: 'siha', heroes: ['ghost'], name: 'SİHA Desteği', icon: '🛩', color: 0xcfd8e0, desc: 'Silahlı insansız uçak en güçlü zombileri tek tek vurur.', levels: ['2 hedef', '+%35 hasar', '+1 hedef', '+%35 hasar', '+1 hedef'], evo: { passive: 'velocity', name: 'Sürü Taarruzu', desc: '+3 hedef.' } }),
   supplyDrop: S({ id: 'supplyDrop', heroes: ['valkyrie'], name: 'İkmal Paraşütü', icon: '🪂', color: 0x9ab07a, desc: 'Nakliye uçağı paraşütle ikmal sandığı atar (can + güçlendirme).', levels: ['1 sandık', '−bekleme', '−bekleme', '−bekleme', '−bekleme'], evo: { passive: 'cooldown', name: 'Çift Sandık', desc: 'Her seferinde 2 sandık.' } }),
+  cropDuster: S({ id: 'cropDuster', heroes: ['tox'], name: 'İlaçlama Uçağı', icon: '🛩', color: 0x8fc93a, desc: 'Telsizle zirai ilaçlama uçağı çağırır: işaretli şeride zehir bulutu serer.', levels: ['20 m şerit', '+%30 hasar', '+2 m şerit, +süre', '+%30 hasar', '−bekleme'], evo: { passive: 'area', name: 'Tarla Komple', desc: 'Çok daha geniş şerit, bulut 9 sn kalır.' } }),
+  dolmus: S({ id: 'dolmus', heroes: ['breaker'], name: 'Dolmuş', icon: '🚌', color: 0x2a5aa8, desc: 'Kaptanı çağırır: dolmuş işaretli şeritten geçip önüne çıkanı ezer.', levels: ['24 m şerit', '+%30 hasar', '+2 m şerit', '+%30 hasar', '−bekleme'], evo: { passive: 'velocity', name: 'Arkadan Boş Geliyor', desc: 'İkinci dolmuş ters yönden geçer.' } }),
+  trafo: S({ id: 'trafo', heroes: ['spark'], name: 'Trafo', icon: '🔌', color: 0x9fd8ff, desc: 'Ustayı arar: işaretli noktaya trafo düşer, patlar ve zombiden zombiye atlar.', levels: ['5 atlama', '+%30 hasar, +1 atlama', '+alan, +1 atlama', '+%30 hasar, +1 atlama', '−bekleme, +1 atlama'], evo: { passive: 'capacitor', name: 'Mahalle Karanlıkta', desc: 'Daha geniş patlama, +4 atlama.' } }),
 };
 
 
@@ -99,6 +105,9 @@ const SUPPORT_SKILLS: Array<[RunSkillId, SupportKind, number]> = [
   ['barrage', 'artillery', 22],
   ['siha', 'siha', 18],
   ['supplyDrop', 'supply', 45],
+  ['cropDuster', 'duster', 24],
+  ['dolmus', 'dolmus', 20],
+  ['trafo', 'trafo', 22],
 ];
 
 export const PASSIVES: Record<PassiveId, PassiveDef> = {
