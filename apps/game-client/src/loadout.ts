@@ -86,6 +86,8 @@ export interface Profile {
   owned: string[];
   heroes: Record<string, HeroLoadout>;
   starterGranted: boolean;
+  /** signature-weapon revision this save has been migrated to */
+  signatures?: number;
   /** last chosen map / mode / difficulty */
   mission?: MissionSelection;
 }
@@ -99,6 +101,15 @@ export const itemKey = {
   accessory: (id: AccessoryId) => `a:${id}`,
   backpack: (tier: number) => `bp:${tier}`,
 };
+
+/** Bumped when operatives get new signature weapons, so old saves pick them up once. */
+const SIGNATURE_REV = 1;
+
+/** Signature weapons belong to one operative; everything else is free for all. */
+export function canEquip(heroId: string, variant: string): boolean {
+  const owner = weaponByVariant(variant).hero;
+  return !owner || owner === heroId;
+}
 
 /** Signature weapon per hero (free) + sensible defaults. */
 function defaultSlots(heroId: OperativeId): string[] {
@@ -121,23 +132,28 @@ function defaultHero(heroId: OperativeId): HeroLoadout {
 function freshProfile(): Profile {
   const owned = new Set<string>([itemKey.costume('standard')]);
   for (const w of WEAPONS) if ((w.cost ?? 0) === 0) owned.add(itemKey.weapon(weaponVariantId(w)));
+  // signature weapons are owned by everyone but only their operative can equip them (see canEquip)
   for (const h of OPERATIVE_ROSTER) owned.add(itemKey.weapon(weaponVariantId(WEAPONS[h.weaponIndex] ?? WEAPONS[0]!)));
   const heroes: Record<string, HeroLoadout> = {};
   for (const h of OPERATIVE_ROSTER) heroes[h.id] = defaultHero(h.id);
-  return { version: 1, hero: 'ironclad', owned: [...owned], heroes, starterGranted: false };
+  return { version: 1, hero: 'ironclad', owned: [...owned], heroes, starterGranted: false, signatures: SIGNATURE_REV };
 }
 
-function sanitize(p: Profile): Profile {
+export function sanitize(p: Profile): Profile {
   const base = freshProfile();
   const out: Profile = { ...base, ...p, owned: [...new Set([...(base.owned ?? []), ...(p.owned ?? [])])] };
   for (const h of OPERATIVE_ROSTER) {
     const cur = { ...defaultHero(h.id), ...(p.heroes?.[h.id] ?? {}) };
     cur.abilities = { ...defaultHero(h.id).abilities, ...(cur.abilities ?? {}) };
     const cap = BASE_WEAPON_SLOTS + slotBonus(cur.backpack);
-    cur.slots = (cur.slots ?? []).filter((v) => out.owned.includes(itemKey.weapon(v))).slice(0, cap);
+    cur.slots = (cur.slots ?? []).filter((v) => out.owned.includes(itemKey.weapon(v)) && canEquip(h.id, v)).slice(0, cap);
+    // one-time: older saves get the operative's new signature weapon in slot 1
+    const sig = weaponVariantId(WEAPONS[h.weaponIndex] ?? WEAPONS[0]!);
+    if ((p.signatures ?? 0) < SIGNATURE_REV && !cur.slots.includes(sig)) cur.slots = [sig, ...cur.slots.slice(1)];
     if (cur.slots.length === 0) cur.slots = defaultSlots(h.id);
     out.heroes[h.id] = cur;
   }
+  out.signatures = SIGNATURE_REV;
   if (!OPERATIVE_ROSTER.some((h) => h.id === out.hero)) out.hero = 'ironclad';
   return out;
 }

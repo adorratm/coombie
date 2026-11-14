@@ -1,6 +1,7 @@
 import type { AvatarGender } from './avatars';
 import type { ClassId } from './progression';
 import type { ZombieAvatarKind } from './zombieKinds';
+import { weaponIndexOfVariant } from './weapons';
 
 /** Stable operative ids — one unique VRM + class each (player + 7 rescues). */
 export type OperativeId =
@@ -103,7 +104,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     scale: 0.96,
     speed: 6.1,
     hp: 90,
-    weaponIndex: 1,
+    weaponIndex: weaponIndexOfVariant('sirt_pompasi'),
     gender: 'female',
     icon: 'TX',
     role: 'Alchemist',
@@ -118,7 +119,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     scale: 1.0,
     speed: 5.8,
     hp: 100,
-    weaponIndex: 0,
+    weaponIndex: weaponIndexOfVariant('civi_tabancasi'),
     gender: 'female',
     icon: 'SP',
     role: 'Engineer',
@@ -148,7 +149,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     scale: 1.05,
     speed: 5.5,
     hp: 105,
-    weaponIndex: 2,
+    weaponIndex: weaponIndexOfVariant('boru_havan'),
     gender: 'male',
     icon: 'HV',
     role: 'Demolisher',

@@ -43,6 +43,8 @@ export interface WeaponDef {
   /** Armory price in credits (0 = starter) */
   cost?: number;
   desc?: string;
+  /** Signature weapon: only this operative can equip it. */
+  hero?: string;
   look?: WeaponLook;
   fx?: WeaponFxDef;
 }
@@ -308,6 +310,16 @@ WEAPONS.push(
   // ——— Melee (4th) ———
   V({ id: 'knife', variant: 'machete', name: 'Machete', sfx: 'melee', grip: 'melee', fireRate: 0.42, damage: 5.6, range: 2.6, spread: 0, pellets: 1, tracerColor: 0xd0d8e0, recoil: 0.25, auto: true, magSize: 1, reloadTime: 0.01, melee: true, meleeArc: 1.1, tier: 2, cost: 300, desc: 'Uzun bıçak, geniş kesik.',
     look: { body: 'machete', finish: 0xc8d0d8, trim: 0x2a1a10 }, fx: { flash: 0, flashScale: 0, tracer: 0, impact: 'flesh' } }),
+);
+
+// Class signature weapons. Appended last so existing weapon indices stay put.
+WEAPONS.push(
+  V({ id: 'smg', variant: 'sirt_pompasi', hero: 'tox', name: 'Sırt Pompası', sfx: 'smg', grip: 'smg', fireRate: 0.07, damage: 0.58, range: 14, spread: 0.085, pellets: 1, tracerColor: 0x9cff2e, recoil: 0.04, auto: true, magSize: 45, reloadTime: 1.5, tier: 1, cost: 0, desc: 'Zirai ilaç pompası: kısa menzil, zehir zamanla eritir.',
+    look: { body: 'smg', mag: 'drum', stock: 'none', finish: 0x3a5a22, trim: 0xc9a227, glow: 0x9cff2e }, fx: { flash: 0xb6ff5a, flashScale: 0.6, tracer: 0.9, impact: 'toxic', statusChance: 0.25 } }),
+  V({ id: 'rifle', variant: 'civi_tabancasi', hero: 'spark', name: 'Çivi Tabancası', sfx: 'pistol', grip: 'rifle', fireRate: 0.13, damage: 1.3, range: 24, spread: 0.022, pellets: 1, tracerColor: 0xcfd8e3, recoil: 0.1, auto: true, magSize: 32, reloadTime: 1.5, tier: 1, cost: 0, desc: 'Kompresörlü çivi tabancası: çivi ilk hedefi delip geçer.',
+    look: { body: 'bullpup', mag: 'box', stock: 'none', finish: 0xd9a514, trim: 0x22262c, glow: 0x5cc8ff }, fx: { flash: 0xd8ecff, flashScale: 0.5, tracer: 1.1, impact: 'heavy', pierce: 1 } }),
+  V({ id: 'shotgun', variant: 'boru_havan', hero: 'havoc', name: 'Boru Havan', sfx: 'shotgun', grip: 'rifle', fireRate: 0.7, damage: 3.4, range: 18, spread: 0.03, pellets: 1, tracerColor: 0xffaa33, recoil: 0.42, auto: true, magSize: 5, reloadTime: 2.3, tier: 1, cost: 0, desc: 'El yapımı boru havan: tek mermi, küçük alan patlaması.',
+    look: { body: 'launcher', mag: 'none', stock: 'wood', finish: 0x5a5148, trim: 0x2a1a10 }, fx: { flash: 0xffaa33, flashScale: 1.4, tracer: 3, impact: 'explosive', aoe: 2.2, speed: 0.45 } }),
 );
 
 export function weaponVariantId(w: WeaponDef): string {

@@ -818,7 +818,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     const chips = document.createElement('div');
     chips.className = 'chips';
     for (const f of FAMILY_ORDER) {
-      const n = WEAPONS.filter((w) => familyOf(w) === f).length;
+      const n = WEAPONS.filter((w) => familyOf(w) === f && (!w.hero || w.hero === heroId)).length;
       if (!n) continue;
       const c = document.createElement('button');
       c.type = 'button';
@@ -829,7 +829,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     }
     panel.append(Object.assign(document.createElement('h3'), { textContent: 'Katalog' }), chips);
     for (const fam of [fam0]) {
-      const list = WEAPONS.filter((w) => familyOf(w) === fam);
+      const list = WEAPONS.filter((w) => familyOf(w) === fam && (!w.hero || w.hero === heroId));
       if (!list.length) continue;
       const g = document.createElement('div');
       g.className = 'cards';
