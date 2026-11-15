@@ -51,7 +51,28 @@ export interface ZombieTraits {
   drain?: { r: number; dps: number };
   /** yanks heroes toward itself */
   pull?: { every: number; r: number; dist: number };
+  /** telegraphed jump onto the nearest hero (range m), splash damage on landing */
+  leap?: { every: number; range: number; mul: number };
+  /** digs under ground (untouchable, invisible) and surfaces next to a hero */
+  burrow?: { every: number; dur: number };
+  /** shots from the front are reduced by this fraction */
+  frontShield?: number;
+  /** web glob: heroes in the area are slowed hard for a while */
+  web?: { every: number; r: number; dur: number };
+  /** telegraphed straight rush, hits everything on the line */
+  charge?: { every: number; dist: number; mul: number };
+  /** nearby zombies take less damage while this one lives */
+  aegis?: { r: number; armor: number };
+  /** keeps growing: + size / hp every few seconds up to a cap */
+  grow?: { every: number; max: number };
+  /** below half health, splits once into two copies (half hp each) */
+  mitosis?: boolean;
+  /** shriek: short stun on heroes in the radius */
+  screech?: { every: number; r: number };
 }
+
+/** Procedural layer on top of the walk / run clips, so the horde doesn't move as one. */
+export type GaitStyle = 'normal' | 'hunch' | 'limp' | 'twitch' | 'lurch' | 'broken' | 'stalk';
 
 export interface ZombieTypeDef {
   id: string;
@@ -68,6 +89,8 @@ export interface ZombieTypeDef {
   /** arrival banner (bosses, first sighting of a type) */
   intro: string;
   traits: ZombieTraits;
+  /** how it carries itself (defaults to a random style per zombie) */
+  gait?: GaitStyle;
 }
 
 const T = (d: ZombieTypeDef) => d;
@@ -108,6 +131,18 @@ export const ZOMBIE_TYPES: readonly ZombieTypeDef[] = [
   T({ id: 'ofkeli', name: 'Öfkeli', tier: 'special', base: 'runner', fromMin: 6, hpMul: 1.5, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0xff3030, intro: 'yaralanınca çıldırıyor', traits: { enrage: 0.6 } }),
   T({ id: 'suluk', name: 'Sülük', tier: 'special', base: 'grunt', fromMin: 7, hpMul: 1.5, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0x9a1030, intro: 'yakınındakinin canını emiyor', traits: { drain: { r: 3, dps: 0.4 } } }),
   T({ id: 'miknatis', name: 'Mıknatıs', tier: 'special', base: 'grunt', fromMin: 8, hpMul: 1.8, speedMul: 1, dmgMul: 1, scaleMul: 1.05, color: 0x5a7aff, intro: 'seni kendine çekiyor', traits: { pull: { every: 5, r: 9, dist: 3 } } }),
+
+  // ───────── newer arrivals (append-only: wire indices) ─────────
+  T({ id: 'sicrayan', name: 'Sıçrayan', tier: 'special', base: 'runner', fromMin: 3, hpMul: 1.1, speedMul: 1.05, dmgMul: 1.1, scaleMul: 0.95, color: 0xe0a040, intro: 'üstüne atlıyor — işaret çıkınca kaç', gait: 'stalk', traits: { leap: { every: 5, range: 11, mul: 1.4 } } }),
+  T({ id: 'kostebek', name: 'Köstebek', tier: 'special', base: 'crawler', fromMin: 4, hpMul: 1.4, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0x8a6a4a, intro: 'toprağın altından çıkıyor', traits: { burrow: { every: 8, dur: 2.4 } } }),
+  T({ id: 'orumcek', name: 'Örümcek', tier: 'special', base: 'crawler', fromMin: 5, hpMul: 1.3, speedMul: 1.1, dmgMul: 0.9, scaleMul: 1, color: 0xd8d0c0, intro: 'ağ atıyor — yapışırsan yavaşlarsın', traits: { web: { every: 6, r: 3.2, dur: 3 } } }),
+  T({ id: 'boga', name: 'Boğa', tier: 'special', base: 'grunt', fromMin: 5, hpMul: 1.7, speedMul: 1, dmgMul: 1.2, scaleMul: 1.1, color: 0x9a3a2a, intro: 'kafa atarak hücum ediyor — hattan çekil', gait: 'hunch', traits: { charge: { every: 6, dist: 12, mul: 1.6 } } }),
+  T({ id: 'ciyak', name: 'Cıyak', tier: 'special', base: 'screamer', fromMin: 6, hpMul: 1.3, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0xf0c0ff, intro: 'çığlığı sersemletiyor', gait: 'twitch', traits: { screech: { every: 6, r: 6 } } }),
+  T({ id: 'hucre', name: 'Hücre', tier: 'special', base: 'grunt', fromMin: 6, hpMul: 1.8, speedMul: 1, dmgMul: 1, scaleMul: 1.05, color: 0x70d0a0, intro: 'yarı canında ikiye bölünüyor', gait: 'lurch', traits: { mitosis: true } }),
+  T({ id: 'kalkan_tasiyici', name: 'Kalkan Taşıyıcı', tier: 'elite', base: 'riot', fromMin: 9, hpMul: 2.4, speedMul: 0.9, dmgMul: 1.1, scaleMul: 1.3, color: 0xb8c0c8, intro: 'önden mermi geçmiyor, yanındakileri de koruyor — yandan vur', traits: { frontShield: 0.75, aegis: { r: 6, armor: 0.35 } } }),
+  T({ id: 'buyuyen', name: 'Büyüyen', tier: 'elite', base: 'tank', fromMin: 10, hpMul: 1.6, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0x9a6aaa, intro: 'yaşadıkça büyüyor — erken indir', gait: 'broken', traits: { grow: { every: 4, max: 1.9 } } }),
+  T({ id: 'yeralti_krali', name: 'Yeraltı Kralı', tier: 'boss', base: 'boss', fromMin: 14, hpMul: 2.7, speedMul: 1, dmgMul: 1.3, scaleMul: 1.45, color: 0x6a4a2a, intro: 'yerin altından vuruyor', traits: { burrow: { every: 9, dur: 2.8 }, leap: { every: 7, range: 16, mul: 1.8 }, summon: { every: 8, kind: 'crawler', n: 4 } } }),
+  T({ id: 'firtina_bogasi', name: 'Fırtına Boğası', tier: 'boss', base: 'boss', fromMin: 19, hpMul: 3, speedMul: 1.05, dmgMul: 1.4, scaleMul: 1.55, color: 0x5a6a8a, intro: 'durmadan hücum ediyor — yanlara kaç', traits: { charge: { every: 5, dist: 18, mul: 2 }, quake: { every: 9, r: 6, mul: 1.4 }, enrage: 0.4 } }),
 ];
 
 export const ZOMBIE_TYPE_BY_ID: ReadonlyMap<string, ZombieTypeDef> = new Map(ZOMBIE_TYPES.map((t) => [t.id, t]));

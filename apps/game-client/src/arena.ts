@@ -1221,7 +1221,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     }
     // type traits: armour plating, phasing
-    const tm = traitDamageMul(z, zombieCtx.nowSec);
+    const tm = traitDamageMul(z, zombieCtx.nowSec, knockDir);
     if (tm < 1) {
       dmg *= tm;
       if (Math.random() < 0.3) skillFx.sparks(hitPos, 3, tm === 0 ? 0xe8e8ff : 0xfff0c0, 3);

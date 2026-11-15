@@ -15,6 +15,7 @@ import { allZombieModelUrls, applyZombieLook, zombieModelUrl } from './zombieLoo
 import { applyCosmetics, type Cosmetics } from './costumeLook';
 import { sampleZombieGait } from './zombieGait';
 import type { ZombieKind } from './zombieKinds';
+import { ZOMBIE_TYPE_BY_ID, type GaitStyle } from './zombieTypes';
 import type { ZombieVrmLod } from './vrmLod';
 import {
   loadAnimLibrary,
@@ -47,6 +48,8 @@ export interface VrmPoseOpts {
 export interface ZombiePoseOpts {
   /** ground speed (m/s) for clip-driven zombies */
   speed?: number;
+  /** procedural carriage layered on the clips */
+  style?: GaitStyle;
   kind?: ZombieKind;
   attackAnim?: number;
   skill?: string;
@@ -810,6 +813,8 @@ export async function createVrmAvatar(opts: {
   vrm.humanoid?.update();
   vrm.update(1 / 60);
 
+  let gaitClock = Math.random() * 10;
+  const gaitState: GaitState = { jerk: new THREE.Vector3(), nextJerk: 0, side: Math.random() < 0.5 ? -1 : 1 };
   const update = (
     dt: number,
     moving: boolean,
@@ -824,6 +829,10 @@ export async function createVrmAvatar(opts: {
     if (zombieAnim) {
       vrm.scene.getWorldScale(_zs);
       zombieAnim.update(dt, zombieOpts?.speed ?? 0, _zs.y);
+      if (zombieOpts?.style && zombieOpts.style !== 'normal' && !zombieAnim.dead) {
+        gaitClock += dt;
+        applyGaitStyle(vrm, zombieOpts.style, gaitClock, zombieOpts.speed ?? 0, rig ? 1 : -1, gaitState);
+      }
       vrm.update(dt);
       return;
     }
@@ -1270,7 +1279,7 @@ export function updateZombieVrm(
       }
       q.length = 0;
     }
-    avatar.update(step, moving, false, z.animPhase, 0, false, 0, undefined, { speed: ud.speedEma, kind: z.kind });
+    avatar.update(step, moving, false, z.animPhase, 0, false, 0, undefined, { speed: ud.speedEma, kind: z.kind, style: gaitStyleFor(z) });
     return;
   }
 
@@ -1305,6 +1314,79 @@ interface ZombieAnimState {
 }
 
 /** Queue a clip one-shot for a zombie (applied on its next animation update). */
+interface GaitState {
+  jerk: THREE.Vector3;
+  nextJerk: number;
+  side: number;
+}
+
+/**
+ * Procedural carriage on top of the clips (normalized bones, after the mixer): a
+ * hunched shamble, a limp, twitches, a drunken lurch, a broken neck, a low stalk.
+ * `sign` matches the normalized frame (rigs vs VRM0).
+ */
+function applyGaitStyle(vrm: VRM, style: GaitStyle, t: number, speed: number, sign: number, st: GaitState): void {
+  const h = vrm.humanoid;
+  if (!h) return;
+  const b = (n: VRMHumanBoneName) => h.getNormalizedBoneNode(n);
+  const mv = Math.min(1, speed / 1.5);
+  const ph = t * (2.2 + speed * 1.4);
+  switch (style) {
+    case 'hunch':
+      b(VRMHumanBoneName.Spine)?.rotateX(0.3 * sign);
+      b(VRMHumanBoneName.Chest)?.rotateX(0.2 * sign);
+      b(VRMHumanBoneName.Head)?.rotateX(-0.35 * sign);
+      break;
+    case 'stalk':
+      b(VRMHumanBoneName.Spine)?.rotateX(0.42 * sign);
+      b(VRMHumanBoneName.Chest)?.rotateX(0.15 * sign);
+      b(VRMHumanBoneName.Head)?.rotateX(-0.45 * sign);
+      b(VRMHumanBoneName.Neck)?.rotateY(Math.sin(t * 0.9) * 0.35);
+      break;
+    case 'limp': {
+      const w = Math.sin(ph) * (0.35 + 0.65 * mv);
+      b(VRMHumanBoneName.Hips)?.rotateZ(w * 0.12 * st.side);
+      b(VRMHumanBoneName.Spine)?.rotateZ(-w * 0.16 * st.side);
+      b(VRMHumanBoneName.Head)?.rotateZ(w * 0.1 * st.side + 0.12 * st.side);
+      break;
+    }
+    case 'lurch':
+      b(VRMHumanBoneName.Spine)?.rotateZ(Math.sin(t * 1.7) * 0.2);
+      b(VRMHumanBoneName.Chest)?.rotateY(Math.sin(t * 1.1) * 0.18);
+      b(VRMHumanBoneName.Head)?.rotateZ(0.28 * st.side + Math.sin(t * 2.3) * 0.08);
+      break;
+    case 'broken':
+      b(VRMHumanBoneName.Neck)?.rotateZ(0.55 * st.side);
+      b(VRMHumanBoneName.Head)?.rotateX(0.25 * sign);
+      b(VRMHumanBoneName.Spine)?.rotateX(0.12 * sign);
+      b(VRMHumanBoneName.Spine)?.rotateZ(-0.12 * st.side);
+      break;
+    case 'twitch': {
+      if (t >= st.nextJerk) {
+        st.nextJerk = t + 0.5 + Math.random() * 1.4;
+        st.jerk.set((Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 1.1, (Math.random() - 0.5) * 0.9);
+      }
+      st.jerk.multiplyScalar(0.86);
+      const head = b(VRMHumanBoneName.Head);
+      head?.rotateX(st.jerk.x);
+      head?.rotateY(st.jerk.y);
+      head?.rotateZ(st.jerk.z);
+      b(VRMHumanBoneName.Chest)?.rotateZ(st.jerk.z * 0.35);
+      break;
+    }
+  }
+}
+
+const GAIT_POOL: GaitStyle[] = ['normal', 'normal', 'normal', 'hunch', 'hunch', 'limp', 'limp', 'twitch', 'lurch', 'broken', 'stalk'];
+/** A zombie's carriage: its type's own, else a random one (giants stay upright). */
+export function gaitStyleFor(z: ZombieVisual): GaitStyle {
+  const ud = z.root.userData as { gaitStyle?: GaitStyle; ztype?: string };
+  if (ud.gaitStyle) return ud.gaitStyle;
+  const own = ud.ztype ? ZOMBIE_TYPE_BY_ID.get(ud.ztype)?.gait : undefined;
+  ud.gaitStyle = own ?? (z.kind === 'boss' || z.kind === 'tank' || z.kind === 'crawler' || z.kind === 'hooker' ? (Math.random() < 0.6 ? 'normal' : 'hunch') : GAIT_POOL[Math.floor(Math.random() * GAIT_POOL.length)]!);
+  return ud.gaitStyle;
+}
+
 export function queueZombieAnim(z: ZombieVisual, ev: ZombieAnimEvent): void {
   const ud = z.root.userData as ZombieAnimState;
   const q = (ud.animQueue ??= []);

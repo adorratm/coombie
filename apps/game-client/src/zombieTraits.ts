@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { OperativeVisual, ZombieVisual } from './characters';
 import { createAcidSpit, knock, slowOperative, stun, type ZombieCombatCtx } from './zombieCombat';
 import { ZOMBIE_TYPE_BY_ID, type ZombieTraits, type ZombieTypeDef } from './zombieTypes';
+import { queueZombieAnim } from './avatars';
+import { SEG } from './zombieAnim';
 
 /**
  * Runtime for zombie type traits (see zombieTypes.ts). Host-side only: the host owns
@@ -17,6 +19,10 @@ interface TraitState {
   lastHp: number;
   enraged: boolean;
   phaseUntil: number;
+  /** burrowed: hidden & untouchable until then */
+  burrowUntil?: number;
+  split?: boolean;
+  growth?: number;
 }
 
 interface Pending {
@@ -63,13 +69,22 @@ const nearestOp = (squad: OperativeVisual[], at: THREE.Vector3, range: number): 
   return best;
 };
 
-/** Incoming-damage multiplier from armor and phasing. */
-export function traitDamageMul(z: ZombieVisual, now: number): number {
+/** Incoming-damage multiplier from armor, phasing, burrowing, front shields and aegis. */
+export function traitDamageMul(z: ZombieVisual, now: number, hitDir?: THREE.Vector3): number {
+  // shielded by an aegis-bearer nearby (set on plain zombies too)
+  const aegis = ((z.root.userData.aegisUntil as number | undefined) ?? 0) > now ? ((z.root.userData.aegisArmor as number | undefined) ?? 0) : 0;
   const t = typeOf(z)?.traits;
-  if (!t) return 1;
+  if (!t) return 1 - aegis;
   const st = (z.root.userData as { trs?: TraitState }).trs;
-  if (st && st.phaseUntil > now) return 0;
-  return 1 - Math.min(0.85, t.armor ?? 0);
+  if (st && (st.phaseUntil > now || (st.burrowUntil ?? 0) > now)) return 0;
+  let m = 1 - Math.min(0.85, (t.armor ?? 0) + aegis);
+  if (t.frontShield && hitDir && hitDir.lengthSq() > 0.01) {
+    const fy = z.root.rotation.y;
+    // knock direction points away from the shooter: facing the shot means a negative dot
+    const facing = hitDir.x * Math.sin(fy) + hitDir.z * Math.cos(fy);
+    if (facing < -0.3) m *= 1 - t.frontShield;
+  }
+  return m;
 }
 
 /** Pending telegraphed hits (call once per frame on the host). */
@@ -262,6 +277,8 @@ export function tickZombieTraits(z: ZombieVisual, dt: number, ctx: ZombieCombatC
     });
   }
 
+  tickNewTraits(z, def, st, target, dist, dt, ctx);
+
   if (t.meteor && target && dist < 24 && due(st, 'meteor', t.meteor.every, now)) {
     const alive = ctx.squad.filter((o) => o.alive && o.root.position.distanceTo(p) < 24);
     const r = t.meteor.r;
@@ -287,6 +304,156 @@ export function tickZombieTraits(z: ZombieVisual, dt: number, ctx: ZombieCombatC
       });
     }
   }
+}
+
+/** The newer traits: leap, burrow, web, charge, aegis, grow, mitosis, screech. */
+function tickNewTraits(z: ZombieVisual, def: ZombieTypeDef, st: TraitState, target: OperativeVisual | null, dist: number, dt: number, ctx: ZombieCombatCtx): void {
+  const t = def.traits;
+  const now = ctx.nowSec;
+  const p = z.root.position;
+
+  if (t.burrow) {
+    if ((st.burrowUntil ?? 0) > now) {
+      z.root.visible = false;
+      return;
+    }
+    if (st.burrowUntil && st.burrowUntil <= now && !z.root.visible) {
+      // surface right next to a hero
+      z.root.visible = true;
+      st.burrowUntil = 0;
+      if (target) {
+        const a = Math.random() * Math.PI * 2;
+        const to = target.root.position.clone().add(new THREE.Vector3(Math.cos(a) * 2.2, 0, Math.sin(a) * 2.2));
+        const d = to.sub(p).setY(0);
+        for (let i = 0; i < 8; i++) ctx.move(z.root, d.x / 8, d.z / 8, 0.5);
+      }
+      ctx.vfx?.debris(z.root.position.clone(), 12, 1.6);
+      ctx.vfx?.dustRing(z.root.position, 2.2, 0x6a5040);
+      z.root.userData.spawnUntil = now + 1.2;
+      queueZombieAnim(z, { kind: 'spawn', dur: 1.2 });
+      ctx.shake(0.12);
+    } else if (target && dist > 6 && dist < 40 && due(st, 'burrow', t.burrow.every, now)) {
+      st.burrowUntil = now + t.burrow.dur;
+      ctx.vfx?.debris(p.clone(), 10, 1.2);
+      ctx.vfx?.dustRing(p, 2, 0x6a5040);
+      z.root.visible = false;
+      return;
+    }
+  }
+
+  if (t.leap && target && dist > 3.5 && dist < t.leap.range && z.attackAnim <= 0 && due(st, 'leap', t.leap.every, now)) {
+    const land = target.root.position.clone().setY(0);
+    const r = def.tier === 'boss' ? 3.6 : 2.2;
+    const dmg = z.attackDamage * t.leap.mul;
+    ctx.fx.spawnWarnRing(land, r, def.color, 0.75);
+    queueZombieAnim(z, { kind: 'act', seg: z.kind === 'boss' || z.kind === 'tank' ? SEG.mJump : SEG.headbutt, dur: 0.9, priority: 2 });
+    queue.push({
+      at: now + 0.75,
+      run: () => {
+        if (z.hp <= 0) return;
+        const d = land.clone().sub(z.root.position).setY(0);
+        for (let i = 0; i < 10; i++) ctx.move(z.root, d.x / 10, d.z / 10, 0.5);
+        ctx.vfx?.dustRing(z.root.position, r, 0x5a4a3a);
+        ctx.shake(def.tier === 'boss' ? 0.4 : 0.15);
+        for (const op of ctx.squad) {
+          if (!op.alive || op.root.position.distanceTo(z.root.position) > r) continue;
+          ctx.damageOperative(op, dmg, z.root.position);
+          knock(op, z.root.position, 1.4, ctx);
+        }
+      },
+    });
+  }
+
+  if (t.charge && target && dist > 4 && dist < t.charge.dist + 4 && z.attackAnim <= 0 && due(st, 'charge', t.charge.every, now)) {
+    const dir = target.root.position.clone().sub(p).setY(0).normalize();
+    const len = t.charge.dist;
+    const dmg = z.attackDamage * t.charge.mul;
+    // telegraph: rings along the line
+    for (let k = 1; k <= 4; k++) ctx.fx.spawnWarnRing(p.clone().addScaledVector(dir, (len * k) / 4), 1.4, def.color, 0.8);
+    z.root.rotation.y = Math.atan2(dir.x, dir.z);
+    queueZombieAnim(z, { kind: 'act', seg: z.kind === 'boss' ? SEG.mRoar : SEG.scream, dur: 0.8, priority: 2 });
+    queue.push({
+      at: now + 0.85,
+      run: () => {
+        if (z.hp <= 0) return;
+        const hit = new Set<OperativeVisual>();
+        const steps = 16;
+        for (let i = 0; i < steps; i++) {
+          ctx.move(z.root, (dir.x * len) / steps, (dir.z * len) / steps, 0.6);
+          for (const op of ctx.squad) {
+            if (!op.alive || hit.has(op) || op.root.position.distanceTo(z.root.position) > 1.8) continue;
+            hit.add(op);
+            ctx.damageOperative(op, dmg, z.root.position);
+            knock(op, z.root.position, 2.4, ctx);
+            stun(op, ctx.nowSec + 0.4);
+          }
+        }
+        ctx.vfx?.debris(z.root.position.clone(), 10, 1.2);
+        ctx.shake(0.25);
+      },
+    });
+  }
+
+  if (t.web && target && dist < 14 && due(st, 'web', t.web.every, now)) {
+    const at = target.root.position.clone().setY(0);
+    const r = t.web.r;
+    ctx.fx.spawnWarnRing(at, r, 0xe8e0d0, 0.7);
+    ctx.vfx?.bolt(p.clone().setY(1), at.clone().setY(0.3), 0xe8e0d0, 0.04, 0.5, 4);
+    queue.push({
+      at: now + 0.7,
+      run: () => {
+        ctx.vfx?.dustRing(at, r, 0xd8d0c0);
+        for (let i = 0; i < 10; i++) ctx.vfx?.emit('smoke', at.x + (Math.random() - 0.5) * r * 1.6, 0.1, at.z + (Math.random() - 0.5) * r * 1.6, { vy: 0.05, life: t.web!.dur, s0: 0.8, s1: 1, color: 0xe8e4d8, a: 0.35, spin: 0 });
+        for (const op of ctx.squad) if (op.alive && op.root.position.distanceTo(at) < r) slowOperative(op, 0.35, ctx.nowSec + t.web!.dur);
+      },
+    });
+  }
+
+  if (t.screech && target && dist < t.screech.r && due(st, 'screech', t.screech.every, now)) {
+    const r = t.screech.r;
+    ctx.fx.spawnWarnRing(p.clone(), r, 0xf0c0ff, 0.6);
+    queueZombieAnim(z, { kind: 'act', seg: SEG.scream, dur: 1, priority: 2 });
+    ctx.playSfx(z, 'attack');
+    queue.push({
+      at: now + 0.6,
+      run: () => {
+        if (z.hp <= 0) return;
+        ctx.vfx?.dustRing(z.root.position, r, 0x8a5a9a);
+        for (const op of ctx.squad) if (op.alive && op.root.position.distanceTo(z.root.position) < r) stun(op, ctx.nowSec + 0.7);
+      },
+    });
+  }
+
+  if (t.aegis && due(st, 'aegis', 0.8, now)) {
+    let n = 0;
+    for (const o of ctx.zombies) {
+      if (o === z || o.hp <= 0 || o.root.position.distanceTo(p) > t.aegis.r) continue;
+      o.root.userData.aegisUntil = now + 1.2;
+      o.root.userData.aegisArmor = t.aegis.armor;
+      if (ctx.vfx && n++ < 6 && Math.random() < 0.3) ctx.vfx.bolt(p.clone().setY(1.6), o.root.position.clone().setY(1.4), 0xc8d8ff, 0.03, 0.2, 4);
+    }
+  }
+
+  if (t.grow && (st.growth ?? 1) < t.grow.max && due(st, 'grow', t.grow.every, now)) {
+    const g = Math.min(t.grow.max, (st.growth ?? 1) * 1.08);
+    const k = g / (st.growth ?? 1);
+    st.growth = g;
+    z.root.scale.multiplyScalar(k);
+    z.maxHp = Math.ceil(z.maxHp * k);
+    z.hp = Math.min(z.maxHp, z.hp * k);
+    z.attackDamage = Math.ceil(z.attackDamage * (1 + (k - 1) * 0.6));
+    ctx.vfx?.emit('smoke', p.x, 1.2, p.z, { vy: 1, life: 0.6, s0: 0.5, s1: 1.2, color: def.color, a: 0.35 });
+  }
+
+  if (t.mitosis && !st.split && z.hp < z.maxHp * 0.5) {
+    st.split = true;
+    ctx.fx.spawnBloodBurst(p.clone().setY(1), 1.4, def.color);
+    for (let i = 0; i < 2; i++) {
+      const a = Math.random() * Math.PI * 2;
+      ctx.spawnZombieAt(def.base, p.x + Math.cos(a) * 1.6, p.z + Math.sin(a) * 1.6);
+    }
+  }
+  void dt;
 }
 
 /** Death traits: blast, split. Called before the corpse is removed. */
