@@ -1,6 +1,7 @@
 # Map assets
 
-All map assets are **CC0** (public domain) — no attribution required, credited here anyway.
+All map assets are **CC0** (public domain) — no attribution required, credited here anyway —
+except the vehicles below, which are **CC-BY 4.0** and must keep their credit.
 
 ## Props — Poly Haven (https://polyhaven.com, CC0)
 Photo-scanned models, fetched as 1k glTF by `scripts/maps/fetch-polyhaven.py`
@@ -15,3 +16,11 @@ PBR sets (colour 1024, normal/roughness 512, WebP) fetched by `scripts/maps/fetc
 aerial_grass_rock asphalt_02 asphalt_snow brick_wall_10 brown_mud clay_roof_tiles coast_sand_01 concrete_floor_worn_001 concrete_wall_008 container_side corrugated_iron cracked_concrete damaged_plaster dark_wooden_planks dirty_tiles dry_ground_rocks factory_wall floor_tiles_06 forest_ground_04 forest_leaves_02 gravel_road grey_roof_01 hangar_concrete_floor hessian_230 metal_plate road_damaged rust_coarse_01 snow006 
 
 `snow006` is ambientCG **Snow006**; everything else is the Poly Haven asset of the same name.
+
+## Vehicles (CC-BY 4.0 — attribution required)
+- `vehicles/ural_4320.glb` — This work is based on "URAL-4320 (soviet-army truck)"
+  (https://sketchfab.com/3d-models/ural-4320-soviet-army-truck-e3aadc206ef2413c90f350a3f4e8a5cd)
+  by zhe_kan (https://sketchfab.com/zhe_kan), licensed under CC-BY-4.0
+  (http://creativecommons.org/licenses/by/4.0/). Modified: wheels split per hub, decimated
+  226k → 62k tris, textures resized to WebP ≤1024 px, specular maps dropped
+  (`scripts/maps/build-vehicle.mjs`).

@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { pbr, propGroup } from './mapBuilder';
 
 /**
- * A 6x6 military cargo truck built from shaped (bevelled, extruded) panels with
+ * Fallback 6x6 military cargo truck built from shaped (bevelled, extruded) panels with
  * photo-textured PBR materials, plus photoscanned props (crates, jerrycans, tyres)
  * loaded on the bed. Front = +Z, ground = y 0, about 7.4 m long, 2.5 m wide.
  */
@@ -84,7 +86,7 @@ function wheel(m: ReturnType<typeof mats>, r: number, w: number): THREE.Group {
   return g;
 }
 
-export function buildMilitaryTruck(): THREE.Group {
+function buildProceduralTruck(): THREE.Group {
   const m = mats();
   const truck = new THREE.Group();
   truck.name = 'convoyTruck';
@@ -302,7 +304,131 @@ export function buildMilitaryTruck(): THREE.Group {
   return truck;
 }
 
+// ── realistic URAL-4320 (CC-BY 4.0, zhe_kan — see public/maps/CREDITS.md)
+const URAL_URL = '/maps/vehicles/ural_4320.glb';
+const URAL_WHEEL_R = 0.585;
+interface TruckAsset {
+  statics: Array<{ geo: THREE.BufferGeometry; mat: THREE.Material }>;
+  wheels: Array<{ parts: Array<{ geo: THREE.BufferGeometry; mat: THREE.Material }>; pos: THREE.Vector3 }>;
+}
+let uralAsset: Promise<TruckAsset> | null = null;
+
+/** De-quantize (KHR_mesh_quantization) and bake `m` into a float geometry with pos/normal/uv. */
+function bakeGeometry(src: THREE.BufferGeometry, m: THREE.Matrix4): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  const n = src.attributes.position!.count;
+  for (const [k, size] of [
+    ['position', 3],
+    ['normal', 3],
+    ['uv', 2],
+  ] as const) {
+    const a = src.attributes[k] as THREE.BufferAttribute | undefined;
+    const out = new Float32Array(n * size);
+    if (a) for (let i = 0; i < n; i++) for (let c = 0; c < size; c++) out[i * size + c] = a.getComponent(i, c);
+    geo.setAttribute(k, new THREE.BufferAttribute(out, size));
+  }
+  geo.setIndex(src.index ? Array.from(src.index.array) : Array.from({ length: n }, (_, i) => i));
+  geo.applyMatrix4(m);
+  if (!src.attributes.normal) geo.computeVertexNormals();
+  return geo;
+}
+
+/** Load the GLB once; merge static parts by material so the truck is ~18 draw calls. */
+function loadUral(): Promise<TruckAsset> {
+  if (uralAsset) return uralAsset;
+  uralAsset = new GLTFLoader().loadAsync(URAL_URL).then((g) => {
+    g.scene.updateMatrixWorld(true);
+    const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+    const wheels: TruckAsset['wheels'] = [];
+    const prep = (mat: THREE.Material) => {
+      const sm = mat as THREE.MeshStandardMaterial;
+      if (sm.isMeshStandardMaterial) sm.envMapIntensity = 0.7;
+      return mat;
+    };
+    const inWheel = (o: THREE.Object3D) => {
+      for (let p = o.parent; p; p = p.parent) if (p.name.startsWith('wheel_')) return true;
+      return false;
+    };
+    g.scene.traverse((o) => {
+      if (o.name.startsWith('wheel_') && !inWheel(o)) {
+        const parts: TruckAsset['wheels'][number]['parts'] = [];
+        const pos = o.getWorldPosition(new THREE.Vector3());
+        const toHub = new THREE.Matrix4().makeTranslation(-pos.x, -pos.y, -pos.z);
+        o.traverse((c) => {
+          const m = c as THREE.Mesh;
+          if (m.isMesh) parts.push({ geo: bakeGeometry(m.geometry, toHub.clone().multiply(m.matrixWorld)), mat: prep(m.material as THREE.Material) });
+        });
+        wheels.push({ parts, pos });
+        return;
+      }
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || o.name.startsWith('wheel_') || inWheel(o)) return;
+      const geo = bakeGeometry(m.geometry, m.matrixWorld);
+      const mat = prep(m.material as THREE.Material);
+      const list = byMat.get(mat) ?? [];
+      list.push(geo);
+      byMat.set(mat, list);
+    });
+    const statics: TruckAsset['statics'] = [];
+    for (const [mat, geos] of byMat) {
+      const merged = geos.length > 1 ? mergeGeometries(geos, false) : geos[0]!;
+      if (merged) statics.push({ geo: merged, mat });
+      else for (const geo of geos) statics.push({ geo, mat });
+    }
+    return { statics, wheels };
+  });
+  return uralAsset;
+}
+
+function mountUral(truck: THREE.Group, a: TruckAsset): void {
+  const body = new THREE.Group();
+  body.name = 'ural';
+  for (const s of a.statics) {
+    const mesh = new THREE.Mesh(s.geo, s.mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    body.add(mesh);
+  }
+  const wheels: THREE.Object3D[] = [];
+  for (const w of a.wheels) {
+    const hub = new THREE.Group();
+    hub.position.copy(w.pos);
+    for (const p of w.parts) {
+      const mesh = new THREE.Mesh(p.geo, p.mat);
+      mesh.castShadow = true;
+      hub.add(mesh);
+    }
+    body.add(hub);
+    wheels.push(hub);
+  }
+  for (const c of [...truck.children]) truck.remove(c);
+  truck.add(body);
+  truck.userData.wheels = wheels;
+  truck.userData.wheelR = URAL_WHEEL_R;
+}
+
+/**
+ * The convoy truck: a photoreal URAL-4320 (front = +Z, ground = y 0, ~7.9 m long).
+ * Returned immediately with the procedural truck inside; the GLB replaces it once loaded.
+ */
+export function buildMilitaryTruck(): THREE.Group {
+  const truck = new THREE.Group();
+  truck.name = 'convoyTruck';
+  const fallback = buildProceduralTruck();
+  truck.add(fallback);
+  truck.userData.wheels = fallback.children.filter((c) => c.name === 'wheel');
+  truck.userData.wheelR = 0.58;
+  loadUral()
+    .then((a) => mountUral(truck, a))
+    .catch(() => {
+      /* keep the procedural truck */
+    });
+  return truck;
+}
+
 /** Spin the wheels for `dist` metres travelled. */
 export function rollTruckWheels(truck: THREE.Object3D, dist: number): void {
-  for (const c of truck.children) if (c.name === 'wheel') c.rotation.x += dist / 0.58;
+  const wheels = (truck.userData.wheels as THREE.Object3D[] | undefined) ?? [];
+  const r = (truck.userData.wheelR as number | undefined) ?? 0.58;
+  for (const w of wheels) w.rotation.x += dist / r;
 }
