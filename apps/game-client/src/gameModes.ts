@@ -6,6 +6,7 @@ import { MAPS, type MapId, type ModeId } from './mapDefs';
 import type { GameMap } from './gameMap';
 import type { IndicatorSrc } from './powerups';
 import { ExtraMode, isExtraMode } from './extraModes';
+import { propGroup } from './mapBuilder';
 import { CONVOY_SPEED, DARK_SECONDS, DELIVERIES, INFECTION_SECONDS, KING_TARGET, MUTATION_EVERY, MUTATION_SECONDS, NESTS, ONELIFE_SECONDS, SIEGE_SECONDS, SUPPLY_CRATES, SUPPLY_SECONDS } from './modeRules';
 import { BLITZ_BOSS_BONUS, BLITZ_SECONDS, blitzTarget, HUNT_RESPITE_SECONDS, HUNT_TARGET_HP_MUL, HUNT_TARGETS, huntTargetKind, pickNextZone, ZONE_COUNT, ZONE_HOLD_SECONDS, ZONE_RADIUS, zoneProgress } from './modeRules';
 
@@ -257,13 +258,10 @@ export class ModeRuntime {
   private spawnPickups(): void {
     for (const p of this.ctx.map.anchors.pickups) {
       const g = this.beacon(0xffb020, 1.4);
-      const can = new THREE.Mesh(
-        new THREE.BoxGeometry(0.45, 0.6, 0.22),
-        new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.5, metalness: 0.5, emissive: 0x7f1d1d, emissiveIntensity: 0.6 }),
-      );
-      this.owned.push(can.material as THREE.Material);
-      can.position.y = 0.7;
-      g.add(can);
+      // a real (photoscanned) jerrycan
+      void propGroup('metal_jerrycan', 1.5)
+        .then((can) => g.add(can))
+        .catch(() => undefined);
       g.position.copy(p);
       this.pickups.push({ mesh: g, pos: p.clone(), taken: false });
     }

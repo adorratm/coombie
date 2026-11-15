@@ -382,6 +382,24 @@ function loadProp(file: string): Promise<PropAsset> {
   return p;
 }
 
+/** A single prop as a plain group (outside the instanced map path), base on y = 0, centred in x/z. */
+export async function propGroup(file: string, scale = 1): Promise<THREE.Group> {
+  const a = await loadProp(file);
+  const g = new THREE.Group();
+  const inner = new THREE.Group();
+  for (const part of a.parts) {
+    const m = new THREE.Mesh(part.geo, part.mat);
+    m.applyMatrix4(part.local);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    inner.add(m);
+  }
+  inner.position.set(-a.center.x, -a.minY, -a.center.z);
+  g.add(inner);
+  g.scale.setScalar(WORLD * scale);
+  return g;
+}
+
 interface Placement {
   x: number;
   y: number;

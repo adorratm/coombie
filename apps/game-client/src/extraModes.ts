@@ -3,8 +3,14 @@ import type { OperativeVisual, ZombieVisual } from './characters';
 import type { IndicatorSrc } from './powerups';
 import type { ModeId } from './mapDefs';
 import type { ZombieKind } from './zombieKinds';
+import { buildMilitaryTruck, rollTruckWheels } from './vehicleModels';
+import { propGroup } from './mapBuilder';
 import {
+  CONVOY_AMBUSH_SECONDS,
+  CONVOY_CHECKPOINT_SECONDS,
+  CONVOY_CHECKPOINTS,
   CONVOY_HP,
+  CONVOY_REPAIR,
   CONVOY_SPEED,
   DARK_SECONDS,
   DELIVERIES,
@@ -89,6 +95,14 @@ export class ExtraMode {
   // convoy
   private truck: THREE.Group | null = null;
   private truckHp = CONVOY_HP;
+  /** route: start, checkpoints, evac */
+  private route: THREE.Vector3[] = [];
+  private leg = 1;
+  private routeLen = 1;
+  private travelled = 0;
+  /** stopped at a checkpoint until this mode time */
+  private holdUntil = 0;
+  private ambushT = 0;
   private from = new THREE.Vector3();
   private to = new THREE.Vector3();
   // supply / delivery / king / nests markers
@@ -112,9 +126,22 @@ export class ExtraMode {
       case 'convoy': {
         this.from.copy(a.spawn).setY(0);
         this.to.copy(a.evac).setY(0);
-        this.truck = this.buildTruck();
+        // a long route: start → three checkpoints (nearest-next) → evac
+        const pool = [...a.pickups, ...a.rescues, a.boss].map((v) => v.clone().setY(0)).filter((v) => v.distanceTo(this.from) > 15 && v.distanceTo(this.to) > 15);
+        this.route = [this.from.clone()];
+        let cur = this.from.clone();
+        for (let i = 0; i < CONVOY_CHECKPOINTS && pool.length; i++) {
+          pool.sort((x, y) => x.distanceTo(cur) - y.distanceTo(cur));
+          cur = pool.shift()!;
+          this.route.push(cur);
+        }
+        this.route.push(this.to.clone());
+        for (let i = 1; i < this.route.length; i++) this.routeLen += this.route[i]!.distanceTo(this.route[i - 1]!);
+        this.truck = buildMilitaryTruck();
+        host.ctx.scene.add(this.truck);
         this.truck.position.copy(this.from);
-        this.truck.lookAt(this.to);
+        this.truck.lookAt(this.route[1]!);
+        this.truckHp = CONVOY_HP * (1 + 0.15 * Math.max(0, 1 - host.diff.dmg));
         break;
       }
       case 'supply':
@@ -163,29 +190,16 @@ export class ExtraMode {
     this.host.owned.push(m);
     return m;
   }
-  private buildTruck(): THREE.Group {
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.6, 5), this.mat(0x4b5a3a));
-    body.position.y = 1.3;
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.3, 1.8), this.mat(0x3a4630));
-    cab.position.set(0, 2.4, 1.4);
-    const plow = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.9, 0.3), this.mat(0x777b80));
-    plow.position.set(0, 0.8, 2.7);
-    const light = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.1), this.mat(0xfff4c0, 0xfff4c0));
-    light.position.set(0.7, 2.1, 2.36);
-    const light2 = light.clone();
-    light2.position.x = -0.7;
-    g.add(body, cab, plow, light, light2);
-    for (const x of [-1.15, 1.15])
-      for (const z of [-1.6, 1.6]) {
-        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 14), this.mat(0x1a1a1a));
-        w.rotation.z = Math.PI / 2;
-        w.position.set(x, 0.55, z);
-        g.add(w);
-      }
-    this.host.ctx.scene.add(g);
-    return g;
+  /** a pack of zombies around `at` (convoy ambush) */
+  private ambush(n: number, at: THREE.Vector3, spread: number): void {
+    const kinds: ZombieKind[] = ['runner', 'grunt', 'grunt', 'crawler', 'tank'];
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = spread * (0.5 + Math.random() * 0.5);
+      this.host.ctx.spawnZombieAt(kinds[Math.floor(Math.random() * kinds.length)]!, at.x + Math.cos(a) * d, at.z + Math.sin(a) * d);
+    }
   }
+
   private buildNest(): THREE.Object3D {
     const g = new THREE.Group();
     const mound = new THREE.Mesh(new THREE.SphereGeometry(1.6, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), this.mat(0x3a1f3a, 0x5a1a6a));
@@ -200,20 +214,29 @@ export class ExtraMode {
     }
     return g;
   }
+  /** photoscanned prop loaded into `into` (the group is usable right away) */
+  private prop(into: THREE.Group, file: string, scale: number, y = 0): void {
+    void propGroup(file, scale)
+      .then((g) => {
+        g.position.y = y;
+        into.add(g);
+      })
+      .catch(() => undefined);
+  }
   private buildGenerator(): THREE.Object3D {
     const g = new THREE.Group();
-    const box = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 1.1), this.mat(0xc8a030));
-    box.position.y = 0.6;
-    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.3), this.mat(0x0f2a1c, 0x38bdf8));
-    core.position.y = 1.6;
+    this.prop(g, 'portable_generator', 1.7);
+    // a status light the squad can read from afar
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.22), this.mat(0x0f2a1c, 0x38bdf8));
+    core.position.y = 1.9;
     core.name = 'core';
-    g.add(box, core);
+    g.add(core);
     return g;
   }
   private buildCrate(color: number): THREE.Object3D {
-    const c = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.8), this.mat(color, color));
-    c.position.y = 0.6;
+    const c = new THREE.Group();
     c.name = 'crate';
+    this.prop(c, color === 0x22d3ee ? 'cardboard_box_01' : 'wooden_military_crate', color === 0x22d3ee ? 1.6 : 1.1);
     return c;
   }
 
@@ -295,36 +318,73 @@ export class ExtraMode {
       case 'convoy': {
         const truck = this.truck!;
         const p = truck.position;
-        // zombies at the truck chew on it
+        // zombies at the truck chew on it; a crowd in front of the plough blocks it
         let hits = 0;
+        let blocking = 0;
+        const target = this.route[this.leg] ?? this.to;
+        const heading = target.clone().sub(p).setY(0).normalize();
         for (const z of c.zombies) {
           if (z.hp <= 0) continue;
-          const d = (z.root.position.x - p.x) ** 2 + (z.root.position.z - p.z) ** 2;
-          if (d < 3.4 * 3.4) hits += z.kind === 'boss' ? 6 : z.kind === 'tank' ? 3 : 1;
+          this.tmp.subVectors(z.root.position, p).setY(0);
+          const d2 = this.tmp.lengthSq();
+          if (d2 < 3.6 * 3.6) {
+            hits += z.kind === 'boss' ? 6 : z.kind === 'tank' ? 3 : 1;
+            if (this.tmp.dot(heading) > 1.5) blocking++;
+          }
         }
-        if (hits) this.truckHp -= hits * dt * 0.55 * h.diff.dmg;
+        if (hits) this.truckHp -= hits * dt * 0.7 * h.diff.dmg;
         const escorted = h.humanWithin(p, 10);
-        const left = this.to.clone().sub(p).setY(0);
-        const dist = left.length();
-        if (escorted && dist > 0.5) {
-          const step = Math.min(dist, CONVOY_SPEED * dt * (hits > 6 ? 0.4 : 1));
+        // crew patch the truck up when it is quiet around it
+        if (hits === 0 && h.humanWithin(p, 4.5)) this.truckHp = Math.min(CONVOY_HP, this.truckHp + CONVOY_REPAIR * dt);
+        const stopped = this.holdUntil > this.t;
+        if (!stopped && escorted && blocking < 4) {
+          const left = target.clone().sub(p).setY(0);
+          const dist = left.length();
+          const step = Math.min(dist, CONVOY_SPEED * dt * (blocking > 0 ? 0.45 : 1));
           p.addScaledVector(left.normalize(), step);
-          truck.lookAt(this.to.x, 0, this.to.z);
+          this.travelled += step;
+          rollTruckWheels(truck, step);
+          // turn smoothly toward the next leg
+          const want = Math.atan2(left.x, left.z);
+          let dy = want - truck.rotation.y;
+          dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+          truck.rotation.y += dy * Math.min(1, dt * 2.5);
           // the plough shoves zombies aside
           for (const z of c.zombies) {
             if (z.hp <= 0) continue;
             this.tmp.subVectors(z.root.position, p).setY(0);
-            if (this.tmp.lengthSq() < 2.6 * 2.6) z.root.position.addScaledVector(this.tmp.normalize(), 0.6);
+            if (this.tmp.lengthSq() < 2.8 * 2.8) z.root.position.addScaledVector(this.tmp.normalize(), 0.5);
+          }
+          if (dist - step <= 0.4) {
+            if (this.leg < this.route.length - 1) {
+              // checkpoint: the truck has to stop and the squad holds it
+              this.leg += 1;
+              this.holdUntil = this.t + CONVOY_CHECKPOINT_SECONDS;
+              h.banner(`Kontrol noktası ${this.leg - 1}/${this.route.length - 2}: yol temizlenene kadar konvoyu koru!`);
+              c.sfx('alarm');
+              this.ambush(14, p, 22);
+              if (this.leg - 1 === Math.ceil((this.route.length - 2) / 2)) h.spawnBoss();
+            } else {
+              h.win(`Konvoy %${Math.round((this.truckHp / CONVOY_HP) * 100)} sağlamla vardı.`);
+              break;
+            }
           }
         }
-        h.spawnMul = 1.3 + (1 - dist / Math.max(1, this.from.distanceTo(this.to))) * 0.6;
-        if (!this.bossCalled && dist < this.from.distanceTo(this.to) * 0.5) {
+        // ambushes along the road, ahead of the truck
+        this.ambushT -= dt;
+        if (this.ambushT <= 0) {
+          this.ambushT = stopped ? 9 : CONVOY_AMBUSH_SECONDS;
+          const ahead = p.clone().addScaledVector(heading, 26);
+          this.ambush(stopped ? 6 : 8, ahead, 7);
+        }
+        const done = this.travelled / this.routeLen;
+        h.spawnMul = 1.35 + done * 0.8 + (stopped ? 0.4 : 0);
+        if (!this.bossCalled && done > 0.82) {
           this.bossCalled = true;
           h.spawnBoss();
-          h.banner('Konvoyu durdurmak için bir mutant geliyor!');
+          h.banner('Son düzlükte bir mutant yolu kesiyor!');
         }
         if (this.truckHp <= 0) h.fail('Konvoy yok edildi.');
-        else if (dist <= 0.6) h.win(`Konvoy %${Math.round((this.truckHp / CONVOY_HP) * 100)} sağlamla vardı.`);
         break;
       }
       case 'supply': {
@@ -561,7 +621,11 @@ export class ExtraMode {
   indicators(): IndicatorSrc[] {
     const out: IndicatorSrc[] = [];
     if (this.truck) out.push({ pos: this.truck.position, color: 0x84cc16, icon: '🚚', label: `Konvoy %${Math.round((this.truckHp / CONVOY_HP) * 100)}`, urgent: true, radius: 10 });
-    if (this.id === 'convoy') out.push({ pos: this.to, color: 0xffd23c, icon: '🏁', label: 'Varış', radius: 3 });
+    if (this.id === 'convoy') {
+      const next = this.route[this.leg];
+      if (next && this.leg < this.route.length - 1) out.push({ pos: next, color: 0xfacc15, icon: '🚧', label: 'Kontrol noktası', radius: 3 });
+      out.push({ pos: this.to, color: 0xffd23c, icon: '🏁', label: 'Varış', radius: 3 });
+    }
     if (this.marker?.visible) {
       const icon = this.id === 'king' ? '👑' : this.id === 'delivery' ? '📦' : '🎁';
       out.push({ pos: this.marker.position, color: this.id === 'king' ? 0xfacc15 : 0xffb020, icon, label: this.id === 'king' ? 'Tepe' : this.id === 'delivery' ? 'Paket' : 'İkmal', urgent: true, radius: this.id === 'king' ? KING_RADIUS : 2 });
@@ -575,9 +639,10 @@ export class ExtraMode {
   hud(): { label: string; prog: number; target: number } {
     switch (this.id) {
       case 'convoy': {
-        const total = Math.max(1, this.from.distanceTo(this.to));
-        const left = this.truck ? this.truck.position.distanceTo(this.to) : 0;
-        return { label: `Konvoy %${Math.max(0, Math.round((this.truckHp / CONVOY_HP) * 100))} · kalan ${Math.round(left)} m${this.truck && !this.host.humanWithin(this.truck.position, 10) ? ' · YANINDA KAL' : ''}`, prog: total - left, target: total };
+        const left = Math.max(0, this.routeLen - this.travelled);
+        const hold = this.holdUntil - this.t;
+        const state = hold > 0 ? ` · kontrol noktası ${Math.ceil(hold)} sn` : this.truck && !this.host.humanWithin(this.truck.position, 10) ? ' · YANINDA KAL' : '';
+        return { label: `Konvoy %${Math.max(0, Math.round((this.truckHp / CONVOY_HP) * 100))} · kalan ${Math.round(left)} m${state}`, prog: this.travelled, target: this.routeLen };
       }
       case 'supply':
         return { label: `İkmal ${this.done}/${SUPPLY_CRATES} · ${fmt(SUPPLY_SECONDS - this.t)}`, prog: this.done, target: SUPPLY_CRATES };

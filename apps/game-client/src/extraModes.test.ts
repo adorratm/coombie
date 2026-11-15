@@ -1,5 +1,11 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// the truck model needs textures (browser only)
+vi.mock('./vehicleModels', async () => {
+  const T = await import('three');
+  return { buildMilitaryTruck: () => new T.Group(), rollTruckWheels: () => undefined };
+});
 import { ModeRuntime, MODES } from './gameModes';
 import { EXTRA_MODE_IDS } from './extraModes';
 import { MAPS, MAP_ORDER } from './mapDefs';
@@ -73,14 +79,15 @@ describe('the ten newer modes', () => {
   });
 
   it('convoy rolls only with an escort and arrives', () => {
-    const { rt, me } = runtime('convoy');
+    const { rt, me, zombies } = runtime('convoy');
     me.root.position.set(-80, 0, 80);
     for (let i = 0; i < 20; i++) rt.update(0.5, 0);
     const before = rt.hud({} as never).objectiveProgress;
     expect(before).toBe(0);
-    for (let i = 0; i < 2000 && !rt.outcome; i++) {
+    for (let i = 0; i < 4000 && !rt.outcome; i++) {
       const truck = rt.indicators().find((x) => x.icon === '🚚')!;
       me.root.position.copy(truck.pos);
+      zombies.length = 0; // the squad clears every ambush
       rt.update(0.5, 0);
     }
     expect(rt.outcome?.won).toBe(true);

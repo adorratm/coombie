@@ -55,7 +55,14 @@ export function huntTargetKind(index: number): 'tank' | 'riot' | 'hooker' | 'bos
 
 export const CONVOY_HP = 100;
 /** m/s while a hero is near the truck */
-export const CONVOY_SPEED = 1.6;
+export const CONVOY_SPEED = 1.25;
+/** stops on the way (each held under fire) */
+export const CONVOY_CHECKPOINTS = 3;
+export const CONVOY_CHECKPOINT_SECONDS = 30;
+/** seconds between road ambushes while rolling */
+export const CONVOY_AMBUSH_SECONDS = 16;
+/** hp per second the crew patches back when no zombie is at the truck */
+export const CONVOY_REPAIR = 1.2;
 export const SUPPLY_CRATES = 8;
 export const SUPPLY_SECONDS = 10 * 60;
 export const KING_RADIUS = 6;
