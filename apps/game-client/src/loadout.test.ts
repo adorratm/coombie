@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { canEquip, sanitize, type Profile } from './loadout';
+import { canEquip, equipBlock, missingRequired, sanitize, withRequired, type Profile } from './loadout';
 import { OPERATIVE_ROSTER } from './roster';
 import { WEAPONS, weaponVariantId } from './weapons';
 
@@ -26,7 +26,7 @@ describe('signature weapons', () => {
 
     const migrated = sanitize(old);
 
-    expect(migrated.heroes.tox!.slots).toEqual(['sirt_pompasi', 'rifle', 'knife']);
+    expect(migrated.heroes.tox!.slots).toEqual(['sirt_pompasi', 'rifle', 'knife', 'pistol']);
   });
 
   test('a migrated save is left alone when the player swaps the signature out', () => {
@@ -34,7 +34,7 @@ describe('signature weapons', () => {
 
     const loaded = sanitize(swapped);
 
-    expect(loaded.heroes.tox!.slots).toEqual(['rifle', 'knife']);
+    expect(loaded.heroes.tox!.slots).toEqual(['rifle', 'knife', 'pistol']);
   });
 
   test('another operative loses a signature weapon that is not theirs', () => {
@@ -42,6 +42,24 @@ describe('signature weapons', () => {
 
     const loaded = sanitize(cheat);
 
-    expect(loaded.heroes.ironclad!.slots).toEqual(['rifle']);
+    expect(loaded.heroes.ironclad!.slots).toEqual(['rifle', 'knife', 'pistol']);
+  });
+});
+
+describe('loadout rules', () => {
+  test('heavy guns: gunner only, the lightest first', () => {
+    expect(canEquip('ironclad', 'shredder')).toBe(false);
+    expect(canEquip('havoc', 'lmg')).toBe(false);
+    expect(canEquip('warden', 'lmg')).toBe(true);
+    expect(equipBlock('warden', 'shredder')).toMatch(/Sv 40/);
+  });
+
+  test('a melee weapon and a pistol are always carried', () => {
+    expect(missingRequired(['rifle', 'smg'])).toBeTruthy();
+    expect(missingRequired(['rifle', 'knife', 'pistol'])).toBeNull();
+    const full = withRequired(['rifle', 'smg', 'shotgun', 'sniper', 'carbine_m4'], 5);
+    expect(full).toHaveLength(5);
+    expect(missingRequired(full)).toBeNull();
+    expect(full[0]).toBe('rifle');
   });
 });

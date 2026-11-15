@@ -25,12 +25,19 @@ import {
   updateHero,
   upgradeAbility,
   currentMission,
+  equipBlock,
+  toggleAttachment,
+  upgradeAttachment,
+  upgradeWeaponPower,
+  weaponGear,
+  missingRequired,
   setMission,
   type AbilitySlot,
   type HeroLoadout,
 } from './loadout';
 import { OPERATIVE_ROSTER, rosterById, type OperativeId } from './roster';
 import { WEAPONS, attachWeaponMesh, weaponByVariant, weaponVariantId, type WeaponDef, type WeaponId } from './weapons';
+import { ATTACHMENT_MAX, ATTACHMENT_SLOT_LABEL, ATTACHMENTS, attachmentCost, attachmentsFor, decorateGun, equippedAttachments, POWER_MAX, POWER_STEP, powerCost } from './attachments';
 import { RUN_SKILLS } from './runSkills';
 import { accessoryThumb, backpackThumb, costumeSwatch, heroPortrait, thumbImg, weaponThumb } from './thumbs';
 
@@ -195,6 +202,18 @@ const CSS = /* css */ `
 #lobby .diff small { color: var(--dim); font-size: 10px; line-height: 1.25; }
 #lobby .diff span { font: 600 10px var(--display); color: var(--gold, #f5c542); }
 #lobby .diff.on { background: color-mix(in srgb, var(--ac) 16%, #0e1216); box-shadow: inset 0 0 0 1px var(--ac); }
+#lobby .gear { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+#lobby .gpow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+#lobby .gpow span { color: var(--dim); flex: 1; }
+#lobby .gh { margin: 10px 0 6px; font: 700 11px var(--display); letter-spacing: .12em; color: var(--dim); }
+#lobby .gatt { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+#lobby .ga { display: grid; grid-template-columns: 30px 1fr; gap: 6px; padding: 7px; border: 1px solid var(--line); background: rgba(14,18,22,.7); }
+#lobby .ga.own { border-color: #3a4a3a; }
+#lobby .ga.on { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+#lobby .ga .gi { font-size: 20px; }
+#lobby .ga small { display: block; color: var(--dim); font-size: 11px; }
+#lobby .ga .gbtns { grid-column: 1 / -1; display: flex; gap: 6px; }
+#lobby .ga .gbtns .btn { padding: 4px 8px; font-size: 11px; }
 #lobby .achcat { margin: 14px 0 6px; font: 700 12px var(--display); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
 #lobby .ach.secret { opacity: .7; border-style: dashed; }
 #lobby .ach { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line);
@@ -535,7 +554,8 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     previewDef = def;
     const hero = rosterById(loadProfile().hero);
     gun = new THREE.Group();
-    attachWeaponMesh(gun, def, hero.accent, 1);
+    const tip = attachWeaponMesh(gun, def, hero.accent, 1);
+    decorateGun(tip, equippedAttachments(weaponGear(variant), def));
     const hand = avatar.rightHand;
     hand.add(gun);
     avatar.root.updateMatrixWorld(true);
@@ -823,6 +843,77 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     return bar;
   };
 
+  /** Armory: weapon power level + attachments (bought, levelled, swapped). */
+  const gearPanel = (variant: string): HTMLElement => {
+    const w = weaponByVariant(variant);
+    const g = weaponGear(variant);
+    const box = document.createElement('div');
+    box.className = 'gear';
+    const pc = powerCost(w, g.power);
+    const pw = document.createElement('div');
+    pw.className = 'gpow';
+    pw.innerHTML = `<b>⚡ Silah gücü</b> <span>Sv ${g.power}/${POWER_MAX} · +%${Math.round(g.power * POWER_STEP * 100)} hasar</span>`;
+    const pb = document.createElement('button');
+    pb.type = 'button';
+    pb.className = 'btn go';
+    pb.textContent = Number.isFinite(pc) ? `GÜÇLENDİR · ${cr(pc)}` : 'MAKSİMUM';
+    pb.disabled = !Number.isFinite(pc) || credits() < pc;
+    pb.onclick = () => {
+      if (upgradeWeaponPower(variant)) {
+        toast(`${w.name} gücü → Sv ${g.power + 1}`, true);
+        renderAll();
+      }
+    };
+    pw.append(pb);
+    box.append(pw);
+    const list = attachmentsFor(w);
+    if (list.length) {
+      box.append(Object.assign(document.createElement('div'), { className: 'gh', textContent: 'EKLENTİLER · aynı yuvada bir tane takılı olur' }));
+      const grid = document.createElement('div');
+      grid.className = 'gatt';
+      for (const id of list) {
+        const a = ATTACHMENTS[id];
+        const lv = g.levels[id] ?? 0;
+        const on = g.on[a.slot] === id;
+        const cost = attachmentCost(w, id, lv);
+        const d = document.createElement('div');
+        d.className = `ga${on ? ' on' : ''}${lv ? ' own' : ''}`;
+        d.innerHTML = `<span class="gi">${a.icon}</span><div><b>${a.name}</b> <small>${ATTACHMENT_SLOT_LABEL[a.slot]} · Sv ${lv}/${ATTACHMENT_MAX}</small><small>${a.perLevel} / sv</small></div>`;
+        const row = document.createElement('div');
+        row.className = 'gbtns';
+        const up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'btn go';
+        up.textContent = !Number.isFinite(cost) ? 'MAKS' : lv ? `SV ${lv + 1} · ${cr(cost)}` : `AL · ${cr(cost)}`;
+        up.disabled = !Number.isFinite(cost) || credits() < cost;
+        up.onclick = () => {
+          if (upgradeAttachment(variant, id)) {
+            toast(`${a.name} → Sv ${lv + 1}`, true);
+            equipPreviewGun(variant);
+            renderAll();
+          }
+        };
+        row.append(up);
+        if (lv) {
+          const t = document.createElement('button');
+          t.type = 'button';
+          t.className = 'btn';
+          t.textContent = on ? 'ÇIKAR' : 'TAK';
+          t.onclick = () => {
+            toggleAttachment(variant, id);
+            equipPreviewGun(variant);
+            renderAll();
+          };
+          row.append(t);
+        }
+        d.append(row);
+        grid.append(d);
+      }
+      box.append(grid);
+    }
+    return box;
+  };
+
   const renderArmory = (panel: HTMLElement) => {
     const p = loadProfile();
     const heroId = p.hero;
@@ -853,7 +944,30 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     const btn = document.createElement('button');
     btn.type = 'button';
     const cost = fw.cost ?? 0;
-    if (!fOwned) {
+    const block = equipBlock(heroId, focus);
+    // would this swap leave the loadout without a melee weapon or a pistol?
+    const nextSlots = (() => {
+      const x = [...h.slots];
+      const prev = x.indexOf(focus);
+      const cur = x[selSlot];
+      while (x.length <= selSlot) x.push(focus);
+      x[selSlot] = focus;
+      if (prev >= 0 && prev !== selSlot) {
+        if (cur) x[prev] = cur;
+        else x.splice(prev, 1);
+      }
+      return x.filter(Boolean);
+    })();
+    const missing = missingRequired(nextSlots);
+    if (block) {
+      btn.className = 'btn';
+      btn.textContent = `🔒 ${block}`;
+      btn.disabled = true;
+    } else if (missing && fSlot !== selSlot) {
+      btn.className = 'btn';
+      btn.textContent = `🔒 ${missing} — başka slotu seç`;
+      btn.disabled = true;
+    } else if (!fOwned) {
       btn.className = 'btn buy';
       btn.textContent = `SATIN AL VE SLOT ${selSlot + 1}'E TAK · ${cr(cost)}`;
       btn.disabled = credits() < cost;
@@ -883,6 +997,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     };
     act.append(btn);
     body.append(act);
+    if (fOwned && !fw.melee) body.append(gearPanel(focus));
     det.innerHTML = `<span class="tierb">${TIER_NAME[tier]!.toUpperCase()}</span>`;
     det.append(pic, body);
     const top = document.createElement('div');

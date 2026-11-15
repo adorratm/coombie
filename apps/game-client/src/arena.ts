@@ -19,7 +19,7 @@ import { PowerUps, POWER_DEFS, type IndicatorSrc } from './powerups';
 import { createHookerModel, tickHooks, clearHooks } from './hooker';
 import { allAvatarUrls } from './roster';
 import { rosterById } from './roster';
-import { currentRunLoadout, type AbilitySlot, type RunLoadout } from './loadout';
+import { currentRunLoadout, weaponGear, type AbilitySlot, type RunLoadout } from './loadout';
 import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
 import { BOSS_VARIANT_IDS, BOSS_VARIANTS, pickBossVariant, type BossVariant, type BossVariantDef } from './bossVariants';
 import { giantBossCap, giantBossInterval, pickGiantBoss, rollSpawnType, TIER_XP, ZOMBIE_TYPES, zombieTypeIndex, type ZombieTypeDef } from './zombieTypes';
@@ -30,7 +30,7 @@ import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
 import { waveKindForLevel } from '@protocol-z/shared';
 import { buildSpawnField } from './spawnField';
 import type { NetSession } from './netSession';
-import { PICKUP_RADIUS, PICKUP_SECONDS, tickDowned } from './coopRules';
+import { coopDifficulty, PICKUP_RADIUS, PICKUP_SECONDS, tickDowned } from './coopRules';
 import { NET_MAX_MARKS, type NetHero, type NetMark, type NetObjective } from '@protocol-z/shared';
 import {
   HORDE_WARN_SECONDS,
@@ -164,6 +164,7 @@ import { ALLY_XP_SHARE, HeroXpLedger, loadHeroProgress, treeTotals } from './her
 import { applyModDeltas, applyWeaponStep } from './progression';
 import { recomputeSkillDerived } from './skilltree';
 import { CoopMirror, packKit } from './coopMirror';
+import { applyGear, equippedAttachments } from './attachments';
 import { SeeThrough, type SeeTarget } from './seeThrough';
 import type { OperativeId } from './roster';
 import { queueZombieAnim, setOperativeDead, spawnZombieCorpse, tickZombieCorpses, type ZombieCorpse } from './avatars';
@@ -349,6 +350,19 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const mission: MissionSelection = loadout.mission ?? { map: 'city', mode: 'survival', difficulty: 'normal' };
   const mapDef = MAPS[mission.map] ?? MAPS.city;
   const diff = DIFFICULTIES[mission.difficulty] ?? DIFFICULTIES.normal;
+  /**
+   * Co-op is harder than solo: every extra player adds zombie health, numbers and a
+   * little bite, so a squad still has to work for it (and one strong build can't carry).
+   */
+  const coopScaleCache = { n: -1, v: { hp: 1, count: 1, dmg: 1 } };
+  /** humans in the match (kept in step with the co-op allies) */
+  let coopPlayers = 1;
+  const coopScale = () => {
+    const n = coopPlayers;
+    if (coopScaleCache.n !== n) coopScaleCache.v = coopDifficulty(n);
+    coopScaleCache.n = n;
+    return coopScaleCache.v;
+  };
   const LT = mapDef.lighting;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(LT.bg);
@@ -501,6 +515,11 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         missionRuntime.bannerUntil = simTime + 2.6;
       }
     }
+  };
+  // armory gear: base power + attachments (stats and the models on the gun)
+  player.gear = (w) => {
+    const g = weaponGear(weaponVariantId(w));
+    return { weapon: applyGear(w, g), attachments: equippedAttachments(g, w) };
   };
   setOperativeWeapon(player, weaponIndexOfVariant(weaponSlots[0]!));
   setActiveClassForWeapon(progress, player.weapon.id);
@@ -714,9 +733,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     z.root.userData.netId = ++netZombieSeq;
     z.proxy.visible = true;
     const waveMul = zombieHpMul(wave) * lateHpMul(runMin) * pressure.hpMul;
-    z.maxHp = Math.ceil(z.maxHp * waveMul * diff.hp);
+    z.maxHp = Math.ceil(z.maxHp * waveMul * diff.hp * coopScale().hp);
     z.hp = z.maxHp;
-    z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg * earlyDamageMul(simTime) * lateDamageMul(runMin) * pressure.dmgMul));
+    z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg * earlyDamageMul(simTime) * lateDamageMul(runMin) * pressure.dmgMul * coopScale().dmg));
     z.speed *= diff.speed * lateSpeedMul(runMin);
     if (def) applyZombieType(z, def);
     else if (kind === 'boss') applyBossVariant(z);
@@ -1783,6 +1802,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     healthBars.push(ally.healthBar);
     squad.push(ally);
     netAllies.set(id, ally);
+    coopPlayers = 1 + netAllies.size;
     void attachVrmToOperative(ally, def.gender).then((avatar) => {
       if (!avatar) ally.proxy.visible = true;
     });
@@ -1794,6 +1814,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (!ally) return;
     coopMirror?.drop(id);
     netAllies.delete(id);
+    coopPlayers = 1 + netAllies.size;
     netTarget.delete(id);
     const si = squad.indexOf(ally);
     if (si > 0) squad.splice(si, 1);
@@ -2985,7 +3006,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       waveTimer = 0;
       wave += 1;
       hordeWarned = false;
-      spawnBudget = Math.round(waveBudget(wave) * diff.count * modeRt.spawnMul);
+      spawnBudget = Math.round(waveBudget(wave) * diff.count * modeRt.spawnMul * coopScale().count);
       shake = Math.max(shake, 0.3);
       const wk = waveKindForLevel(wave);
       hordeActive = isHordeWave(wave);
@@ -3006,7 +3027,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     // Spawn director: alive target ramps from ~6 to full pressure over 2.5 min, and the
     // wave budget trickles in (it used to dump one zombie per frame = a wall at once).
     if (hordeActive && spawnBudget <= 0) hordeActive = false;
-    const aliveTarget = Math.min(MAX_ZOMBIES, directorAliveTarget(simTime, wave, diff.count, modeRt.spawnMul));
+    const aliveTarget = Math.min(MAX_ZOMBIES, directorAliveTarget(simTime, wave, diff.count * coopScale().count, modeRt.spawnMul));
     spawnAcc = Math.min(3, spawnAcc + dt * spawnRate(simTime, wave, hordeActive));
     if (!isGuest && dt > 0) {
       const runMin = simTime / 60;

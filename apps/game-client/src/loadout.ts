@@ -1,6 +1,8 @@
 import { loadMetaSave, writeMetaSave } from './metaSave';
 import { OPERATIVE_ROSTER, type OperativeId } from './roster';
 import { WEAPONS, weaponVariantId, weaponByVariant } from './weapons';
+import { loadHeroProgress } from './heroProgress';
+import { ATTACHMENTS, ATTACHMENT_MAX, attachmentCost, attachmentsFor, emptyGear, POWER_MAX, powerCost, type AttachmentId, type WeaponGear } from './attachments';
 import type { MissionSelection } from './gameModes';
 
 /**
@@ -97,6 +99,8 @@ export interface Profile {
   signatures?: number;
   /** last chosen map / mode / difficulty */
   mission?: MissionSelection;
+  /** armory gear per weapon variant: power level + attachments */
+  gear?: Record<string, WeaponGear>;
 }
 
 const KEY = 'protocol-z-profile-v1';
@@ -112,17 +116,68 @@ export const itemKey = {
 /** Bumped when operatives get new signature weapons, so old saves pick them up once. */
 const SIGNATURE_REV = 1;
 
-/** Signature weapons belong to one operative; everything else is free for all. */
+/**
+ * Heavy machine guns (minigun, drum launcher, the AK-LMG) are the gunner's trade.
+ * Nobody else can carry them, and the gunner starts with the lightest one: the
+ * rest open with operator level.
+ */
+export const HEAVY_CLASS = 'gunner';
+export const HEAVY_UNLOCK_LEVEL: Record<string, number> = { lmg: 1, thumper_gl: 20, shredder: 40 };
+export const isHeavyWeapon = (variant: string): boolean => weaponByVariant(variant).id === 'lmg';
+export const isMeleeWeapon = (variant: string): boolean => weaponByVariant(variant).grip === 'melee';
+export const isPistolWeapon = (variant: string): boolean => weaponByVariant(variant).grip === 'pistol';
+
+/** Why `heroId` cannot carry `variant` (null = allowed). */
+export function equipBlock(heroId: string, variant: string): string | null {
+  const w = weaponByVariant(variant);
+  if (w.hero && w.hero !== heroId) return 'Başka bir operatörün özel silahı';
+  if (isHeavyWeapon(variant)) {
+    const hero = OPERATIVE_ROSTER.find((h) => h.id === heroId);
+    if (hero?.classId !== HEAVY_CLASS) return 'Ağır silahları sadece Gunner sınıfı taşıyabilir';
+    const need = HEAVY_UNLOCK_LEVEL[weaponVariantId(w)] ?? 30;
+    if (loadHeroProgress(heroId as OperativeId).level < need) return `Operatör Sv ${need} gerekir`;
+  }
+  return null;
+}
+
+/** Signature weapons belong to one operative; heavy guns to the gunner (by level). */
 export function canEquip(heroId: string, variant: string): boolean {
-  const owner = weaponByVariant(variant).hero;
-  return !owner || owner === heroId;
+  return equipBlock(heroId, variant) === null;
+}
+
+/** Every loadout carries at least one melee weapon and one pistol. */
+export function missingRequired(slots: readonly string[]): string | null {
+  if (!slots.some((v) => isMeleeWeapon(v))) return 'En az bir yakın dövüş silahı takılı olmalı';
+  if (!slots.some((v) => isPistolWeapon(v))) return 'En az bir tabanca takılı olmalı';
+  return null;
+}
+
+/** Puts the default knife / pistol back if a loadout lost them (old saves). */
+export function withRequired(slots: string[], cap: number): string[] {
+  const out = [...slots];
+  const need: string[] = [];
+  if (!out.some((v) => isMeleeWeapon(v))) need.push('knife');
+  if (!out.some((v) => isPistolWeapon(v))) need.push('pistol');
+  for (const v of need) {
+    if (out.length < cap) out.push(v);
+    else {
+      // replace the last slot that is not itself a required kind
+      for (let i = out.length - 1; i >= 0; i--) {
+        const cur = out[i]!;
+        if ((isMeleeWeapon(cur) && out.filter(isMeleeWeapon).length === 1) || (isPistolWeapon(cur) && out.filter(isPistolWeapon).length === 1) || i === 0) continue;
+        out[i] = v;
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 /** Signature weapon per hero (free) + sensible defaults. */
 function defaultSlots(heroId: OperativeId): string[] {
   const hero = OPERATIVE_ROSTER.find((h) => h.id === heroId) ?? OPERATIVE_ROSTER[0]!;
   const sig = weaponVariantId(WEAPONS[hero.weaponIndex] ?? WEAPONS[0]!);
-  const order = [sig, 'rifle', 'smg', 'shotgun', 'pistol', 'knife'];
+  const order = [sig, 'pistol', 'knife', 'rifle', 'smg', 'shotgun'];
   return [...new Set(order)].slice(0, BASE_WEAPON_SLOTS);
 }
 
@@ -158,6 +213,7 @@ export function sanitize(p: Profile): Profile {
     const sig = weaponVariantId(WEAPONS[h.weaponIndex] ?? WEAPONS[0]!);
     if ((p.signatures ?? 0) < SIGNATURE_REV && !cur.slots.includes(sig)) cur.slots = [sig, ...cur.slots.slice(1)];
     if (cur.slots.length === 0) cur.slots = defaultSlots(h.id);
+    cur.slots = withRequired(cur.slots, cap);
     out.heroes[h.id] = cur;
   }
   out.signatures = SIGNATURE_REV;
@@ -234,7 +290,7 @@ export function updateHero(heroId: OperativeId, fn: (h: HeroLoadout) => void): v
   const h = p.heroes[heroId] ?? defaultHero(heroId);
   fn(h);
   const cap = BASE_WEAPON_SLOTS + slotBonus(h.backpack);
-  h.slots = h.slots.slice(0, cap);
+  h.slots = withRequired(h.slots.filter((v) => canEquip(heroId, v)).slice(0, cap), cap);
   p.heroes[heroId] = h;
   saveProfile(p);
 }
@@ -292,8 +348,66 @@ export function currentRunLoadout(): RunLoadout {
     costume: COSTUMES.find((c) => c.id === h.costume) ?? COSTUMES[0]!,
     accessories: [...h.accessories],
     backpack: h.backpack,
-    weaponSlots: h.slots.filter((v) => weaponByVariant(v)),
+    weaponSlots: withRequired(h.slots.filter((v) => weaponByVariant(v) && canEquip(p.hero, v)), BASE_WEAPON_SLOTS + slotBonus(h.backpack)),
     abilityLevels: { ...h.abilities },
     mission: p.mission ?? { map: 'city', mode: 'survival', difficulty: 'normal' },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Armory gear (weapon power + attachments)
+// ---------------------------------------------------------------------------
+
+export function weaponGear(variant: string): WeaponGear {
+  const g = loadProfile().gear?.[variant];
+  return g ? { power: g.power ?? 0, levels: { ...(g.levels ?? {}) }, on: { ...(g.on ?? {}) } } : emptyGear();
+}
+
+function saveGear(variant: string, g: WeaponGear): void {
+  const p = loadProfile();
+  p.gear = { ...(p.gear ?? {}), [variant]: g };
+  saveProfile(p);
+}
+
+function spend(cost: number): boolean {
+  const meta = loadMetaSave();
+  if (!Number.isFinite(cost) || meta.credits < cost) return false;
+  meta.credits -= cost;
+  writeMetaSave(meta);
+  return true;
+}
+
+/** Raise a weapon's base power one level (credits). */
+export function upgradeWeaponPower(variant: string): boolean {
+  if (!owns(itemKey.weapon(variant))) return false;
+  const w = weaponByVariant(variant);
+  const g = weaponGear(variant);
+  if (g.power >= POWER_MAX || !spend(powerCost(w, g.power))) return false;
+  g.power += 1;
+  saveGear(variant, g);
+  return true;
+}
+
+/** Buy (level 1) or level up an attachment; it is equipped in its slot. */
+export function upgradeAttachment(variant: string, id: AttachmentId): boolean {
+  if (!owns(itemKey.weapon(variant))) return false;
+  const w = weaponByVariant(variant);
+  if (!attachmentsFor(w).includes(id)) return false;
+  const g = weaponGear(variant);
+  const lv = g.levels[id] ?? 0;
+  if (lv >= ATTACHMENT_MAX || !spend(attachmentCost(w, id, lv))) return false;
+  g.levels[id] = lv + 1;
+  g.on[ATTACHMENTS[id].slot] = id;
+  saveGear(variant, g);
+  return true;
+}
+
+/** Swap to an owned attachment (or take it off). Free. */
+export function toggleAttachment(variant: string, id: AttachmentId): void {
+  const g = weaponGear(variant);
+  if (!(g.levels[id] ?? 0)) return;
+  const slot = ATTACHMENTS[id].slot;
+  if (g.on[slot] === id) delete g.on[slot];
+  else g.on[slot] = id;
+  saveGear(variant, g);
 }
