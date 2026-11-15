@@ -103,7 +103,7 @@ function rotateWorld(obj: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3
 }
 
 /** Analytic two-bone IK: moves `hand`'s origin onto `target`, elbow kept on its current side (biased down). */
-export function twoBoneIK(upper: THREE.Object3D, lower: THREE.Object3D, hand: THREE.Object3D, target: THREE.Vector3, w: number): void {
+export function twoBoneIK(upper: THREE.Object3D, lower: THREE.Object3D, hand: THREE.Object3D, target: THREE.Vector3, w: number, bendHint?: THREE.Vector3): void {
   upper.updateWorldMatrix(true, true);
   upper.getWorldPosition(_A);
   lower.getWorldPosition(_B);
@@ -125,6 +125,11 @@ export function twoBoneIK(upper: THREE.Object3D, lower: THREE.Object3D, hand: TH
   else _bend.set(0, 0, 0);
   _u.copy(_down).addScaledVector(_d, -_down.dot(_d));
   if (_u.lengthSq() > 1e-6) _bend.addScaledVector(_u.normalize(), 0.6);
+  if (bendHint) {
+    // the caller knows where the elbow belongs (e.g. down and out for a hip-carried gun)
+    _u.copy(bendHint).addScaledVector(_d, -bendHint.dot(_d));
+    if (_u.lengthSq() > 1e-6) _bend.copy(_u.normalize());
+  }
   if (_bend.lengthSq() < 1e-6) return;
   _bend.normalize();
 
@@ -241,7 +246,7 @@ function orientHand(rig: BoneSource, side: 'left' | 'right', finger: THREE.Vecto
 }
 
 /** Wrist IK so the palm centre lands on `target`, then the hand is turned to wrap. */
-function placeHand(rig: BoneSource, side: 'left' | 'right', target: THREE.Vector3, finger: THREE.Vector3, across: THREE.Vector3, w: number): void {
+function placeHand(rig: BoneSource, side: 'left' | 'right', target: THREE.Vector3, finger: THREE.Vector3, across: THREE.Vector3, w: number, bendHint?: THREE.Vector3): void {
   const upper = rig.bone(`${side}UpperArm`);
   const lower = rig.bone(`${side}LowerArm`);
   const hand = rig.bone(`${side}Hand`);
@@ -256,7 +261,7 @@ function placeHand(rig: BoneSource, side: 'left' | 'right', target: THREE.Vector
       _palm.lerpVectors(_C, _knuckle, 0.5);
     } else _palm.copy(_C);
     _T.copy(target).sub(_palm).add(_C);
-    twoBoneIK(upper, lower, hand, _T, w);
+    twoBoneIK(upper, lower, hand, _T, w, bendHint);
   }
   if (w > 0.5) orientHand(rig, side, finger, across);
 }
@@ -481,7 +486,10 @@ export function holdGunRig(rig: BoneSource, root: THREE.Object3D, gun: THREE.Obj
   const rAcross = new THREE.Vector3().copy(_gu).multiplyScalar(0.85).addScaledVector(_gf, 0.3);
   // palm sits on the right flank of the grip
   _tgt.addScaledVector(_right, 0.035 * unit);
-  placeHand(rig, 'right', _tgt, rFinger, rAcross, o.rightW);
+  // elbows hang down and a little out (a hip-carried gun pushes them back too), never up
+  const rHint = new THREE.Vector3().copy(_up).multiplyScalar(-1).addScaledVector(_right, st === 'heavy' ? 0.7 : 0.45).addScaledVector(_fwd, st === 'heavy' ? -0.5 : -0.1);
+  const lHint = new THREE.Vector3().copy(_up).multiplyScalar(-1).addScaledVector(_right, st === 'heavy' ? -0.6 : -0.35);
+  placeHand(rig, 'right', _tgt, rFinger, rAcross, o.rightW, rHint);
   // fingers round the grip, index finger along / on the trigger
   curlHand(rig, 'right', 1.05, 0.55, o.rightW);
 
@@ -493,14 +501,14 @@ export function holdGunRig(rig: BoneSource, root: THREE.Object3D, gun: THREE.Obj
     const out = Math.sin(Math.min(1, reload) * Math.PI);
     _tgt.copy(_grip).addScaledVector(_gf, (st === 'pistol' ? 0.0 : 0.09) * unit).addScaledVector(_gu, (-0.08 - out * 0.12) * unit).addScaledVector(_right, -0.03 * unit);
     const lFinger = new THREE.Vector3().copy(_right).multiplyScalar(0.6).addScaledVector(_gu, 0.5).addScaledVector(_gf, 0.3);
-    placeHand(rig, 'left', _tgt, lFinger, _gf.clone(), o.leftW);
+    placeHand(rig, 'left', _tgt, lFinger, _gf.clone(), o.leftW, lHint);
     curlHand(rig, 'left', 0.8, 0.8, o.leftW);
   } else if (st === 'pistol' || !sp) {
     // cup the firing hand from the left side
     _tgt.copy(_grip).addScaledVector(_gu, -0.07 * unit).addScaledVector(_right, -0.04 * unit).addScaledVector(_gf, 0.01 * unit);
     const lFinger = new THREE.Vector3().copy(_right).multiplyScalar(0.7).addScaledVector(_gf, 0.55).addScaledVector(_gu, -0.1);
     const lAcross = new THREE.Vector3().copy(_gu).multiplyScalar(0.7).addScaledVector(_gf, 0.4);
-    placeHand(rig, 'left', _tgt, lFinger, lAcross, o.leftW);
+    placeHand(rig, 'left', _tgt, lFinger, lAcross, o.leftW, lHint);
     curlHand(rig, 'left', 1.0, 1.0, o.leftW);
   } else {
     sp.getWorldPosition(_tgt);
@@ -508,7 +516,7 @@ export function holdGunRig(rig: BoneSource, root: THREE.Object3D, gun: THREE.Obj
     // under the handguard, palm up, fingers wrapping round the right side
     const lFinger = new THREE.Vector3().copy(_right).multiplyScalar(0.7).addScaledVector(_gu, 0.35).addScaledVector(_gf, 0.35);
     const lAcross = new THREE.Vector3().copy(_gf);
-    placeHand(rig, 'left', _tgt, lFinger, lAcross, o.leftW);
+    placeHand(rig, 'left', _tgt, lFinger, lAcross, o.leftW, lHint);
     curlHand(rig, 'left', 0.95, 0.85, o.leftW);
   }
 }
