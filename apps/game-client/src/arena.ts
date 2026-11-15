@@ -163,6 +163,9 @@ import { createRunSkillState, HERO_START_SKILL, RUN_SKILLS, RunSkillRuntime, SKI
 import { ALLY_XP_SHARE, HeroXpLedger, loadHeroProgress, treeTotals } from './heroProgress';
 import { applyModDeltas, applyWeaponStep } from './progression';
 import { recomputeSkillDerived } from './skilltree';
+import { CoopMirror, packKit } from './coopMirror';
+import { SeeThrough, type SeeTarget } from './seeThrough';
+import type { OperativeId } from './roster';
 import { queueZombieAnim, setOperativeDead, spawnZombieCorpse, tickZombieCorpses, type ZombieCorpse } from './avatars';
 
 export interface ArenaHudState {
@@ -504,10 +507,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   progress.activeClassId = hero.classId;
   for (const w of ALL_WEAPONS) progress.unlockedWeapons.add(w.id);
   let heroRt: HeroAbilityRuntime | null = null;
+  /** co-op: team mates' abilities and skills drawn on this screen */
+  let coopMirror: CoopMirror | null = null;
   const NO_BUFF: HeroBuffs = { damage: 1, fireRate: 1, move: 1, armor: 0, crit: 0 };
   const heroBuffs = (op: OperativeVisual): HeroBuffs => {
-    const b = heroRt ? heroRt.buffsFor(op, simTime) : NO_BUFF;
+    let b = heroRt ? heroRt.buffsFor(op, simTime) : NO_BUFF;
     if (!op.isPlayer) return b;
+    if (coopMirror) b = coopMirror.buffsFor(op, simTime, b);
     const pu = powerUps;
     const dmg = pu.isActive('damage', simTime) ? 1.6 : 1;
     const fr = pu.isActive('firerate', simTime) ? 1.5 : 1;
@@ -552,7 +558,41 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   // walkable area connected to the player: spawns never land outside the map or in sealed pockets
   const MIN_FIELD_CELLS = 60;
   let spawnField = buildSpawnField(ARENA_BOUND, colliders, player.root.position.x, player.root.position.z, ZOMBIE_RADIUS, 1.5);
+  /** roofs / tree crowns / walls go see-through over heroes and nearby zombies */
+  const seeThrough = new SeeThrough();
+  seeThrough.patch(map.root);
+  const seeTargets: SeeTarget[] = [];
+  const seePool: SeeTarget[] = Array.from({ length: 16 }, () => ({ pos: new THREE.Vector3(), radius: 1 }));
+  const seeZ: { z: ZombieVisual; d: number }[] = [];
+  const updateSeeThrough = () => {
+    seeTargets.length = 0;
+    let k = 0;
+    const push = (x: number, y: number, z: number, r: number) => {
+      const t = seePool[k++];
+      if (!t) return;
+      t.pos.set(x, y, z);
+      t.radius = r;
+      seeTargets.push(t);
+    };
+    const P = player.root.position;
+    push(P.x, 1.1, P.z, 2.2);
+    for (const op of squad) if (op !== player && op.root.visible) push(op.root.position.x, 1.1, op.root.position.z, 1.8);
+    seeZ.length = 0;
+    for (const z of zombies) {
+      if (z.hp <= 0) continue;
+      const d = (z.root.position.x - P.x) ** 2 + (z.root.position.z - P.z) ** 2;
+      if (d < 34 * 34) seeZ.push({ z, d });
+    }
+    seeZ.sort((a, b) => a.d - b.d);
+    for (const { z } of seeZ) {
+      if (k >= seePool.length) break;
+      const big = z.root.scale.x > 1.4;
+      push(z.root.position.x, big ? 1.8 : 1.0, z.root.position.z, big ? 2.2 : 1.3);
+    }
+    seeThrough.update(camera, renderer, seeTargets);
+  };
   void map.ready.then(() => {
+    seeThrough.patch(map.root);
     // props finish loading asynchronously → colliders are only complete now
     spawnField = buildSpawnField(ARENA_BOUND, colliders, player.root.position.x, player.root.position.z, ZOMBIE_RADIUS, 1.5);
   });
@@ -946,6 +986,55 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     flashes.push({ mesh, life: 0.07 });
   };
 
+  /** Dragon's Breath: burning pellets fanning out of the muzzle, ember trail and a lick of smoke. */
+  const spawnFlameCone = (origin: THREE.Vector3, dir: THREE.Vector3, range: number, spread: number) => {
+    const fx3 = dir.x;
+    const fz3 = dir.z;
+    const reach = Math.min(range, 12);
+    const n = 26;
+    for (let i = 0; i < n; i++) {
+      const yaw = (Math.random() - 0.5) * spread * 2.2;
+      const c = Math.cos(yaw);
+      const sn = Math.sin(yaw);
+      const dx = fx3 * c - fz3 * sn;
+      const dz = fx3 * sn + fz3 * c;
+      const sp = reach * (0.5 + Math.random() * 2.6);
+      const life = 0.18 + Math.random() * 0.22;
+      skillFx.emit('fire', origin.x + dx * 0.15, origin.y + (Math.random() - 0.5) * 0.08, origin.z + dz * 0.15, {
+        vx: dx * sp,
+        vz: dz * sp,
+        vy: 0.4 + Math.random() * 1.4,
+        life,
+        s0: 0.18,
+        s1: 0.55 + Math.random() * 0.6,
+        color: i % 3 === 0 ? 0xffe0a0 : i % 3 === 1 ? 0xff7a1f : 0xff4a12,
+        drag: 2.4,
+        a: 0.95,
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      skillFx.emit('spark', origin.x, origin.y, origin.z, {
+        vx: (fx3 + (Math.random() - 0.5) * spread * 2) * reach * 2.4,
+        vz: (fz3 + (Math.random() - 0.5) * spread * 2) * reach * 2.4,
+        vy: 0.5 + Math.random() * 1.5,
+        life: 0.35 + Math.random() * 0.25,
+        s0: 0.06,
+        s1: 0.03,
+        color: 0xffc060,
+      });
+    }
+    skillFx.emit('smoke', origin.x + fx3 * 0.6, origin.y + 0.1, origin.z + fz3 * 0.6, {
+      vx: fx3 * 1.2,
+      vz: fz3 * 1.2,
+      vy: 0.6,
+      life: 0.8,
+      s0: 0.3,
+      s1: 1.1,
+      color: 0x3a3330,
+      a: 0.45,
+    });
+  };
+
   const refreshPlayerMaxHp = () => {
     const ratio = player.hp / Math.max(1, player.maxHp);
     const base = 130;
@@ -1020,7 +1109,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       if (zi >= 0) zombies.splice(zi, 1);
       return;
     }
-    if (isHost) netXpOut += z.xpValue;
+    // co-op: team mates get their own samples and drops where this one fell
+    if (isHost && netLootOut.length < 400) netLootOut.push(Math.round(pos.x * 10) / 10, Math.round(pos.z * 10) / 10, z.xpValue, z.kind);
     fx.spawnBloodBurst(pos, deathBurstScale(z.kind));
     fx.spawnHitRing(
       pos,
@@ -1495,6 +1585,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     op.muzzleLight.intensity = 8 * (wfx?.flashScale ?? 1);
     if (wfx) op.muzzleLight.color.setHex(wfx.flash);
     spawnFlash(muzzleWorld, wfx?.flash ?? 0xffe29a, wfx?.flashScale ?? 1);
+    // fire-spitting shotguns (Dragon's Breath): a visible cone of flame out of the barrel
+    if (wfx?.impact === 'incendiary' && weapon.pellets > 1) spawnFlameCone(muzzleWorld, forward, weapon.range, weapon.spread);
     audio.playGunshot(weapon.sfx, pan);
 
     let pierce = 0;
@@ -1538,6 +1630,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const NO_RESCUE_EVENTS = { spawned: false, rescued: false, retrying: false, failed: false };
   /** host → guests, batched so a horde cannot flood the relay */
   let netXpOut = 0;
+  /** host → guests: kills since the last flush, flat [x, z, xp, kind, …] */
+  const netLootOut: (number | string)[] = [];
   const netDmgOut = new Map<string, { amount: number; fx: number; fz: number }>();
   /** guest → host: ability damage per zombie id */
   const netHitOut = new Map<number, number>();
@@ -1618,6 +1712,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const dropNetAlly = (id: string) => {
     const ally = netAllies.get(id);
     if (!ally) return;
+    coopMirror?.drop(id);
     netAllies.delete(id);
     netTarget.delete(id);
     const si = squad.indexOf(ally);
@@ -1851,6 +1946,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         net.send({ k: 'xp', amount: netXpOut, x: 0, z: 0 });
         netXpOut = 0;
       }
+      for (let i = 0; i < netLootOut.length; i += 200) net.send({ k: 'loot', l: netLootOut.slice(i, i + 200) });
+      netLootOut.length = 0;
       for (const [to, d] of netDmgOut) net.send({ k: 'dmg', to, amount: Math.round(d.amount * 10) / 10, fx: d.fx, fz: d.fz });
       netDmgOut.clear();
       const banner = missionRuntime.bannerUntil > simTime ? missionRuntime.banner : '';
@@ -1865,7 +1962,22 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
 
   if (net) {
     net.handlers = {
-      onEvent: (ev) => {
+      onEvent: (ev, from) => {
+        if (ev.k === 'cast' || ev.k === 'sup' || ev.k === 'kit') {
+          // a team mate's ability: guests send it to the host, the host passes it on to everyone
+          const by = isHost ? from : String(ev.by ?? from);
+          if (isHost) net.send({ ...ev, by });
+          if (by === net.playerId || !coopMirror) return;
+          try {
+            if (ev.k === 'cast') coopMirror.cast(by, ev, simTime);
+            else if (ev.k === 'sup') coopMirror.support(by, Number(ev.x), Number(ev.z));
+            else coopMirror.kit(by, ev.s, ev.pw);
+          } catch (err) {
+            // a mate's effect failing to draw must never take the match down
+            console.warn('[coop] mirror', ev.k, err);
+          }
+          return;
+        }
         if (ev.k === 'pause') {
           const by = String(ev.by ?? '').slice(0, 24);
           applyNetPause(!!ev.on, by);
@@ -1888,6 +2000,21 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         }
         if (ev.k === 'dmg' && ev.to === net.playerId) {
           damageOperative(player, ev.amount, new THREE.Vector3(ev.fx, 0, ev.fz));
+        } else if (ev.k === 'loot' && Array.isArray(ev.l)) {
+          for (let i = 0; i + 3 < ev.l.length && i < 400; i += 4) {
+            const x = Number(ev.l[i]);
+            const zz = Number(ev.l[i + 1]);
+            const xp = Number(ev.l[i + 2]);
+            if (!Number.isFinite(x) || !Number.isFinite(zz) || !(xp > 0)) continue;
+            spawnGem(x, zz, Math.min(5000, xp));
+            const kind = String(ev.l[i + 3]) as ZombieVisual['kind'];
+            const drop = (NET_ZOMBIE_KINDS as readonly string[]).includes(kind) ? rollItemDrop(kind) : null;
+            if (drop) {
+              const item = createWorldItem(drop, new THREE.Vector3(x, 0, zz));
+              scene.add(item.mesh);
+              worldItems.push(item);
+            }
+          }
         } else if (ev.k === 'xp') {
           if (player.alive && Number.isFinite(ev.amount)) gainXp(Math.max(0, Math.min(5000, ev.amount)));
         } else if (ev.k === 'banner') {
@@ -1926,6 +2053,15 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     op.fireCooldown = (op.weapon.fireRate / Math.max(0.35, rateMul * heroBuffs(op).fireRate)) * disrupt;
   };
 
+  const reviveByAbility = (op: OperativeVisual) => {
+    op.alive = true;
+    op.hp = op.maxHp * 0.5;
+    setOperativeDead(op, false);
+    op.invuln = 1.5;
+    op.healthBar.setVisible(true);
+    op.healthBar.setRatio(op.hp / op.maxHp);
+    fx.spawnHitRing(op.root.position, 0x7cffb2);
+  };
   heroRt = createHeroAbilityRuntime(hero.id, loadout.abilityLevels, {
     scene,
     fx,
@@ -1935,15 +2071,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     aim: mouseAim,
     damageZombie: (z, dmg, at, dir) => damageZombie(z, dmg, at, dir, { weaponId: player.weapon.id, fromPlayer: true, forward: true }),
     moveWithCollision: applyMoveWithCollision,
-    revive: (op) => {
-      op.alive = true;
-      op.hp = op.maxHp * 0.5;
-      setOperativeDead(op, false);
-      op.invuln = 1.5;
-      op.healthBar.setVisible(true);
-      op.healthBar.setRatio(op.hp / op.maxHp);
-      fx.spawnHitRing(op.root.position, 0x7cffb2);
-    },
+    revive: (op) => reviveByAbility(op),
     addPierceShots: (k) => {
       progress.pierceShots += k;
     },
@@ -2037,9 +2165,51 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     },
   });
 
+  if (net) {
+    coopMirror = new CoopMirror({
+      scene,
+      fx,
+      vfx: skillFx,
+      zombies,
+      me: player,
+      allyOf: (id) => netAllies.get(id) ?? null,
+      heroOf: (id) => (net.roster?.players.find((p) => p.playerId === id)?.operativeId ?? 'valkyrie') as OperativeId,
+      moveWithCollision: applyMoveWithCollision,
+      revive: (op) => reviveByAbility(op),
+      sample: (key, o) => audio.playSample(key, o),
+      boom: () => audio.playSample('s_explosion', { gain: 0.45, rate: 0.9 + Math.random() * 0.25 }),
+    });
+  }
+  /** co-op: our run skills as team mates should see them; resent on change and every few seconds for late joiners */
+  let kitSent = '';
+  let kitT = 0;
+  const publishKit = (dt: number) => {
+    if (!net) return;
+    kitT -= dt;
+    const s = packKit(progress.runSkills);
+    const key = s.join(',');
+    if (key === kitSent && kitT > 0) return;
+    kitSent = key;
+    kitT = 5;
+    net.send({ k: 'kit', s, pw: Math.round(progress.abilityPowerMult * (1 + tree.skillPower) * 100) / 100 });
+  };
+
   const castHero = (slot: AbilitySlot) => {
     if (!player.alive || progress.pendingPicks > 0 || !heroRt) return;
-    if (heroRt.cast(slot, simTime)) shake = Math.max(shake, 0.12);
+    if (heroRt.cast(slot, simTime)) {
+      shake = Math.max(shake, 0.12);
+      net?.send({
+        k: 'cast',
+        slot,
+        x: Math.round(mouseAim.x * 100) / 100,
+        z: Math.round(mouseAim.z * 100) / 100,
+        yaw: Math.round(player.root.rotation.y * 100) / 100,
+        hero: hero.id,
+        lv: heroRt.level(slot),
+        pw: Math.round(progress.abilityPowerMult * 100) / 100,
+        ae: Math.round(progress.mods.aoeRadiusMult * 100) / 100,
+      });
+    }
   };
 
   const activateAbility = () => {
@@ -2208,6 +2378,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     // H: radio fire support on the cursor
     if (input.keys.KeyH && !prevKeys.KeyH && player.alive) {
       const r = runSkills.callSupport(mouseAim);
+      if (r === 'ok') net?.send({ k: 'sup', x: Math.round(mouseAim.x * 100) / 100, z: Math.round(mouseAim.z * 100) / 100 });
       if (r === 'cooldown') notePickup('Destek hazır değil', 'Telsiz hattı meşgul — süre dolunca tekrar dene');
       else if (r === 'notarget') notePickup('Hedef yok', 'İmleci zombilerin üstüne getirip H tuşuna bas');
     }
@@ -3153,6 +3324,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
 
     abilityRuntime.update(dt, zombies, damageZombie);
     heroRt?.update(dt, simTime);
+    coopMirror?.update(dt, simTime);
+    publishKit(dt);
     runSkills.update(dt, moving);
     for (let i = beams.length - 1; i >= 0; i--) {
       const bm = beams[i]!;
@@ -3281,6 +3454,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       );
     }
 
+    updateSeeThrough();
     renderer.render(scene, camera);
   };
 
@@ -3361,6 +3535,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       fx.dispose();
       abilityRuntime.dispose();
       heroRt?.dispose();
+      coopMirror?.dispose();
+      seeThrough.dispose();
       runSkills.dispose();
       modeRt.dispose();
       map.dispose();

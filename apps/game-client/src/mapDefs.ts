@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { MapBuilder, type PropId } from './mapBuilder';
 
 /**
- * Ten hand-designed (seeded) maps. Each has its own ground, structures, prop palette,
+ * Hand-designed (seeded) maps. Each has its own ground, structures, prop palette,
  * lighting, weather and objective anchors used by the game modes.
  */
 
-export type MapId = 'city' | 'hospital' | 'military' | 'harbor' | 'forest' | 'highway' | 'industrial' | 'snow' | 'desert' | 'lab';
+export type MapId = 'city' | 'hospital' | 'military' | 'harbor' | 'forest' | 'highway' | 'industrial' | 'snow' | 'desert' | 'lab' | 'village' | 'mall' | 'airport' | 'campus';
 export type Weather = 'none' | 'rain' | 'snow' | 'dust' | 'ash';
 export type ModeId = 'survival' | 'horde' | 'defense' | 'rescue' | 'evac' | 'boss' | 'endless' | 'zones' | 'hunt' | 'blitz';
 /** Modes that need no map-specific anchors beyond the common ones, so every map offers them. */
@@ -533,8 +533,232 @@ export const MAPS: Record<MapId, MapDef> = {
       b.scatter(['cardboard', 'plastic_crate', 'wetsign', 'trashbag', 'medbox'], 60, -78, -78, 78, 78, 0.6);
     },
   },
+
+  village: {
+    id: 'village',
+    name: 'Terk Edilmiş Köy',
+    tagline: 'İkindi · Toz',
+    desc: 'Dağ eteğinde bir Anadolu köyü: taş duvarlı avlular, kerpiç evler, meyve bahçeleri ve köy meydanındaki çeşme.',
+    half: 95,
+    seed: 1409,
+    weather: 'dust',
+    accent: 0xe8a35a,
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x0f0b07, fog: 0x231a10, fogDensity: 0.013, ambient: [0x30281e, 0.65], hemi: [0xb09a78, 0x18120c, 0.8], sun: [0xffd09a, 1.85], sunDir: [-36, 30, 22], rim: [0xffa65a, 0.4], exposure: 1.2 }),
+    build: (b) => {
+      b.ground('brown_mud', 6, 'aerial_grass_rock', 7, 0.65, 0xb8a888);
+      b.anchors.evac.set(76, 0, 70);
+      b.anchors.boss.set(-66, 0, -64);
+      ringAnchors(b, 50);
+      b.clear(0, 0, 12);
+      // village square with the fountain (generator core) and plane trees
+      b.patch('cracked_concrete', 3, 0, 0, 26, 26, 0, 0xc8b8a0);
+      for (const [x, z] of [[-17, -16], [17, -16], [-24, 4], [24, 4]] as const) b.tree(x, z, b.r(8, 10));
+      // dirt lanes
+      b.road(-120, 0, 120, 0, 7, { tex: 'dry_ground_rocks', curb: false, lanes: false, tint: 0xd8c8a8 });
+      b.road(0, -120, 0, 120, 7, { tex: 'dry_ground_rocks', curb: false, lanes: false, tint: 0xd8c8a8 });
+      b.road(-90, -50, 90, -50, 5, { tex: 'dry_ground_rocks', curb: false, lanes: false, tint: 0xd0c0a0 });
+      b.road(-90, 48, 90, 48, 5, { tex: 'dry_ground_rocks', curb: false, lanes: false, tint: 0xd0c0a0 });
+      for (let t = -100; t <= 100; t += 5) {
+        b.clear(t, 0, 5);
+        b.clear(0, t, 5);
+        b.clear(t, -50, 4);
+        b.clear(t, 48, 4);
+      }
+      // houses in walled yards
+      const house = { wall: 'damaged_plaster' as const, roof: 'clay_roof_tiles' as const, wallTile: 2.5, tint: 0xe2d2b6, roofTint: 0xb87a5a, rooftop: false };
+      const adobe = { wall: 'damaged_plaster' as const, roof: 'grey_roof_01' as const, wallTile: 2.5, tint: 0xc9a77e, roofTint: 0x8a7462, rooftop: false };
+      for (let i = 0; i < 40; i++) {
+        const x = b.r(-82, 82);
+        const z = b.r(-82, 82);
+        if (!b.isClear(x, z, 9)) continue;
+        const w = b.r(7, 11);
+        const d = b.r(6, 9);
+        const rot = b.pick([0, Math.PI / 2]) + b.r(-0.08, 0.08);
+        b.building(x, z, w, d, b.r(3.4, 6.2), b.rng() < 0.6 ? house : adobe, rot);
+        // low stone yard wall on one or two sides
+        const yard = 3.5;
+        if (b.rng() < 0.7) b.wall(x - w / 2 - yard, z + d / 2 + yard, x + w / 2 + yard, z + d / 2 + yard, 1.2, 'concrete_wall_008', 0.45, 0xa89a84);
+        if (b.rng() < 0.5) b.wall(x - w / 2 - yard, z - d / 2, x - w / 2 - yard, z + d / 2 + yard, 1.2, 'concrete_wall_008', 0.45, 0xa89a84);
+        b.clutter(x + w / 2 + 2, z, ['crate', 'jerrycan', 'tyre', 'barrel_rust', 'log2'], 3, 1.6);
+      }
+      // orchards
+      for (const [ox, oz] of [[-60, 70], [62, -70], [-74, -12], [70, 18]] as const) {
+        for (let i = 0; i < 4; i++)
+          for (let k = 0; k < 4; k++) {
+            const x = ox + i * 6 + b.r(-0.8, 0.8);
+            const z = oz + k * 6 + b.r(-0.8, 0.8);
+            if (b.isClear(x, z, 2.5)) b.tree(x, z, b.r(6, 8));
+          }
+      }
+      // threshing floor + hay
+      b.patch('dry_ground_rocks', 4, 40, -28, 16, 16, 0, 0xd8c08a);
+      b.scatter(['crate_long', 'crate', 'log', 'log2'], 10, 32, -36, 48, -20, 1.5);
+      for (let i = 0; i < 9; i++) b.prop('car', b.r(-90, 90), b.r(-90, 90), { rot: b.r(0, 6.28), tint: b.pick([0xc8c0b0, 0x6a3a2a, 0x3a4a5a, 0x8a8a6a]) });
+      b.scatter(['shrub', 'shrub_low', 'rock', 'rock_small', 'branches', 'stump'], 140, -92, -92, 92, 92, 1);
+      for (const [x, z] of [[-6, 0], [6, 0], [0, 40], [0, -40]] as const) b.lamp(x, z, 0xffd6a0, b.lights.length < 3);
+      b.fire(-30, 18);
+    },
+  },
+  mall: {
+    id: 'mall',
+    name: 'Alışveriş Merkezi',
+    tagline: 'Gece · Neon',
+    desc: 'Son sığınak olacaktı: dev AVM, katlı otopark, yükleme rampaları ve barikatlı girişler.',
+    half: 100,
+    seed: 1511,
+    weather: 'none',
+    accent: 0xe879f9,
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x07060a, fog: 0x0e0c14, fogDensity: 0.016, ambient: [0x2a2834, 0.75], hemi: [0x8a86a0, 0x12101a, 0.85], sun: [0xe8e2ff, 1.45], sunDir: [24, 44, -18], rim: [0xe879f9, 0.5], exposure: 1.4 }),
+    build: (b) => {
+      b.ground('asphalt_02', 6, 'cracked_concrete', 5, 0.45, 0xa8a8b0);
+      b.anchors.core.set(0, 0, 24);
+      b.anchors.spawn.set(0, 0, 30);
+      b.anchors.evac.set(-82, 0, 82);
+      b.anchors.boss.set(70, 0, -78);
+      ringAnchors(b, 58);
+      b.clear(0, 24, 11);
+      // the mall: two big halls joined by a glass atrium, entrance plaza to the south
+      const hall = { wall: 'concrete_wall_008' as const, roof: 'metal_plate' as const, wallTile: 4, tint: 0xd8d4dc, roofTint: 0x7a7a82 };
+      b.building(-30, -26, 42, 34, 14, hall);
+      b.building(32, -26, 40, 34, 12, { ...hall, tint: 0xc8c4d0 });
+      b.building(0, -34, 20, 18, 17, { wall: 'metal_plate', roof: 'metal_plate', wallTile: 2, tint: 0x8aa0b8, roofTint: 0x5a6a7a });
+      b.patch('floor_tiles_06', 4, 0, 14, 62, 20, 0, 0xa8a4a0);
+      // barricaded entrance
+      b.sandbags(-14, 6, -4, 6);
+      b.sandbags(4, 6, 14, 6);
+      for (let x = -24; x <= 24; x += 2.4) if (Math.abs(x) > 15) b.prop('barrier', x, 6.5);
+      b.clutter(-8, 10, ['plastic_crate', 'cardboard', 'shelves', 'trashcan'], 5, 2.5);
+      // parking lot in rows
+      b.patch('asphalt_02', 6, 0, 62, 170, 44, 0, 0x8a8a92);
+      for (let row = 0; row < 4; row++)
+        for (let i = 0; i < 18; i++) {
+          if (b.rng() < 0.35) continue;
+          const x = -76 + i * 9;
+          const z = 46 + row * 11;
+          if (b.isClear(x, z, 2.2)) b.prop('car', x, z, { rot: (row % 2 ? Math.PI : 0) + b.r(-0.2, 0.2), tint: b.pick(CAR_TINTS) });
+        }
+      // loading docks + trucks' containers on the north side
+      for (let i = 0; i < 6; i++) b.container(-50 + i * 20, -62, 0, b.pick([0x8a3a2a, 0x2a4a6a, 0x5a5a5a, 0xc8b04a]), 1, b.rng() < 0.3);
+      b.scatter(IND_CLUTTER, 26, -80, -78, 80, -50, 1);
+      // ring road and side buildings
+      b.road(-120, 92, 120, 92, 12, { tex: 'road_damaged' });
+      b.road(92, -120, 92, 120, 11, { tex: 'road_damaged' });
+      b.road(-92, -120, -92, 120, 11, { tex: 'road_damaged' });
+      for (const z of [-78, -30, 18]) {
+        b.building(-74, z, 18, 22, b.r(6, 10), { wall: 'brick_wall_10', roof: 'grey_roof_01', tint: 0xb8a8a0 });
+        b.building(74, z, 18, 22, b.r(6, 10), { wall: 'concrete_wall_008', roof: 'grey_roof_01', tint: 0xb0b8c0 });
+      }
+      for (let x = -80; x <= 80; x += 20) b.lamp(x, 40, 0xf0d0ff, b.lights.length < 4 && b.rng() < 0.4);
+      for (let x = -70; x <= 70; x += 28) b.lamp(x, 84, 0xffc98a, false);
+      b.scatter(['trashcan', 'bench', 'hydrant', 'utilitybox'], 26, -90, -10, 90, 90, 2);
+      b.scatter(URBAN_CLUTTER, 80, -96, -96, 96, 96, 0.6);
+    },
+  },
+  airport: {
+    id: 'airport',
+    name: 'Kapalı Havalimanı',
+    tagline: 'Şafak · Sis',
+    desc: 'Son uçuşlar hiç kalkmadı. Pist, hangarlar, terminal ve yakıt deposu arasında açık arazi.',
+    half: 120,
+    seed: 1613,
+    weather: 'none',
+    accent: 0x7dd3fc,
+    modes: ['survival', 'horde', 'defense', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x0a0c10, fog: 0x161c24, fogDensity: 0.011, ambient: [0x262c34, 0.7], hemi: [0x8a9aae, 0x12161c, 0.85], sun: [0xffe2c4, 1.7], sunDir: [44, 26, 30], rim: [0x7dd3fc, 0.4], exposure: 1.2 }),
+    build: (b) => {
+      b.ground('aerial_grass_rock', 9, 'dry_ground_rocks', 7, 0.55, 0xa0a890);
+      b.anchors.core.set(0, 0, -30);
+      b.anchors.spawn.set(0, 0, -24);
+      b.anchors.evac.set(96, 0, 40);
+      b.anchors.boss.set(-90, 0, 40);
+      ringAnchors(b, 62);
+      b.clear(0, -30, 11);
+      // runway + taxiway
+      b.road(-170, 40, 170, 40, 26, { tex: 'asphalt_02', curb: false, tint: 0x9a9aa0 });
+      b.road(-170, 8, 170, 8, 10, { tex: 'asphalt_02', curb: false, lanes: false, tint: 0x8a8a90 });
+      for (const x of [-60, 0, 60]) b.road(x, 8, x, 40, 9, { tex: 'asphalt_02', curb: false, lanes: false, tint: 0x8a8a90 });
+      // apron + terminal
+      b.patch('cracked_concrete', 4, 0, -20, 150, 30, 0, 0xd0d0d0);
+      b.building(0, -58, 90, 26, 12, { wall: 'metal_plate', roof: 'metal_plate', wallTile: 3, tint: 0xb8c8d8, roofTint: 0x6a7a8a });
+      b.building(0, -76, 30, 10, 22, { wall: 'concrete_wall_008', roof: 'metal_plate', tint: 0xd0d0d0 }); // tower base
+      // hangars
+      for (const x of [-95, -65, 70, 100]) b.building(x, -24, 24, 26, 11, { wall: 'corrugated_iron', roof: 'corrugated_iron', wallTile: 3, roofTile: 3, tint: 0x8a9488, roofTint: 0x6a7068, windows: false });
+      // fuel farm
+      for (let i = 0; i < 6; i++) b.prop('lpg', -40 + (i % 3) * 6, -86 + Math.floor(i / 3) * 6, { scale: 2.4 });
+      b.fence(-52, -96, -16, -96);
+      b.fence(-52, -96, -52, -74);
+      // abandoned ground vehicles, baggage, barriers on the apron
+      for (let i = 0; i < 16; i++) b.prop('car', b.r(-100, 100), b.r(-34, -6), { rot: b.r(0, 6.28), tint: b.pick([0xe8e8e0, 0xf0c040, 0x3a4a5a]) });
+      b.scatter(['plastic_box', 'cardboard', 'crate', 'barrier', 'toolcart', 'generator'], 50, -110, -40, 110, 0, 1.4);
+      for (let x = -150; x < 150; x += 30) b.prop('barrier', x + b.r(-8, 8), 40 + b.r(-9, 9), { rot: b.r(0, 6.28) });
+      // perimeter fences and grass
+      b.fence(-118, 64, 118, 64);
+      b.fence(-118, -110, 118, -110);
+      b.scatter(['shrub', 'shrub_low', 'rock_small', 'branches'], 160, -118, 56, 118, 118, 0.8);
+      b.scatter(['shrub_low', 'rock', 'stump'], 50, -118, -108, 118, -70, 1.2);
+      for (let x = -100; x <= 100; x += 25) b.lamp(x, -2, 0xfff1d6, b.lights.length < 4 && b.rng() < 0.4);
+      for (const [x, z] of [[-30, 40], [44, 36]] as const) b.fire(x, z);
+    },
+  },
+  campus: {
+    id: 'campus',
+    name: 'Üniversite Kampüsü',
+    tagline: 'Sonbahar · Yağmur',
+    desc: 'Final haftası hiç bitmedi. Fakülte binaları, yurtlar, ağaçlı yürüyüş yolları ve merkez kütüphane.',
+    half: 100,
+    seed: 1717,
+    weather: 'rain',
+    accent: 0xfb923c,
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x080807, fog: 0x12110d, fogDensity: 0.018, ambient: [0x2a2620, 0.6], hemi: [0x8a7e68, 0x14110c, 0.8], sun: [0xffe0b8, 1.4], sunDir: [-28, 40, -20], rim: [0xfb923c, 0.4], exposure: 1.25 }),
+    build: (b) => {
+      b.ground('forest_leaves_02', 6, 'aerial_grass_rock', 8, 0.55, 0xa89878);
+      b.anchors.evac.set(-80, 0, -80);
+      b.anchors.boss.set(76, 0, 74);
+      ringAnchors(b, 54);
+      b.clear(0, 0, 12);
+      // central quad: paved cross paths
+      b.patch('cracked_concrete', 3, 0, 0, 30, 30, 0, 0xc8c0b4);
+      b.road(-110, 0, 110, 0, 6, { tex: 'cracked_concrete', curb: false, lanes: false, tint: 0xc8c0b4 });
+      b.road(0, -110, 0, 110, 6, { tex: 'cracked_concrete', curb: false, lanes: false, tint: 0xc8c0b4 });
+      b.road(-110, 70, 110, 70, 10, { tex: 'road_damaged' });
+      // faculties around the quad
+      const fac = { wall: 'brick_wall_10' as const, roof: 'grey_roof_01' as const, wallTile: 3, tint: 0xc09a84 };
+      const modern = { wall: 'concrete_wall_008' as const, roof: 'concrete_floor_worn_001' as const, tint: 0xd8d8d0 };
+      b.building(0, -40, 46, 18, 15, modern); // library
+      b.building(-40, -6, 18, 36, 11, fac);
+      b.building(40, -6, 18, 36, 11, fac);
+      b.building(-40, 36, 30, 14, 9, { ...fac, tint: 0xa88a74 });
+      b.building(40, 36, 30, 14, 9, modern);
+      // dorm blocks
+      for (let i = 0; i < 4; i++) {
+        b.building(-80 + i * 18, -78, 12, 22, b.r(14, 18), { wall: 'concrete_wall_008', roof: 'grey_roof_01', tint: 0xc8c0b0 });
+        b.building(26 + i * 18, -78, 12, 22, b.r(14, 18), { wall: 'concrete_wall_008', roof: 'grey_roof_01', tint: 0xb8b8c0 });
+      }
+      // tree-lined paths
+      for (let t = -100; t <= 100; t += 10) {
+        for (const off of [-5.5, 5.5]) {
+          if (b.isClear(t, off, 2.5) && Math.abs(t) > 18) b.tree(t, off, b.r(8, 11));
+          if (b.isClear(off, t, 2.5) && Math.abs(t) > 18) b.tree(off, t, b.r(8, 11));
+        }
+      }
+      for (let i = 0; i < 60; i++) {
+        const x = b.r(-95, 95);
+        const z = b.r(-95, 95);
+        if (b.isClear(x, z, 4)) b.tree(x, z, b.r(7, 12));
+      }
+      // parked cars along the road, student clutter
+      for (let x = -96; x < 96; x += 7) if (b.rng() < 0.45) b.prop('car', x, 78, { rot: Math.PI / 2 + b.r(-0.1, 0.1), tint: b.pick(CAR_TINTS) });
+      b.scatter(['bench', 'picnic', 'trashcan', 'bench'], 36, -60, -60, 60, 60, 2);
+      b.scatter(['cardboard', 'trashbag', 'plastic_crate', 'desk', 'shelves'], 50, -96, -96, 96, 96, 0.8);
+      b.scatter(['shrub', 'shrub_low', 'fern', 'branches'], 110, -96, -96, 96, 96, 0.5);
+      for (const [x, z] of [[-14, -14], [14, -14], [-14, 14], [14, 14], [0, 60]] as const) b.lamp(x, z, 0xffe6c0, b.lights.length < 4);
+    },
+  },
 };
 
-export const MAP_ORDER: MapId[] = ['city', 'hospital', 'military', 'harbor', 'forest', 'highway', 'industrial', 'snow', 'desert', 'lab'];
+export const MAP_ORDER: MapId[] = ['city', 'hospital', 'military', 'harbor', 'forest', 'highway', 'industrial', 'snow', 'desert', 'lab', 'village', 'mall', 'airport', 'campus'];
 
 for (const id of MAP_ORDER) MAPS[id].modes.push(...UNIVERSAL_MODES);

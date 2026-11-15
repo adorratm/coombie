@@ -206,7 +206,9 @@ const _m = new THREE.Matrix4();
 /** Carry style for a firearm (heavy guns are carried at the hip). */
 export function holdStyleOf(weapon: { id: string; variant?: string; grip?: string }): HoldStyle {
   const v = weapon.variant ?? weapon.id;
-  if (weapon.id === 'lmg' || v === 'shredder' || v === 'thumper_gl' || v === 'boru_havan' || v === 'anti_materiel') return 'heavy';
+  // only the belt-fed / rotary machine guns (and the drum launcher on the same frame) ride at the hip;
+  // shotguns, the pipe mortar and the .50 are shouldered like a rifle
+  if (weapon.id === 'lmg' || v === 'shredder' || v === 'thumper_gl') return 'heavy';
   if (weapon.grip === 'pistol') return 'pistol';
   if (weapon.grip === 'smg') return 'smg';
   return 'rifle';

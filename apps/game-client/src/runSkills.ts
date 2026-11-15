@@ -631,6 +631,12 @@ export class RunSkillRuntime {
     return 'ok';
   }
 
+  /** Co-op mirror: a team mate called their support in — replay it here (their cooldown, not ours). */
+  remoteSupport(at: THREE.Vector3): void {
+    this.supportCd = 0;
+    this.callSupport(at);
+  }
+
   /** Gunship: every so often the pair hovers over the densest crowd near the hero. */
   private tickAutoHeli(dt: number): void {
     this.autoHeliCd -= dt;

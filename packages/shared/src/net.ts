@@ -119,13 +119,22 @@ export function sanitizeObjective(raw: unknown): NetObjective | null {
 export type NetEvent =
   /** host → one hero: you were hit */
   | { k: 'dmg'; to: string; amount: number; fx: number; fz: number }
-  /** host → all: xp for a kill, shared */
+  /** host → all: xp for a kill, shared (older hosts; newer ones send `loot`) */
   | { k: 'xp'; amount: number; x: number; z: number }
+  /** host → all: kills since the last flush, flat [x, z, xp, zombieKind, …]; every player gets their own samples / drops there */
+  | { k: 'loot'; l: (number | string)[] }
   | { k: 'banner'; text: string; dur: number }
   /** co-op pause: guest → host asks, host → all applies. `on: false` starts the 3-2-1 resume countdown */
   | { k: 'pause'; on: boolean; by: string }
-  /** guest → host: hero ability cast */
-  | { k: 'cast'; slot: string; x: number; z: number; yaw: number }
+  /**
+   * hero ability cast (Q/E/R), so team mates can draw it. Guest → host, the host relays it to everyone
+   * with `by` filled in; host casts go straight to the room. `lv` = ability level, `pw`/`ae` = power / area multipliers.
+   */
+  | { k: 'cast'; slot: string; x: number; z: number; yaw: number; by?: string; hero?: string; lv?: number; pw?: number; ae?: number }
+  /** radio fire support (H) called on x/z — same routing as `cast` */
+  | { k: 'sup'; x: number; z: number; by?: string }
+  /** a hero's run skills, so team mates can draw the passive ones: flat [skillId, level, evolution branch or '', …] */
+  | { k: 'kit'; s: (string | number)[]; pw?: number; by?: string }
   /** guest → host: ability / skill damage the guest dealt — flat [zombieId, amount, …] */
   | { k: 'hit'; h: number[] }
   /** guest → host: melee / point-blank hit request is NOT trusted; the host fires for every hero */

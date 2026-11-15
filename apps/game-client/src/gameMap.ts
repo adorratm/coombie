@@ -10,6 +10,8 @@ export interface GameMap extends MapBuildResult {
   anchors: MapAnchors;
   /** resolves when every prop model is placed (colliders complete) */
   ready: Promise<void>;
+  /** everything the map put in the scene */
+  root: THREE.Group;
   /** beacon over the evac point (shown by modes) */
   evacMarker: THREE.Group;
   update: (dt: number, t: number, center: THREE.Vector3) => void;
@@ -105,6 +107,7 @@ export function buildGameMap(scene: THREE.Scene, id: MapId, renderer?: THREE.Web
     bound: def.half,
     anchors: b.anchors,
     ready,
+    root: b.root,
     colliders: b.colliders,
     core,
     ring,
