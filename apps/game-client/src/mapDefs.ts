@@ -6,7 +6,7 @@ import { MapBuilder, type PropId } from './mapBuilder';
  * lighting, weather and objective anchors used by the game modes.
  */
 
-export type MapId = 'city' | 'hospital' | 'military' | 'harbor' | 'forest' | 'highway' | 'industrial' | 'snow' | 'desert' | 'lab' | 'village' | 'mall' | 'airport' | 'campus';
+export type MapId = 'city' | 'hospital' | 'military' | 'harbor' | 'forest' | 'highway' | 'industrial' | 'snow' | 'desert' | 'lab' | 'village' | 'mall' | 'airport' | 'campus' | 'river' | 'canyon' | 'fortress' | 'volcano' | 'maze';
 export type Weather = 'none' | 'rain' | 'snow' | 'dust' | 'ash';
 export type ModeId =
   | 'survival' | 'horde' | 'defense' | 'rescue' | 'evac' | 'boss' | 'endless' | 'zones' | 'hunt' | 'blitz'
@@ -759,8 +759,271 @@ export const MAPS: Record<MapId, MapDef> = {
       for (const [x, z] of [[-14, -14], [14, -14], [-14, 14], [14, 14], [0, 60]] as const) b.lamp(x, z, 0xffe6c0, b.lights.length < 4);
     },
   },
+
+  river: {
+    id: 'river',
+    name: 'Nehir Kasabası',
+    tagline: 'Sis · Çiseleme',
+    desc: 'Kasabayı ikiye bölen nehir: karşıya sadece üç köprüden geçilir. Sürü köprülere yığılır — köprüyü tutan kazanır.',
+    half: 100,
+    seed: 1811,
+    weather: 'rain',
+    accent: 0x2dd4bf,
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x06090a, fog: 0x0c1416, fogDensity: 0.02, ambient: [0x22302e, 0.6], hemi: [0x6a8a86, 0x0e1414, 0.8], sun: [0xd8f0f0, 1.3], sunDir: [-18, 44, 26], rim: [0x2dd4bf, 0.45], exposure: 1.3 }),
+    build: (b) => {
+      b.ground('aerial_grass_rock', 8, 'brown_mud', 6, 0.55, 0xa0aa90);
+      b.anchors.core.set(0, 0, 17);
+      b.anchors.spawn.set(0, 0, 23);
+      b.anchors.evac.set(-70, 0, -74);
+      b.anchors.boss.set(70, 0, -64);
+      ringAnchors(b, 52);
+      b.clear(0, 17, 10);
+      // the river: a lazy S across the map, three bridges
+      b.water(-130, 4, -40, -2, 12, [0.62]);
+      b.water(-40, -2, 40, 2, 12, [0.5]);
+      b.water(40, 2, 130, -6, 12, [0.38]);
+      // riverside promenade + town both banks
+      const town = [
+        { wall: 'brick_wall_10' as const, roof: 'clay_roof_tiles' as const, wallTile: 3, tint: 0xc8a890, roofTint: 0xa86a4a },
+        { wall: 'damaged_plaster' as const, roof: 'grey_roof_01' as const, wallTile: 3, tint: 0xd8d0c0 },
+      ];
+      for (let i = 0; i < 44; i++) {
+        const x = b.r(-90, 90);
+        const z = b.pick([b.r(16, 90), b.r(-90, -16)]);
+        if (!b.isClear(x, z, 8)) continue;
+        b.building(x, z, b.r(7, 12), b.r(7, 11), b.r(4, 9), b.pick(town), b.pick([0, Math.PI / 2]));
+      }
+      for (let x = -96; x <= 96; x += 7) {
+        for (const z of [-11, 12]) if (b.isClear(x, z, 2)) b.tree(x + b.r(-1, 1), z + b.r(-1, 1), b.r(7, 10));
+      }
+      b.scatter(['bench', 'lamp', 'trashcan', 'barrier'], 30, -95, -20, 95, 20, 2);
+      b.scatter(['car', 'crate', 'barrel', 'tyre'], 30, -95, -95, 95, 95, 2);
+      b.scatter(['shrub', 'shrub_low', 'rock_small', 'fern'], 120, -98, -98, 98, 98, 0.6);
+      for (const [x, z] of [[-6, 20], [6, 20], [0, 34]] as const) b.lamp(x, z, 0xd8fff4, b.lights.length < 3);
+    },
+  },
+  canyon: {
+    id: 'canyon',
+    name: 'Kızıl Kanyon',
+    tagline: 'Kavurucu öğle · Toz',
+    desc: 'Kaya duvarlarının arasında üç dar koridor ve birkaç geçit. Açık alan yok: sürü karşıdan gelir, kaçacak yer azdır.',
+    half: 100,
+    seed: 1913,
+    weather: 'dust',
+    accent: 0xf97316,
+    modes: ['survival', 'horde', 'defense', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x120a06, fog: 0x2a170c, fogDensity: 0.011, ambient: [0x3a281c, 0.7], hemi: [0xd0a070, 0x1c120a, 0.85], sun: [0xffe0b0, 2.0], sunDir: [20, 50, 10], rim: [0xf97316, 0.35], exposure: 1.15 }),
+    build: (b) => {
+      b.ground('dry_ground_rocks', 7, 'coast_sand_01', 8, 0.5, 0xd09a6a);
+      b.anchors.core.set(0, 0, 0);
+      b.anchors.spawn.set(0, 0, 6);
+      b.anchors.evac.set(80, 0, 70);
+      b.anchors.boss.set(-80, 0, -70);
+      ringAnchors(b, 50);
+      b.clear(0, 0, 12);
+      // two long cliff ridges split the map into three corridors; passes cut through them
+      for (const x0 of [-34, 34]) {
+        const gaps = x0 < 0 ? [-60, 10, 70] : [-20, 45];
+        let z = -100;
+        for (const gz of [...gaps, 110]) {
+          const end = gz - 6;
+          if (end > z + 2) b.cliff(x0 + b.r(-3, 3), z, x0 + b.r(-3, 3), end, b.r(8, 13), 5, 0xa8603a);
+          z = gz + 6;
+        }
+      }
+      // rock spurs inside the corridors (cover, chokepoints)
+      for (let i = 0; i < 16; i++) {
+        const x = b.pick([-70, 0, 70]) + b.r(-14, 14);
+        const z = b.r(-90, 90);
+        if (!b.isClear(x, z, 8)) continue;
+        const a = b.r(0, Math.PI);
+        const l = b.r(6, 14);
+        b.cliff(x - Math.sin(a) * l / 2, z - Math.cos(a) * l / 2, x + Math.sin(a) * l / 2, z + Math.cos(a) * l / 2, b.r(4, 8), 3, 0xb87048);
+      }
+      // abandoned mine camp in the middle corridor
+      for (let i = 0; i < 4; i++) b.building(-10 + i * 7, -40, 5, 6, 3.2, { wall: 'dark_wooden_planks', roof: 'corrugated_iron', wallTile: 1.6, roofTint: 0x7a5a4a, windows: false, rooftop: false });
+      b.scatter(['crate', 'crate_long', 'barrel_rust', 'jerrycan', 'generator', 'log'], 40, -95, -95, 95, 95, 1.5);
+      b.scatter(['rock', 'rock', 'deadtree', 'shrub_low', 'branches'], 110, -98, -98, 98, 98, 1.2);
+      for (const [x, z] of [[-8, -36], [8, -44]] as const) b.fire(x, z);
+    },
+  },
+  fortress: {
+    id: 'fortress',
+    name: 'Kale Kuşatması',
+    tagline: 'Alacakaranlık · Kül',
+    desc: 'İç içe üç sur, kapıları farklı yönlerde: içeri girmek için her halkayı dolaşmak gerekir. Ortada eski kale.',
+    half: 95,
+    seed: 2017,
+    weather: 'ash',
+    accent: 0xeab308,
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x0a0806, fog: 0x15110c, fogDensity: 0.014, ambient: [0x3a3024, 0.8], hemi: [0xb8a480, 0x18140e, 0.9], sun: [0xffd0a0, 1.9], sunDir: [-36, 34, -20], rim: [0xeab308, 0.4], exposure: 1.35 }),
+    build: (b) => {
+      b.ground('gravel_road', 6, 'aerial_grass_rock', 8, 0.5, 0xa89a80);
+      b.anchors.core.set(0, 0, 0);
+      b.anchors.spawn.set(0, 0, 8);
+      b.anchors.evac.set(76, 0, 76);
+      b.anchors.boss.set(-74, 0, -74);
+      b.anchors.pickups.push(new THREE.Vector3(0, 0, -40), new THREE.Vector3(40, 0, 0), new THREE.Vector3(0, 0, 40), new THREE.Vector3(-40, 0, 0));
+      b.anchors.rescues.push(new THREE.Vector3(-60, 0, 30), new THREE.Vector3(60, 0, -30), new THREE.Vector3(20, 0, 64));
+      b.clear(0, 0, 10);
+      // keep
+      b.building(0, -14, 14, 10, 12, { wall: 'concrete_wall_008', roof: 'concrete_floor_worn_001', wallTile: 2, tint: 0xa89a88, windows: false });
+      // three square rings; each ring's gate on a different side
+      const stone = (x1: number, z1: number, x2: number, z2: number, h: number) => b.wall(x1, z1, x2, z2, h, 'concrete_wall_008', 1.6, 0x9a8e7c);
+      const rings: [number, number, 'n' | 'e' | 's' | 'w'][] = [[26, 5, 's'], [48, 6, 'n'], [72, 7, 'e']];
+      for (const [r, h, gate] of rings) {
+        const g = 5;
+        // north (z = -r)
+        if (gate === 'n') { stone(-r, -r, -g, -r, h); stone(g, -r, r, -r, h); } else stone(-r, -r, r, -r, h);
+        if (gate === 's') { stone(-r, r, -g, r, h); stone(g, r, r, r, h); } else stone(-r, r, r, r, h);
+        if (gate === 'w') { stone(-r, -r, -r, -g, h); stone(-r, g, -r, r, h); } else stone(-r, -r, -r, r, h);
+        if (gate === 'e') { stone(r, -r, r, -g, h); stone(r, g, r, r, h); } else stone(r, -r, r, r, h);
+        // towers on the corners
+        for (const [cx, cz] of [[-r, -r], [r, -r], [-r, r], [r, r]] as const) b.building(cx, cz, 5, 5, h + 3, { wall: 'concrete_wall_008', roof: 'concrete_floor_worn_001', tint: 0x8a7e6c, windows: false });
+      }
+      for (const [x, z] of [[0, 26], [0, -48], [72, 0]] as const) b.clear(x, z, 6);
+      // siege camp outside
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + 0.3;
+        const x = Math.cos(a) * 86;
+        const z = Math.sin(a) * 86;
+        if (b.isClear(x, z, 5)) b.building(x, z, 6, 8, 2.8, { wall: 'hessian_230', roof: 'hessian_230', wallTile: 1.2, roofTile: 1.2, tint: 0xb8a888, windows: false, rooftop: false });
+      }
+      b.scatter(['crate', 'barrel', 'milcrate', 'ammo', 'log'], 40, -70, -70, 70, 70, 1.2);
+      b.scatter(['rock', 'shrub', 'shrub_low', 'branches'], 80, -93, -93, 93, 93, 1);
+      for (const [x, z] of [[-6, 6], [6, 6], [0, 20], [0, -36]] as const) b.fire(x, z);
+    },
+  },
+  volcano: {
+    id: 'volcano',
+    name: 'Kül Dağı',
+    tagline: 'Lav · Kül yağmuru',
+    desc: 'Çatlaklardan lav akıyor. Lav nehirleri haritayı adalara böler; aralarında dar taş geçitler var.',
+    half: 95,
+    seed: 2111,
+    weather: 'ash',
+    accent: 0xef4444,
+    modes: ['survival', 'horde', 'defense', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x0a0504, fog: 0x1a0a06, fogDensity: 0.016, ambient: [0x2a1410, 0.75], hemi: [0x8a5040, 0x120806, 0.8], sun: [0xffb080, 1.3], sunDir: [24, 40, 30], rim: [0xff4a1a, 0.6], exposure: 1.3 }),
+    build: (b) => {
+      b.ground('dry_ground_rocks', 6, 'brown_mud', 7, 0.6, 0x4a3a34);
+      b.anchors.core.set(0, 0, 0);
+      b.anchors.spawn.set(0, 0, 8);
+      b.anchors.evac.set(-72, 0, 72);
+      b.anchors.boss.set(70, 0, -70);
+      ringAnchors(b, 50);
+      b.clear(0, 0, 14);
+      // lava rivers radiating out from the crater rim, with stone crossings left open
+      const arms = 5;
+      for (let i = 0; i < arms; i++) {
+        const a = (i / arms) * Math.PI * 2 + 0.4;
+        const r0 = 22;
+        const r1 = 98;
+        const mid = (r0 + r1) / 2 + b.r(-8, 8);
+        const bend = b.r(-0.25, 0.25);
+        const p0 = [Math.cos(a) * r0, Math.sin(a) * r0];
+        const p1 = [Math.cos(a + bend) * (mid - 5), Math.sin(a + bend) * (mid - 5)];
+        const p2 = [Math.cos(a + bend) * (mid + 5), Math.sin(a + bend) * (mid + 5)];
+        const p3 = [Math.cos(a + bend * 1.6) * r1, Math.sin(a + bend * 1.6) * r1];
+        b.lava(p0[0]!, p0[1]!, p1[0]!, p1[1]!, 7);
+        // gap = crossing between p1 and p2
+        b.lava(p2[0]!, p2[1]!, p3[0]!, p3[1]!, 7);
+      }
+      // crater rim: broken ring of rock around the centre
+      for (let k = 0; k < 10; k++) {
+        if (k % 3 === 1) continue;
+        const a0 = (k / 10) * Math.PI * 2;
+        const a1 = a0 + 0.5;
+        b.cliff(Math.cos(a0) * 17, Math.sin(a0) * 17, Math.cos(a1) * 17, Math.sin(a1) * 17, b.r(3, 5), 2.5, 0x3a2a26);
+      }
+      b.scatter(['rock', 'rock', 'deadtree', 'branches'], 90, -92, -92, 92, 92, 1.5);
+      b.scatter(['barrel_rust', 'crate', 'jerrycan'], 20, -80, -80, 80, 80, 2);
+      b.fire(5, 6);
+    },
+  },
+  maze: {
+    id: 'maze',
+    name: 'Çit Labirenti',
+    tagline: 'Ay ışığı · Sis',
+    desc: 'Terk edilmiş bir malikânenin çit labirenti. Köşeyi dönmeden ne geldiğini göremezsin; çıkış hep başka yerde.',
+    half: 80,
+    seed: 2213,
+    weather: 'none',
+    accent: 0x86efac,
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x040608, fog: 0x081010, fogDensity: 0.022, ambient: [0x1a2626, 0.65], hemi: [0x5a7a7a, 0x0a1010, 0.8], sun: [0xc8e0ff, 1.15], sunDir: [-20, 46, 16], rim: [0x86efac, 0.4], exposure: 1.35 }),
+    build: (b) => {
+      b.ground('forest_leaves_02', 5, 'aerial_grass_rock', 7, 0.5, 0x7a8a6a);
+      b.anchors.core.set(0, 0, 0);
+      b.anchors.spawn.set(0, 0, 6);
+      // the maze: 10 x 10 cells of 14 m, carved with a seeded depth-first walk + a few extra openings
+      const N = 10;
+      const C = 14;
+      const o = -(N * C) / 2;
+      const right = Array.from({ length: N * N }, () => true);
+      const down = Array.from({ length: N * N }, () => true);
+      const seen = new Array<boolean>(N * N).fill(false);
+      const stack = [Math.floor(N / 2) * N + Math.floor(N / 2)];
+      seen[stack[0]!] = true;
+      while (stack.length) {
+        const cur = stack[stack.length - 1]!;
+        const cx = cur % N;
+        const cz = Math.floor(cur / N);
+        const opts: [number, 'r' | 'l' | 'd' | 'u'][] = [];
+        if (cx < N - 1 && !seen[cur + 1]) opts.push([cur + 1, 'r']);
+        if (cx > 0 && !seen[cur - 1]) opts.push([cur - 1, 'l']);
+        if (cz < N - 1 && !seen[cur + N]) opts.push([cur + N, 'd']);
+        if (cz > 0 && !seen[cur - N]) opts.push([cur - N, 'u']);
+        if (!opts.length) {
+          stack.pop();
+          continue;
+        }
+        const [nx, dir] = b.pick(opts);
+        if (dir === 'r') right[cur] = false;
+        if (dir === 'l') right[nx] = false;
+        if (dir === 'd') down[cur] = false;
+        if (dir === 'u') down[nx] = false;
+        seen[nx] = true;
+        stack.push(nx);
+      }
+      // loops so the horde (and you) have more than one way round
+      for (let i = 0; i < 18; i++) {
+        const k = Math.floor(b.rng() * N * N);
+        if (b.rng() < 0.5) right[k] = false;
+        else down[k] = false;
+      }
+      // open plaza in the middle
+      const mid = Math.floor(N / 2);
+      for (const k of [(mid - 1) * N + mid - 1, (mid - 1) * N + mid, mid * N + mid - 1, mid * N + mid]) {
+        right[k] = false;
+        down[k] = false;
+      }
+      for (let z = 0; z < N; z++)
+        for (let x = 0; x < N; x++) {
+          const k = z * N + x;
+          const x0 = o + x * C;
+          const z0 = o + z * C;
+          if (right[k] && x < N - 1) b.hedge(x0 + C, z0, x0 + C, z0 + C);
+          if (down[k] && z < N - 1) b.hedge(x0, z0 + C, x0 + C, z0 + C);
+        }
+      // outer hedge
+      b.hedge(o, o, -o, o, 3);
+      b.hedge(o, -o, -o, -o, 3);
+      b.hedge(o, o, o, -o, 3);
+      b.hedge(-o, o, -o, -o, 3);
+      b.anchors.evac.set(o + C * 0.5, 0, o + C * 0.5);
+      b.anchors.boss.set(-o - C * 0.5, 0, -o - C * 0.5);
+      for (const [x, z] of [[o + C * 1.5, -o - C * 1.5], [-o - C * 1.5, o + C * 1.5], [o + C * 2.5, o + C * 6.5], [-o - C * 3.5, -o - C * 6.5]] as const) b.anchors.pickups.push(new THREE.Vector3(x, 0, z));
+      for (const [x, z] of [[o + C * 5.5, o + C * 1.5], [o + C * 1.5, o + C * 5.5], [o + C * 8.5, o + C * 4.5]] as const) b.anchors.rescues.push(new THREE.Vector3(x, 0, z));
+      b.prop('picnic', 4, -4, { rot: 0.4 });
+      b.scatter(['bench', 'shrub', 'fern', 'rock_small'], 70, o + 2, o + 2, -o - 2, -o - 2, 1.2);
+      for (const [x, z] of [[-5, 5], [5, -5]] as const) b.lamp(x, z, 0xd8f0ff, true);
+    },
+  },
 };
 
-export const MAP_ORDER: MapId[] = ['city', 'hospital', 'military', 'harbor', 'forest', 'highway', 'industrial', 'snow', 'desert', 'lab', 'village', 'mall', 'airport', 'campus'];
+export const MAP_ORDER: MapId[] = ['city', 'hospital', 'military', 'harbor', 'forest', 'highway', 'industrial', 'snow', 'desert', 'lab', 'village', 'mall', 'airport', 'campus', 'river', 'canyon', 'fortress', 'volcano', 'maze'];
 
 for (const id of MAP_ORDER) MAPS[id].modes.push(...UNIVERSAL_MODES);

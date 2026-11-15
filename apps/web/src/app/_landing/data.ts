@@ -56,6 +56,11 @@ export const MAPS: Array<{ id: string; name: string; mood: string }> = [
   { id: 'mall', name: 'Alışveriş Merkezi', mood: 'Gece · Neon' },
   { id: 'airport', name: 'Kapalı Havalimanı', mood: 'Şafak · Sis' },
   { id: 'campus', name: 'Üniversite Kampüsü', mood: 'Sonbahar · Yağmur' },
+  { id: 'river', name: 'Nehir Kasabası', mood: 'Sis · Çiseleme' },
+  { id: 'canyon', name: 'Kızıl Kanyon', mood: 'Kavurucu öğle · Toz' },
+  { id: 'fortress', name: 'Kale Kuşatması', mood: 'Alacakaranlık · Kül' },
+  { id: 'volcano', name: 'Kül Dağı', mood: 'Lav · Kül yağmuru' },
+  { id: 'maze', name: 'Çit Labirenti', mood: 'Ay ışığı · Sis' },
 ];
 
 export const BOSSES: Array<{ name: string; desc: string; wave: number; color: string }> = [

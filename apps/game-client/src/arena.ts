@@ -166,6 +166,7 @@ import { recomputeSkillDerived } from './skilltree';
 import { CoopMirror, packKit } from './coopMirror';
 import { applyGear, equippedAttachments } from './attachments';
 import { SeeThrough, type SeeTarget } from './seeThrough';
+import { NavField } from './navField';
 import type { OperativeId } from './roster';
 import { queueZombieAnim, setOperativeDead, spawnZombieCorpse, tickZombieCorpses, type ZombieCorpse } from './avatars';
 
@@ -610,8 +611,19 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
     seeThrough.update(camera, renderer, seeTargets);
   };
+  /** zombie navigation field (host / solo): built once the props are in */
+  let nav: NavField | null = null;
+  let navT = 0;
+  const navSteer = { x: 0, z: 0 };
   void map.ready.then(() => {
     seeThrough.patch(map.root);
+    if (!isGuest) {
+      try {
+        nav = new NavField(ARENA_BOUND + 4, colliders);
+      } catch (err) {
+        console.warn('[arena] nav field failed — straight chase', err);
+      }
+    }
     // props finish loading asynchronously → colliders are only complete now
     spawnField = buildSpawnField(ARENA_BOUND, colliders, player.root.position.x, player.root.position.z, ZOMBIE_RADIUS, 1.5);
   });
@@ -3349,8 +3361,19 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           chasing = true;
           tmp.normalize();
           const sp = z.speed * frenzyMul(z, nowSec);
+          // around walls: follow the nav field when the straight line is clearly not the way
+          let steered = false;
+          if (nav && dist > 4) {
+            const zp = z.root.position;
+            const path = nav.distanceAt(zp.x, zp.z);
+            if (!(path <= (dist / nav.cell) * 1.25 + 1.5) && nav.steer(zp.x, zp.z, navSteer)) {
+              tmp.set(navSteer.x, 0, navSteer.z);
+              steered = true;
+            }
+          }
           applyMoveWithCollision(z.root, tmp.x * sp * dt, tmp.z * sp * dt, ZOMBIE_RADIUS);
-          faceToward(z.root, targetOp.root.position.x, targetOp.root.position.z);
+          if (steered) faceToward(z.root, z.root.position.x + tmp.x, z.root.position.z + tmp.z);
+          else faceToward(z.root, targetOp.root.position.x, targetOp.root.position.z);
           if (Math.random() < dt * moanChanceFor(z.kind)) audio.playZombie(z.kind, 'idle', zPan);
         } else if (z.attackCooldown <= 0) startAttack(chooseZombieSkill(z));
       }
@@ -3443,6 +3466,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     heroRt?.update(dt, simTime);
     coopMirror?.update(dt, simTime);
     advanceReactionClock(dt);
+    navT -= dt;
+    if (nav && navT <= 0) {
+      navT = 0.35;
+      const src: { x: number; z: number }[] = [];
+      for (const op of squad) if (op.alive) src.push({ x: op.root.position.x, z: op.root.position.z });
+      if (src.length) nav.flood(src);
+    }
     modeRt.localTick(dt);
     publishKit(dt);
     runSkills.update(dt, moving);

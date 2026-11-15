@@ -211,6 +211,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   A({ id: 'map_campus', category: 'world', name: 'Mezuniyet', desc: 'Üniversite Kampüsü\'nde kazan.', icon: '🎓', reward: 250, target: 1, progress: (s, r) => wonMap(s, r, 'campus') }),
   A({ id: 'map_lab', category: 'world', name: 'Sıfır Noktası', desc: 'Yeraltı Laboratuvarı\'nda kazan.', icon: '🧪', reward: 300, target: 1, progress: (s, r) => wonMap(s, r, 'lab') }),
   A({ id: 'map_snow', category: 'world', name: 'Kutup Kurdu', desc: 'Kar Köyü\'nde kazan.', icon: '❄', reward: 250, target: 1, progress: (s, r) => wonMap(s, r, 'snow') }),
+  A({ id: 'map_river', category: 'world', name: 'Köprü Bekçisi', desc: 'Nehir Kasabası\'nda kazan.', icon: '🌉', reward: 300, target: 1, progress: (s, r) => wonMap(s, r, 'river') }),
+  A({ id: 'map_canyon', category: 'world', name: 'Kanyon Kurdu', desc: 'Kızıl Kanyon\'da kazan.', icon: '🏜', reward: 300, target: 1, progress: (s, r) => wonMap(s, r, 'canyon') }),
+  A({ id: 'map_fortress', category: 'world', name: 'Kale Komutanı', desc: 'Kale Kuşatması\'nda kazan.', icon: '🏯', reward: 300, target: 1, progress: (s, r) => wonMap(s, r, 'fortress') }),
+  A({ id: 'map_volcano', category: 'world', name: 'Ateşten Geçen', desc: 'Kül Dağı\'nda kazan.', icon: '🌋', reward: 350, target: 1, progress: (s, r) => wonMap(s, r, 'volcano') }),
+  A({ id: 'map_maze', category: 'world', name: 'Labirent Çözücü', desc: 'Çit Labirenti\'nde kazan.', icon: '🌿', reward: 350, target: 1, progress: (s, r) => wonMap(s, r, 'maze') }),
 
   // ───────── skills & combos ─────────
   A({ id: 'react_first', category: 'skills', name: 'Kimya Dersi', desc: 'İlk element kombonu patlat (yanma+donma, yanma+zehir, donma+zehir).', icon: '⚗', reward: 150, target: 1, progress: (s, r) => s.reactions + (r?.reactions ?? 0) }),

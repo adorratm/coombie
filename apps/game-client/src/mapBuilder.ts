@@ -417,6 +417,43 @@ export function mulberry(seed: number): Rng {
   };
 }
 
+/** Lava: dark cooling crust with glowing cracks (procedural, tiling). */
+let lavaTex: THREE.DataTexture | null = null;
+function lavaTexture(): THREE.DataTexture {
+  if (lavaTex) return lavaTex;
+  const N = 128;
+  const data = new Uint8Array(N * N * 4);
+  const rnd = mulberry(4242);
+  // a few random cell centres (wrapped) → Voronoi edges are the cracks
+  const pts = Array.from({ length: 18 }, () => [rnd() * N, rnd() * N] as const);
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      let d1 = Infinity;
+      let d2 = Infinity;
+      for (const [px, py] of pts)
+        for (const ox of [-N, 0, N])
+          for (const oy of [-N, 0, N]) {
+            const d = Math.hypot(x - px - ox, y - py - oy);
+            if (d < d1) {
+              d2 = d1;
+              d1 = d;
+            } else if (d < d2) d2 = d;
+          }
+      const edge = Math.max(0, 1 - (d2 - d1) / 5);
+      const glow = Math.min(1, edge * 1.4 + rnd() * 0.08);
+      const i = (y * N + x) * 4;
+      data[i] = Math.round(40 + glow * 215);
+      data[i + 1] = Math.round(12 + glow * glow * 150);
+      data[i + 2] = Math.round(6 + glow * glow * 30);
+      data[i + 3] = 255;
+    }
+  lavaTex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  lavaTex.wrapS = lavaTex.wrapT = THREE.RepeatWrapping;
+  lavaTex.colorSpace = THREE.SRGBColorSpace;
+  lavaTex.needsUpdate = true;
+  return lavaTex;
+}
+
 export class MapBuilder {
   readonly scene: THREE.Scene;
   readonly root = new THREE.Group();
@@ -661,6 +698,131 @@ export class MapBuilder {
     m.receiveShadow = true;
     this.add(m);
     this.collideRect((x1 + x2) / 2, (z1 + z2) / 2, thick, len, rot);
+  }
+
+  /**
+   * Water channel along a line, impassable except where `bridges` (0..1 along the
+   * line) cross it. Banks get a muddy rim; a bridge is a plank deck with rails.
+   */
+  water(x1: number, z1: number, x2: number, z2: number, width: number, bridges: number[] = [], bridgeW = 6): void {
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    const rot = Math.atan2(x2 - x1, z2 - z1);
+    const dx = (x2 - x1) / len;
+    const dz = (z2 - z1) / len;
+    const cx = (x1 + x2) / 2;
+    const cz = (z1 + z2) / 2;
+    // muddy banks
+    this.patch('brown_mud', 4, cx, cz, width + 4, len, rot, 0x8a7a62);
+    // the water: dark, glossy, slightly bluish-green
+    const g = this.geo(new THREE.PlaneGeometry(width, len, 1, 1));
+    const mat = new THREE.MeshStandardMaterial({ color: 0x1d3a44, roughness: 0.08, metalness: 0.55, emissive: 0x06141a, emissiveIntensity: 0.4, transparent: true, opacity: 0.92 });
+    this.ownedMats.push(mat);
+    const w = new THREE.Mesh(g, mat);
+    w.rotation.set(-Math.PI / 2, 0, rot);
+    w.position.set(cx, 0.06, cz);
+    w.receiveShadow = true;
+    w.name = 'water';
+    this.add(w);
+    // colliders in pieces between the bridges
+    const spans = [...bridges].sort((a, b) => a - b);
+    const half = bridgeW / 2 / len;
+    let t0 = 0;
+    const segment = (a: number, b: number) => {
+      if (b - a <= 0.002) return;
+      const sx = x1 + dx * len * a;
+      const sz = z1 + dz * len * a;
+      const ex = x1 + dx * len * b;
+      const ez = z1 + dz * len * b;
+      this.collideRect((sx + ex) / 2, (sz + ez) / 2, width - 0.6, Math.hypot(ex - sx, ez - sz), rot);
+    };
+    for (const t of spans) {
+      segment(t0, t - half);
+      t0 = t + half;
+      const bx = x1 + dx * len * t;
+      const bz = z1 + dz * len * t;
+      this.bridge(bx, bz, width + 3, bridgeW, rot + Math.PI / 2);
+      this.clear(bx, bz, bridgeW);
+    }
+    segment(t0, 1);
+    // keep scatter / buildings off the water
+    for (let t = 0; t <= len; t += Math.max(3, width / 2)) this.clear(x1 + dx * t, z1 + dz * t, width / 2 + 1.5);
+  }
+
+  /** Plank bridge with rails (walkable). `rot` = travel direction. */
+  bridge(x: number, z: number, len: number, width: number, rot: number): void {
+    const deck = new THREE.Mesh(this.geo(boxWorldUV(width, 0.22, len)), pbr('dark_wooden_planks', 1.5, { tint: 0xa08060 }));
+    deck.position.set(x, 0.14, z);
+    deck.rotation.y = rot;
+    deck.castShadow = true;
+    deck.receiveShadow = true;
+    this.add(deck);
+    const c = Math.cos(rot);
+    const sn = Math.sin(rot);
+    for (const side of [-1, 1]) {
+      const rx = x + c * side * (width / 2 - 0.1);
+      const rz = z - sn * side * (width / 2 - 0.1);
+      const rail = new THREE.Mesh(this.geo(boxWorldUV(0.12, 0.9, len)), pbr('dark_wooden_planks', 1, { tint: 0x7a6048 }));
+      rail.position.set(rx, 0.6, rz);
+      rail.rotation.y = rot;
+      rail.castShadow = true;
+      this.add(rail);
+    }
+  }
+
+  /** Rock cliff wall: jagged stacked blocks, impassable. */
+  cliff(x1: number, z1: number, x2: number, z2: number, h: number, thick = 3, tint = 0x9a6a4a): void {
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    const rot = Math.atan2(x2 - x1, z2 - z1);
+    const n = Math.max(1, Math.round(len / 4));
+    const mat = pbr('dry_ground_rocks', 3, { tint });
+    for (let i = 0; i < n; i++) {
+      const k = (i + 0.5) / n;
+      const px = x1 + (x2 - x1) * k;
+      const pz = z1 + (z2 - z1) * k;
+      const bh = h * this.r(0.75, 1.2);
+      const bw = thick * this.r(0.9, 1.4);
+      const m = new THREE.Mesh(this.geo(boxWorldUV(bw, bh, (len / n) * 1.25)), mat);
+      m.position.set(px + this.r(-0.4, 0.4), bh / 2 - 0.2, pz + this.r(-0.4, 0.4));
+      m.rotation.set(this.r(-0.06, 0.06), rot + this.r(-0.12, 0.12), this.r(-0.06, 0.06));
+      m.castShadow = true;
+      m.receiveShadow = true;
+      this.add(m);
+    }
+    this.collideRect((x1 + x2) / 2, (z1 + z2) / 2, thick, len, rot);
+  }
+
+  /** Lava pool / channel: glowing, impassable. */
+  lava(x1: number, z1: number, x2: number, z2: number, width: number): void {
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    const rot = Math.atan2(x2 - x1, z2 - z1);
+    const cx = (x1 + x2) / 2;
+    const cz = (z1 + z2) / 2;
+    this.patch('dry_ground_rocks', 3, cx, cz, width + 3, len + 2, rot, 0x3a2a24);
+    const tex = lavaTexture();
+    const t2 = tex.clone();
+    t2.needsUpdate = true;
+    t2.repeat.set(Math.max(1, width / 8), Math.max(1, len / 8));
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2a0c06, map: t2, emissive: 0xff4a12, emissiveMap: t2, emissiveIntensity: 2.2, roughness: 0.85 });
+    this.ownedMats.push(mat);
+    const m = new THREE.Mesh(this.geo(new THREE.PlaneGeometry(width, len)), mat);
+    m.rotation.set(-Math.PI / 2, 0, rot);
+    m.position.set(cx, 0.07, cz);
+    m.name = 'lava';
+    this.add(m);
+    this.collideRect(cx, cz, width - 0.4, len, rot);
+    for (let t = -len / 2; t <= len / 2; t += Math.max(3, width / 2)) this.clear(cx + Math.sin(rot) * t, cz + Math.cos(rot) * t, width / 2 + 1);
+    if (this.lights.length < 4 && this.rng() < 0.6) {
+      const l = new THREE.PointLight(0xff6a20, 8, 16, 1.8);
+      l.position.set(cx, 1.5, cz);
+      l.userData.flicker = true;
+      this.add(l);
+      this.lights.push(l);
+    }
+  }
+
+  /** Hedge wall (maze). */
+  hedge(x1: number, z1: number, x2: number, z2: number, h = 2.6): void {
+    this.wall(x1, z1, x2, z2, h, 'forest_leaves_02', 1.1, 0x4a6a32);
   }
 
   /** ISO shipping container (optionally stacked). */
