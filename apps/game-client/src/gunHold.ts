@@ -317,9 +317,81 @@ export interface RigHoldOpts {
   reload?: number;
 }
 
+const _gm = new THREE.Matrix4();
+const _gv = new THREE.Vector3();
+const _gs = new THREE.Vector3();
+
+/**
+ * Where the butt of the stock is, in the gun's own space (origin = pistol grip,
+ * +Z = barrel): the rearmost vertices, their mean height. Cached per model instance
+ * (the stand-in is swapped for the real model once it loads, which resets it).
+ */
+export function gunButt(gun: THREE.Object3D): { z: number; y: number } {
+  const key = gun.children[0]?.uuid ?? '';
+  const cached = gun.userData.butt as { key: string; z: number; y: number } | undefined;
+  if (cached && cached.key === key) return cached;
+  gun.updateWorldMatrix(true, true);
+  const inv = new THREE.Matrix4().copy(gun.matrixWorld).invert();
+  let minZ = 0;
+  const pts: number[] = [];
+  gun.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry || o.name === 'gearAttachments' || (o.parent && o.parent.name === 'gearAttachments' && o.position.z > 0.5)) return;
+    const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    _gm.multiplyMatrices(inv, mesh.matrixWorld);
+    const step = Math.max(1, Math.floor(pos.count / 1500));
+    for (let i = 0; i < pos.count; i += step) {
+      _gv.fromBufferAttribute(pos, i).applyMatrix4(_gm);
+      if (_gv.z > 0.2) continue;
+      pts.push(_gv.z, _gv.y);
+      if (_gv.z < minZ) minZ = _gv.z;
+    }
+  });
+  let ys = 0;
+  let n = 0;
+  for (let i = 0; i < pts.length; i += 2) {
+    if (pts[i]! < minZ + 0.035) {
+      ys += pts[i + 1]!;
+      n++;
+    }
+  }
+  const out = { key, z: minZ, y: n ? ys / n : 0.03 };
+  gun.userData.butt = out;
+  return out;
+}
+
+/** How far each carry turns the upper body (right shoulder back, left forward), radians. */
+const BLADE: Record<HoldStyle, number> = { rifle: 0.34, smg: 0.26, heavy: 0.4, pistol: 0.08 };
+
+/** Turn the torso about the vertical by `angle` (split over the spine), the head turned back to the front. */
+function bladeTorso(rig: BoneSource, angle: number): void {
+  if (Math.abs(angle) < 1e-3) return;
+  const parts: [string, number][] = [
+    ['spine', 0.35],
+    ['chest', 0.35],
+    ['upperChest', 0.3],
+  ];
+  for (const [name, share] of parts) {
+    const b = rig.bone(name);
+    if (!b) continue;
+    _q.setFromAxisAngle(_up, angle * share);
+    applyWorldRotation(b, _q);
+  }
+  const head = rig.bone('neck') ?? rig.bone('head');
+  if (head) {
+    _q.setFromAxisAngle(_up, -angle * 0.85);
+    applyWorldRotation(head, _q);
+  }
+}
+
 /**
  * Put the gun at its carry anchor (root space) and both hands on it.
  * The gun group's origin is the pistol grip, +Z the barrel, +Y up.
+ *
+ * Long guns are placed from the BUTT: the stock sits in the right shoulder pocket,
+ * in front of the chest, and the grip follows from the model's own length of pull,
+ * so no stock ever ends up inside the body whatever the model or the operative.
  */
 export function holdGunRig(rig: BoneSource, root: THREE.Object3D, gun: THREE.Object3D, o: RigHoldOpts): void {
   const rUp = rig.bone('rightUpperArm');
@@ -343,20 +415,46 @@ export function holdGunRig(rig: BoneSource, root: THREE.Object3D, gun: THREE.Obj
   _fwd.normalize();
   const s = span / 0.34; // ≈ 1 for an adult
   const st = o.style;
-  // grip position in the world
-  if (st === 'pistol') {
-    _grip.lerpVectors(_R, _L, 0.5).addScaledVector(_fwd, 0.44 * s).addScaledVector(_up, -0.1 * s).addScaledVector(_right, 0.02 * s);
-  } else if (st === 'heavy') {
-    _grip.copy(_R).addScaledVector(_fwd, 0.26 * s).addScaledVector(_up, -0.44 * s).addScaledVector(_right, 0.04 * s);
-  } else if (st === 'smg') {
-    _grip.copy(_R).addScaledVector(_fwd, 0.27 * s).addScaledVector(_up, -0.15 * s).addScaledVector(_right, -0.07 * s);
-  } else {
-    _grip.copy(_R).addScaledVector(_fwd, 0.22 * s).addScaledVector(_up, -0.14 * s).addScaledVector(_right, -0.06 * s);
-  }
+  // bladed stance: the right shoulder goes back so the support arm reaches the handguard
+  const bladeW = Math.min(o.rightW, Math.max(0.35, o.leftW));
+  _w.crossVectors(_up, _right);
+  const sign = _w.dot(_fwd) > 0 ? -1 : 1;
+  bladeTorso(rig, sign * BLADE[st] * bladeW);
+  rUp.getWorldPosition(_R);
+  lUp.getWorldPosition(_L);
   // aim: forward, pitched about the body's right axis (heavy guns hang a touch nose-up)
   const pitch = o.pitch + (st === 'heavy' ? -0.05 : 0);
   _q.setFromAxisAngle(_right, -pitch);
   _aim.copy(_fwd).applyQuaternion(_q).normalize();
+  _gu.copy(_up).addScaledVector(_aim, -_up.dot(_aim)).normalize();
+  root.getWorldScale(_gs);
+  const ws = o.scale * _gs.x;
+  const butt = st === 'pistol' ? null : gunButt(gun);
+  const stocked = !!butt && butt.z * ws < -0.07 * s;
+  // grip position in the world
+  if (st === 'pistol') {
+    _grip.lerpVectors(_R, _L, 0.5).addScaledVector(_fwd, 0.44 * s).addScaledVector(_up, -0.1 * s).addScaledVector(_right, 0.02 * s);
+  } else if (st === 'heavy') {
+    // hip carry: the butt clear of the hip / belly, gun along the right side
+    // (elbow bent ~90°: the hand must stay well inside arm's reach)
+    _grip.copy(_R).addScaledVector(_up, -0.24 * s).addScaledVector(_right, 0.07 * s);
+    const rear = butt ? -butt.z * ws : 0.2 * s;
+    _grip.addScaledVector(_fwd, Math.max(0.17 * s, 0.05 * s + rear * 0.45));
+  } else if (stocked && butt) {
+    // butt in the shoulder pocket: in front of the chest, just inside the shoulder joint
+    _grip.copy(_R).addScaledVector(_fwd, 0.1 * s).addScaledVector(_right, -0.035 * s).addScaledVector(_up, (st === 'smg' ? -0.08 : -0.06) * s);
+    // then out along the barrel by the model's own length of pull
+    _grip.addScaledVector(_aim, -butt.z * ws).addScaledVector(_gu, -butt.y * ws);
+    // keep it humanly reachable whatever the model's proportions
+    const ahead = _tgt.subVectors(_grip, _R).dot(_fwd);
+    const lo = 0.2 * s;
+    const hi = 0.42 * s;
+    if (ahead < lo) _grip.addScaledVector(_fwd, lo - ahead);
+    else if (ahead > hi) _grip.addScaledVector(_fwd, hi - ahead);
+  } else {
+    // stockless SMG / machine pistol: held out in front, two hands
+    _grip.copy(_R).addScaledVector(_fwd, 0.34 * s).addScaledVector(_up, -0.14 * s).addScaledVector(_right, -0.08 * s);
+  }
   _grip.addScaledVector(_aim, -o.recoil * 0.06 * s);
   // gun basis: +Z aim, +Y up-ish, +X = aim × up (right side of the gun)
   _gf.copy(_aim);
@@ -432,8 +530,11 @@ export function seatMeleeInHand(rig: BoneSource, gun: THREE.Object3D, hand: THRE
   const finger = pM.clone().normalize();
   const blade = pI.clone().sub(pL);
   blade.addScaledVector(finger, -blade.dot(finger)).normalize();
-  // tilt the blade a little toward the fingertips (natural wrist angle)
-  blade.addScaledVector(finger, 0.25).normalize();
+  // tilt toward the fingertips: short blades point forward (not up past the face),
+  // long two-handers stay upright like a bat at the ready
+  const variant = String(gun.userData.weaponVariant ?? '');
+  const tilt = variant === 'knife' ? 1.1 : variant === 'machete' ? 1.0 : 0.25;
+  blade.addScaledVector(finger, tilt).normalize();
   // the edge faces away from the palm: gun +Y ≈ finger direction
   const yAxis = finger.clone().addScaledVector(blade, -finger.dot(blade)).normalize();
   const xAxis = new THREE.Vector3().crossVectors(yAxis, blade).normalize();
