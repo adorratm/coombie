@@ -24,6 +24,10 @@ export const ClientEvents = {
   LobbyStart: 'lobby:start',
   /** Dracord içinden: launch token ile kimlik + oturuma bağlı ortak oda */
   LobbyDracord: 'lobby:dracord',
+  /** is a match of my room running? (for the "back into the game" button) */
+  LobbyMatchStatus: 'lobby:match_status',
+  /** get (back) into the running match of my room → MatchStartPayload */
+  LobbyRejoin: 'lobby:rejoin',
 
   MatchInput: 'match:input',
   MatchAbility: 'match:ability',

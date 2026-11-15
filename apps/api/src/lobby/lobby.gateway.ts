@@ -201,6 +201,43 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  /** Is a match of this lobby room running, and was I in it? */
+  @SubscribeMessage(ClientEvents.LobbyMatchStatus)
+  onMatchStatus(@ConnectedSocket() client: Socket) {
+    const roomCode = client.data.roomCode as string | undefined;
+    if (!roomCode) return { running: false };
+    const running = this.matches.relay.isRunning(roomCode, Date.now());
+    let host = false;
+    try {
+      host = this.lobby.getRoom(roomCode).hostPlayerId === client.data.playerId;
+    } catch {
+      /* room gone */
+    }
+    return { running, host };
+  }
+
+  /**
+   * Back into the running match (dropped, closed the tab, went to the menu) — or into it
+   * for the first time when you arrived after the start. Same ticket for returning players.
+   */
+  @SubscribeMessage(ClientEvents.LobbyRejoin)
+  onRejoin(@ConnectedSocket() client: Socket) {
+    const roomCode = client.data.roomCode as string | undefined;
+    if (!roomCode) return { error: 'NO_ROOM' };
+    let state;
+    try {
+      state = this.lobby.getRoom(roomCode);
+    } catch {
+      return { error: 'NO_ROOM' };
+    }
+    const me = state.players.find((p) => p.playerId === client.data.playerId);
+    if (!me) return { error: 'NO_ROOM' };
+    const res = this.matches.relay.rejoinTicket(roomCode, { playerId: me.playerId, displayName: me.displayName, operativeId: me.operativeId }, Date.now());
+    if (!res) return { error: 'NO_MATCH' };
+    const mission = (res.meta as { mission?: MatchMission } | undefined)?.mission;
+    return { ...state, ticket: res.ticket, mission, late: res.late };
+  }
+
   @SubscribeMessage(ClientEvents.LobbyStart)
   async onStart(@ConnectedSocket() client: Socket, @MessageBody() body?: { mission?: unknown }) {
     const roomCode = client.data.roomCode as string | undefined;
@@ -217,7 +254,7 @@ export class LobbyGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     // her oyuncuya kendi maç bileti — /match soketi bununla kimlik doğrular
     const mission = sanitizeMission(body?.mission);
-    const tickets = this.matches.ticketsFor(state);
+    const tickets = this.matches.ticketsFor(state, mission);
     const socks = await this.server.in(roomCode).fetchSockets();
     for (const s of socks) {
       const ticket = tickets.get(s.data?.playerId as string);

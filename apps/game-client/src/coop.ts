@@ -24,6 +24,42 @@ export interface CoopStart {
   mission: MatchMission | undefined;
   /** call when the run is over / abandoned */
   leave: () => void;
+  /** guest progress survives drop-outs under this key (the match ticket) */
+  resumeKey: string;
+  /** this start puts us back into a match that was already running */
+  rejoin: boolean;
+}
+
+/** A guest's way back into a match after closing the tab / going to the menu. */
+interface SavedSeat {
+  ticket: string;
+  mission?: MatchMission;
+  roomCode: string;
+  at: number;
+}
+const SEAT_KEY = 'coombie:coop-seat';
+/** same as the relay's rejoin window */
+const SEAT_TTL_MS = 15 * 60_000;
+
+export function savedSeat(): SavedSeat | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(SEAT_KEY) || 'null') as SavedSeat | null;
+    if (!s || typeof s.ticket !== 'string' || Date.now() - s.at > SEAT_TTL_MS) return null;
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+/** The match is over for us (results shown / host ended it): no way back. */
+export function forgetSeat(): void {
+  const s = savedSeat();
+  try {
+    localStorage.removeItem(SEAT_KEY);
+    if (s) localStorage.removeItem(`coombie:coop-run:${s.ticket}`);
+  } catch {
+    /* ignore */
+  }
 }
 
 const NAME_KEY = 'coombie:coop-name';
@@ -57,6 +93,9 @@ function dracordHostOrigins(): string[] {
 }
 
 const CSS = `
+.coop .rejoin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0; padding: 10px 12px; border: 1px solid #3dff9a; border-radius: 10px; background: rgba(61, 255, 154, 0.08); }
+.coop .rejoin b { flex: 1 1 100%; color: #3dff9a; }
+.coop .rejoin span { flex: 1; font-size: 13px; opacity: 0.85; }
 .coop-back{position:fixed;inset:0;z-index:60;background:rgba(4,6,9,.78);display:none;align-items:center;justify-content:center;font-family:var(--font,Barlow,sans-serif)}
 .coop-back.on{display:flex}
 .coop{width:min(560px,94vw);max-height:92vh;overflow:auto;background:var(--panel-solid,#10141a);border:1px solid var(--line-strong,rgba(220,230,240,.32));padding:22px 24px;color:var(--text,#f3f5f7)}
@@ -88,6 +127,8 @@ export interface CoopPanel {
   close: () => void;
   /** in a room right now? (the solo start button should not start a run then) */
   inRoom: () => boolean;
+  /** go back into the match we dropped out of (saved seat); false if there is none */
+  rejoinSaved: () => boolean;
 }
 
 export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: () => void): CoopPanel {
@@ -185,6 +226,7 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
       state = await fn();
       // the server names us by socket: we are the newest entry we do not know yet
       me = (state as LobbyStatePayload & { you?: string }).you ?? state.players[state.players.length - 1]!.playerId;
+      window.setTimeout(pollStatus, 50);
       await syncOperative().catch((e: Error) => {
         error = e.message;
       });
@@ -206,6 +248,7 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
       const res = await ack<LobbyStatePayload & { you: string }>(ClientEvents.LobbyDracord, { token: dracord.context?.token ?? ctx.token });
       state = res;
       me = res.you;
+      window.setTimeout(pollStatus, 50);
       await syncOperative().catch((e: Error) => {
         error = e.message;
       });
@@ -228,12 +271,12 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
     render();
   };
 
-  const beginMatch = async (p: MatchStartPayload) => {
+  const beginMatch = async (p: Pick<MatchStartPayload, 'ticket' | 'mission'> & { roomCode?: string }, rejoin = false) => {
     if (starting) return;
     starting = true;
     error = '';
     render();
-    const sock = io(`${coopServerUrl()}${SOCKET_NS.match}`, { transports: ['websocket'] });
+    const sock = io(`${coopServerUrl()}${SOCKET_NS.match}`, { transports: ['websocket'], reconnectionAttempts: Infinity, reconnectionDelayMax: 4000 });
     const transport: NetTransport = {
       emit: (event, payload, ack) => void (ack ? sock.emit(event, payload, ack) : sock.emit(event, payload)),
       on: (event, handler) => void sock.on(event, handler as (...args: unknown[]) => void),
@@ -248,12 +291,46 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
           resolve();
         });
       });
-      await session.join(p.ticket);
+      const role = await session.join(p.ticket);
+      // a dropped socket comes back by itself: present the same ticket again
+      let closed = false;
+      sock.on('disconnect', () => {
+        if (!closed) session.setLink(false);
+      });
+      sock.io.on('reconnect', () => {
+        if (closed) return;
+        session
+          .join(p.ticket)
+          .then(() => session.setLink(true))
+          .catch(() => {
+            session.handlers.onEnded?.('REJOIN_FAILED');
+          });
+      });
+      // guests keep their seat across reloads / visits to the menu
+      if (role === 'guest') {
+        try {
+          localStorage.setItem(SEAT_KEY, JSON.stringify({ ticket: p.ticket, mission: p.mission, roomCode: p.roomCode ?? state?.roomCode ?? '', at: Date.now() } satisfies SavedSeat));
+        } catch {
+          /* ignore */
+        }
+      } else forgetSeat();
       back.classList.remove('on');
       onStart({
         session,
         mission: p.mission,
+        resumeKey: p.ticket,
+        rejoin,
         leave: () => {
+          closed = true;
+          // still a guest seat? keep it fresh so "back into the game" works for a while
+          const seat = savedSeat();
+          if (seat?.ticket === p.ticket && !session.ended) {
+            try {
+              localStorage.setItem(SEAT_KEY, JSON.stringify({ ...seat, at: Date.now() }));
+            } catch {
+              /* ignore */
+            }
+          }
           session.dispose();
           sock.close();
         },
@@ -261,10 +338,43 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
     } catch (e) {
       session.dispose();
       sock.close();
-      error = e instanceof Error ? e.message : 'Maç başlatılamadı.';
+      const msg = e instanceof Error ? e.message : '';
+      if (rejoin && (msg === 'EXPIRED' || msg === 'BAD_TICKET')) {
+        forgetSeat();
+        error = 'Bu maç bitmiş ya da artık yeri yok.';
+      } else error = ERR[msg] ?? (msg || 'Maç başlatılamadı.');
     }
     starting = false;
     render();
+  };
+
+  /** the room's match is running and we are not in it (dropped out / arrived late) */
+  let matchRunning = false;
+  let statusTimer = 0;
+  const pollStatus = () => {
+    window.clearTimeout(statusTimer);
+    if (!lobby?.connected || !state || starting) return;
+    lobby.emit(ClientEvents.LobbyMatchStatus, {}, (res: { running?: boolean; host?: boolean }) => {
+      const running = !!res?.running && !res?.host;
+      if (running !== matchRunning) {
+        matchRunning = running;
+        render();
+      }
+    });
+    if (back.classList.contains('on')) statusTimer = window.setTimeout(pollStatus, 4000);
+  };
+  const rejoinRoomMatch = async () => {
+    error = '';
+    try {
+      const res = await ack<MatchStartPayload & { late?: boolean }>(ClientEvents.LobbyRejoin, {});
+      const seat = savedSeat();
+      // the server hands back the same ticket when we were in it → our saved progress applies
+      await beginMatch(res, seat?.ticket === res.ticket);
+    } catch (e) {
+      error = e instanceof Error ? (e.message === 'NO_MATCH' ? 'Şu an süren bir maç yok.' : e.message) : 'Katılınamadı.';
+      matchRunning = false;
+      render();
+    }
   };
 
   function render() {
@@ -326,6 +436,7 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
         .join('')}</ul>
       <p class="solo">Arkadaş beklemek zorunda değilsin: <b>TEK BAŞINA OYNA</b> ile hemen başla, istediğinde buradan birlikte oynarsınız.</p>
       <p>${st.players.length}/8 oyuncu${host ? ` · Görev: ${esc(m.map)} · ${esc(m.mode)} · ${esc(m.difficulty)}` : ''}</p>
+      ${matchRunning && !starting ? `<div class="rejoin"><b>Odanda süren bir maç var.</b><span>${savedSeat() ? 'Kaldığın yerden devam edebilirsin.' : 'Hemen katılabilirsin.'}</span><button id="coopRejoin" class="go">${savedSeat() ? 'OYUNA GERİ DÖN' : 'MAÇA KATIL'}</button></div>` : ''}
       <div class="err" role="alert">${esc(starting ? '' : error)}</div>
       <div class="foot">
         ${dracord ? '' : '<button id="coopLeave">ODADAN ÇIK</button>'}
@@ -335,6 +446,7 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
         ${host ? `<button id="coopStart" class="go" ${allReady && !starting ? '' : 'disabled'}>${starting ? 'BAŞLIYOR…' : 'BAŞLAT'}</button>` : ''}
       </div>`;
     box.querySelector('#coopLeave')?.addEventListener('click', leaveRoom);
+    box.querySelector('#coopRejoin')?.addEventListener('click', () => void rejoinRoomMatch());
     box.querySelector('#coopHide')!.addEventListener('click', () => back.classList.remove('on'));
     box.querySelector('#coopSolo')?.addEventListener('click', () => {
       back.classList.remove('on');
@@ -374,8 +486,18 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
       back.classList.add('on');
       if (state) void syncOperative().then(render, render);
       else render();
+      pollStatus();
     },
     close: () => back.classList.remove('on'),
     inRoom: () => !!state,
+    rejoinSaved: () => {
+      const seat = savedSeat();
+      if (!seat || starting) return false;
+      void beginMatch({ ticket: seat.ticket, mission: seat.mission, roomCode: seat.roomCode }, true).then(() => {
+        // failed? show why in the panel
+        if (error) back.classList.add('on');
+      });
+      return true;
+    },
   };
 }

@@ -1,5 +1,7 @@
+import { OnModuleDestroy } from '@nestjs/common';
 import {
   ConnectedSocket,
+  OnGatewayInit,
   MessageBody,
   OnGatewayDisconnect,
   SubscribeMessage,
@@ -28,11 +30,27 @@ const sizeOf = (body: unknown): number => {
   namespace: '/match',
   cors: { origin: corsOrigins() },
 })
-export class MatchGateway implements OnGatewayDisconnect {
+export class MatchGateway implements OnGatewayDisconnect, OnGatewayInit, OnModuleDestroy {
   @WebSocketServer()
   server!: Namespace;
+  private hostWatch: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly matches: MatchService) {}
+
+  /** hosts that dropped and did not come back within the grace period end their match */
+  afterInit() {
+    this.hostWatch = setInterval(() => {
+      for (const code of this.matches.relay.expiredHosts(Date.now())) {
+        this.server.to(code).emit(NetEvents.Ended, { reason: 'HOST_LEFT' });
+        this.server.in(code).socketsLeave(code);
+      }
+    }, 5000);
+    this.hostWatch.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.hostWatch) clearInterval(this.hostWatch);
+  }
 
   @SubscribeMessage(NetEvents.Join)
   onJoin(@ConnectedSocket() client: Socket, @MessageBody() body: { ticket?: string }) {
@@ -80,7 +98,7 @@ export class MatchGateway implements OnGatewayDisconnect {
     const left = this.matches.relay.leave(client.id, Date.now());
     if (!left) return;
     if (left.ended) {
-      this.server.to(left.roomCode).emit(NetEvents.Ended, { reason: 'HOST_LEFT' });
+      // nobody is left in the match
       this.server.in(left.roomCode).socketsLeave(left.roomCode);
       return;
     }

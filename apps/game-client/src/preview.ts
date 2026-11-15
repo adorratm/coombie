@@ -2,7 +2,7 @@ import { preferLandscape, wantsTouchControls } from './touchControls';
 import { thumbImg, weaponThumb } from './thumbs';
 import { createArena, type ArenaHandle, type ArenaHudState } from './arena';
 import { createLobby } from './lobby';
-import { createCoopPanel, type CoopStart } from './coop';
+import { createCoopPanel, forgetSeat, savedSeat, type CoopStart } from './coop';
 import type { MissionSelection } from './gameModes';
 import { currentRunLoadout, loadProfile } from './loadout';
 import type { AudioBusId } from './audio';
@@ -536,6 +536,8 @@ const renderHud = (hud: ArenaHudState) => {
   if (over) {
     if (!runCommitted) {
       runCommitted = true;
+      // the co-op match is over for us: nothing to come back to
+      if (coop) forgetSeat();
       lastCommit = commitRunResults(arena.getRunSummary(), meta);
       const d = DIFFICULTIES[hud.runStats?.difficulty ?? 'normal'];
       const bonus = Math.round(lastCommit.creditsEarned * (d.reward - 1) + (over.won ? 150 * d.reward : 0));
@@ -743,7 +745,7 @@ const restartRun = (start: CoopStart | null = null) => {
   const loadout = currentRunLoadout();
   // co-op: everyone plays the host's mission
   if (start?.mission) loadout.mission = start.mission as MissionSelection;
-  arena = createArena(root, { loadout, net: start?.session ?? null });
+  arena = createArena(root, { loadout, net: start?.session ?? null, resume: start ? { key: start.resumeKey, rejoin: start.rejoin } : null });
   (window as unknown as { __pzArena?: ArenaHandle }).__pzArena = arena;
   running = true;
   runCommitted = false;
@@ -803,6 +805,7 @@ const toMenu = () => {
   el.hud.style.display = 'none';
   document.body.classList.add('hud-off');
   lobby.show();
+  syncRejoinBtn();
 };
 const lobbyHost = document.getElementById('lobby')!;
 const coopPanel = createCoopPanel(
@@ -818,6 +821,26 @@ const lobby = createLobby(lobbyHost, () => {
   else restartRun();
 });
 document.getElementById('lbCoop')?.addEventListener('click', () => coopPanel.open());
+
+/** Dropped out of a co-op match that is still going: one tap back into it. */
+const rejoinBtn = document.createElement('button');
+rejoinBtn.id = 'rejoinBtn';
+rejoinBtn.type = 'button';
+rejoinBtn.innerHTML = '<b>OYUNA GERİ DÖN</b><span>Co-op maçın devam ediyor</span>';
+rejoinBtn.style.cssText =
+  'position:fixed;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:55;display:none;flex-direction:column;align-items:center;gap:2px;padding:10px 22px;border:1px solid #3dff9a;border-radius:12px;background:rgba(8,20,13,.94);color:#e8fff1;font:700 15px Rajdhani,system-ui,sans-serif;letter-spacing:.14em;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.5)';
+rejoinBtn.querySelector('span')!.setAttribute('style', 'font:500 11px system-ui,sans-serif;letter-spacing:.04em;opacity:.75');
+document.body.appendChild(rejoinBtn);
+const syncRejoinBtn = () => {
+  rejoinBtn.style.display = !running && savedSeat() ? 'flex' : 'none';
+};
+rejoinBtn.addEventListener('click', () => {
+  if (wantsTouchControls()) void preferLandscape();
+  if (!coopPanel.rejoinSaved()) syncRejoinBtn();
+  rejoinBtn.style.display = 'none';
+});
+window.setInterval(syncRejoinBtn, 3000);
+syncRejoinBtn();
 document.getElementById('btnMenu')?.addEventListener('click', toMenu);
 document.getElementById('btnPauseMenu')?.addEventListener('click', toMenu);
 

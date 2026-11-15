@@ -1379,3 +1379,48 @@ export function weaponUnlockLabel(weaponId: WeaponId): string {
   const w = weaponById(weaponId);
   return cls ? `${w.name} · ${cls.name}` : w.name;
 }
+
+/**
+ * Rebuild a card from its id (saved runs: a co-op guest who comes back replays the
+ * picks they had). Fixed cards come from the table; skill and weapon-track cards are
+ * generated, so their ids carry everything needed.
+ */
+export function cardFromId(id: string): UpgradeCardDef | null {
+  const fixed = UPGRADE_CARDS.find((c) => c.id === id) ?? (id === FILLER_CARD.id ? FILLER_CARD : null);
+  if (fixed) return fixed;
+  const rs = /^rs:([a-z]+):([a-z0-9_]+):(\d+)$/.exec(id);
+  if (rs) {
+    return { id, name: rs[2]!, description: '', rarity: 'common', kind: 'skill', icon: 'S', weight: 0, runSkill: { kind: rs[1] as RunSkillCard['kind'], id: rs[2]!, level: Number(rs[3]) } };
+  }
+  const wl = /^wl:([a-z0-9_]+):(\d+)$/.exec(id);
+  if (wl) {
+    return { id, name: wl[1]!, description: '', rarity: 'common', kind: 'weapon_mastery', icon: 'W', weight: 0, weaponLevel: { weaponId: wl[1] as WeaponId, level: Number(wl[2]) } };
+  }
+  return null;
+}
+
+/** What a co-op guest keeps when they drop out and come back. */
+export interface SavedRunProgress {
+  level: number;
+  xp: number;
+  totalXp: number;
+  picks: string[];
+  hp: number;
+  kills: number;
+}
+
+export function exportRunProgress(state: ProgressState, hpRatio: number, kills: number): SavedRunProgress {
+  return { level: state.level, xp: state.xp, totalXp: state.totalXp, picks: [...state.pickedIds], hp: hpRatio, kills };
+}
+
+/** Replay saved picks onto a fresh run state. Unknown ids are skipped. */
+export function importRunProgress(state: ProgressState, saved: SavedRunProgress): void {
+  state.level = Math.max(1, Math.min(200, Math.floor(saved.level) || 1));
+  state.xp = Math.max(0, saved.xp || 0);
+  state.xpToLevel = xpForLevel(state.level);
+  state.totalXp = Math.max(0, saved.totalXp || 0);
+  for (const id of Array.isArray(saved.picks) ? saved.picks.slice(0, 400) : []) {
+    const card = cardFromId(String(id));
+    if (card) applyUpgradeCard(state, card);
+  }
+}

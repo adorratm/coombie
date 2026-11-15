@@ -42,6 +42,8 @@ export class NetSession {
   playerId = '';
   roster: NetRoster | null = null;
   ended: string | null = null;
+  /** false while the socket is down and we are trying to get back in */
+  link = true;
   /** host: latest reported state of every guest hero */
   readonly remoteHeroes = new Map<string, NetHero & { at: number; seq: number }>();
   /** guest: the host's current objective (latest snapshot, not interpolated) */
@@ -92,6 +94,12 @@ export class NetSession {
       this.ended = m?.reason ?? 'ENDED';
       this.handlers.onEnded?.(this.ended);
     });
+  }
+
+  /** Socket dropped (`up` false) or came back and re-joined (`up` true). */
+  setLink(up: boolean): void {
+    this.link = up;
+    if (up) this.lastSent = -1;
   }
 
   /** Present the ticket from `match:start`. Resolves with the role, or rejects. */

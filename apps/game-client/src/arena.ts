@@ -115,7 +115,7 @@ import {
   tickProgressTimers,
   weaponDisplayName,
   weaponUnlockLabel,
-  type UpgradeCardDef, type CardStatContext } from './progression';
+  type UpgradeCardDef, type CardStatContext, exportRunProgress, importRunProgress, type SavedRunProgress } from './progression';
 import {
   MAX_SQUAD_SIZE,
   createRescueSlots,
@@ -323,13 +323,23 @@ const CAM_ZOOM_MAX = 1.85;
 /** dev: ?god=1 — player takes 2 % damage (testing) */
 const DEV_GOD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('god') === '1';
 
-export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout; net?: NetSession | null } = {}): ArenaHandle {
+/** Co-op guest progress that survives a drop-out (keyed by the match ticket). */
+export interface RunResume {
+  key: string;
+  /** coming back into a match already under way */
+  rejoin: boolean;
+}
+
+const RESUME_PREFIX = 'coombie:coop-run:';
+
+export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout; net?: NetSession | null; resume?: RunResume | null } = {}): ArenaHandle {
   const loadout = opts.loadout ?? currentRunLoadout();
   /**
    * Co-op: the host's arena runs the world; a guest's arena draws the host's snapshots and
    * only simulates its own hero. Other players appear as squad members driven by the network.
    */
   const net = opts.net ?? null;
+  const resume = net && opts.resume ? opts.resume : null;
   const netPlay = !!net;
   const isGuest = net?.role === 'guest';
   const isHost = net?.role === 'host';
@@ -1750,6 +1760,37 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
   };
 
+  /** guest: keep a copy of my progress so a drop-out / reload can pick it back up */
+  let resumeSaveT = 0;
+  let rejoinPlaced = !(resume?.rejoin ?? false);
+  const tickResume = (rawDt: number) => {
+    if (!resume) return;
+    // back in a running match: jump to the squad and the host's clock
+    if (!rejoinPlaced && isGuest) {
+      const frame = net!.sampleWorld();
+      const host = frame?.heroes.find((h) => h.id === net!.roster?.hostPlayerId) ?? frame?.heroes.find((h) => h.alive);
+      if (frame && host) {
+        rejoinPlaced = true;
+        simTime = Math.max(simTime, frame.t);
+        const a = Math.random() * Math.PI * 2;
+        applyMoveWithCollision(player.root, host.x + Math.cos(a) * 2.2 - player.root.position.x, host.z + Math.sin(a) * 2.2 - player.root.position.z, 0.45);
+        refreshPlayerMaxHp();
+        player.hp = Math.max(1, Math.round(player.maxHp * resumeHp));
+        player.healthBar.setRatio(player.hp / player.maxHp);
+        missionRuntime.banner = 'OYUNA GERİ DÖNDÜN';
+        missionRuntime.bannerUntil = simTime + 3;
+      }
+    }
+    resumeSaveT += rawDt;
+    if (resumeSaveT < 4 || runOver) return;
+    resumeSaveT = 0;
+    try {
+      localStorage.setItem(RESUME_PREFIX + resume.key, JSON.stringify(exportRunProgress(progress, player.alive ? player.hp / Math.max(1, player.maxHp) : 0.5, runStats.kills + resumeKills)));
+    } catch {
+      /* storage full: not fatal */
+    }
+  };
+
   const ownNetHero = (): Omit<NetHero, 'id'> => ({
     x: player.root.position.x,
     z: player.root.position.z,
@@ -1948,6 +1989,22 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         progress.runSkills.skills.set(id as RunSkillId, Math.min(SKILL_MAX, parseInt(lv ?? '1', 10) || 1));
         if (lv?.endsWith('e')) progress.runSkills.evolved.set(id as RunSkillId, 'signature');
       }
+    }
+  }
+  // co-op guest coming back: replay the level and picks they had before dropping out
+  let resumeHp = 1;
+  let resumeKills = 0;
+  if (resume) {
+    try {
+      const raw = localStorage.getItem(RESUME_PREFIX + resume.key);
+      const saved = raw ? (JSON.parse(raw) as SavedRunProgress) : null;
+      if (saved && resume.rejoin) {
+        importRunProgress(progress, saved);
+        resumeHp = Math.max(0.25, Math.min(1, Number(saved.hp) || 1));
+        resumeKills = Math.max(0, Number(saved.kills) || 0);
+      }
+    } catch {
+      /* corrupt save: start fresh */
     }
   }
   syncWeaponSlots(false);
@@ -2914,6 +2971,18 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     for (const op of squad) tickOperativeSlow(op, nowSec);
 
     if (isGuest) applyNetWorld(dt, t);
+    if (net && resume) tickResume(rawDt);
+    if (net && !runOver) {
+      // connection trouble is shown until it clears (the match keeps its seat for us)
+      const hostAway = isGuest && net.roster?.players.some((p) => p.playerId === net.roster!.hostPlayerId && !p.connected);
+      if (!net.link) {
+        missionRuntime.banner = 'BAĞLANTI KOPTU — yeniden bağlanılıyor…';
+        missionRuntime.bannerUntil = simTime + 0.5;
+      } else if (hostAway) {
+        missionRuntime.banner = 'ODA SAHİBİNİN BAĞLANTISI KOPTU — geri dönmesi bekleniyor…';
+        missionRuntime.bannerUntil = simTime + 0.5;
+      }
+    }
     if (!isGuest && dt > 0) tickTraitQueue(nowSec);
     const statusKills: ZombieVisual[] = [];
     for (const z of zombies) {

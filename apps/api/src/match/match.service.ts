@@ -13,12 +13,13 @@ export class MatchService implements OnModuleDestroy {
   }
 
   /** Lobi başladı: her oyuncuya tek kullanımlık maç bileti. */
-  ticketsFor(lobby: LobbyStatePayload): Map<string, string> {
+  ticketsFor(lobby: LobbyStatePayload, mission?: unknown): Map<string, string> {
     return this.relay.issueTickets(
       lobby.roomCode,
       lobby.hostPlayerId,
       lobby.players.filter((p) => !p.isBot).map((p) => ({ playerId: p.playerId, displayName: p.displayName, operativeId: p.operativeId })),
       Date.now(),
+      { mission },
     );
   }
 

@@ -33,8 +33,11 @@ export const NET_LIMITS = {
   eventsPerSec: 40,
   /** unused tickets expire */
   ticketTtlMs: 120_000,
-  /** a dropped player may come back with the same ticket for this long */
-  rejoinMs: 60_000,
+  /** a dropped / departed player may come back with the same ticket for this long (while the match runs) */
+  rejoinMs: 15 * 60_000,
+  /** the host's connection may drop this long before the match is called off */
+  hostGraceMs: 45_000,
+  maxPlayers: 8,
 } as const;
 
 export interface NetRosterPlayer {
@@ -197,6 +200,8 @@ interface RelayRoom {
   players: Map<string, RelayPlayer>;
   createdAt: number;
   started: boolean;
+  /** opaque start data (mission) handed again to players who come back */
+  meta?: unknown;
 }
 
 interface Bucket {
@@ -238,9 +243,10 @@ export class MatchRelay {
     hostPlayerId: string,
     players: ReadonlyArray<{ playerId: string; displayName: string; operativeId: string }>,
     now: number,
+    meta?: unknown,
   ): Map<string, string> {
     this.dropRoom(roomCode);
-    const room: RelayRoom = { roomCode, hostPlayerId, players: new Map(), createdAt: now, started: false };
+    const room: RelayRoom = { roomCode, hostPlayerId, players: new Map(), createdAt: now, started: false, meta };
     const out = new Map<string, string>();
     for (const p of players) {
       const token = this.tokenFactory();
@@ -282,10 +288,60 @@ export class MatchRelay {
     player.connId = null;
     player.connected = false;
     player.lastSeen = now;
-    const ended = player.playerId === room.hostPlayerId;
     const roster = this.roster(room);
-    if (ended || ![...room.players.values()].some((p) => p.connected)) this.dropRoom(room.roomCode);
+    // The host's world keeps running only while the host is there: a host blip gets a
+    // grace period (expiredHosts), but when nobody at all is connected the match is over.
+    const ended = ![...room.players.values()].some((p) => p.connected);
+    if (ended) this.dropRoom(room.roomCode);
     return { roomCode: room.roomCode, playerId: player.playerId, ended, roster };
+  }
+
+  /** Rooms whose host has been gone longer than the grace period: dropped, codes returned. */
+  expiredHosts(now: number): string[] {
+    const out: string[] = [];
+    for (const room of [...this.rooms.values()]) {
+      const host = room.players.get(room.hostPlayerId);
+      if (!room.started || !host || host.connected) continue;
+      if (now - host.lastSeen > NET_LIMITS.hostGraceMs) {
+        this.dropRoom(room.roomCode);
+        out.push(room.roomCode);
+      }
+    }
+    return out;
+  }
+
+  /** Is a match of this room running (host present or within its grace)? */
+  isRunning(roomCode: string, now: number): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room || !room.started) return false;
+    const host = room.players.get(room.hostPlayerId);
+    return !!host && (host.connected || now - host.lastSeen <= NET_LIMITS.hostGraceMs);
+  }
+
+  /**
+   * A player (back) into a running match: the ticket they had, or a fresh one for someone
+   * who was not in it at start (late join, up to maxPlayers). Null when no match runs.
+   */
+  rejoinTicket(
+    roomCode: string,
+    player: { playerId: string; displayName: string; operativeId: string },
+    now: number,
+  ): { ticket: string; meta: unknown; late: boolean } | null {
+    if (!this.isRunning(roomCode, now)) return null;
+    const room = this.rooms.get(roomCode)!;
+    // the host's world lives in the host's tab: a new page cannot take it over
+    if (player.playerId === room.hostPlayerId) return null;
+    const known = room.players.get(player.playerId);
+    if (known) {
+      // the window restarts: they are actively coming back
+      if (!known.connected) known.lastSeen = now;
+      return { ticket: known.token, meta: room.meta, late: false };
+    }
+    if (room.players.size >= NET_LIMITS.maxPlayers) return null;
+    const token = this.tokenFactory();
+    room.players.set(player.playerId, { ...player, connected: false, token, connId: null, lastSeen: now });
+    this.byToken.set(token, { roomCode, playerId: player.playerId });
+    return { ticket: token, meta: room.meta, late: true };
   }
 
   /** May this connection relay a message of this kind and size right now? */

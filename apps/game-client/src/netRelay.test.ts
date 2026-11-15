@@ -51,7 +51,7 @@ describe('match relay', () => {
     expect(relay.authorize('c2', 'input', 50, 1100).ok).toBe(true);
   });
 
-  it('a guest may drop and rejoin; the host leaving ends the match', () => {
+  it('a guest may drop and rejoin; the host gets a grace period, then the match ends', () => {
     const { relay, tickets } = setup();
     relay.join(tickets.get('host')!, 'c1', 1);
     relay.join(tickets.get('g1')!, 'c2', 1);
@@ -59,10 +59,39 @@ describe('match relay', () => {
     expect(left?.ended).toBe(false);
     expect(relay.join(tickets.get('g1')!, 'c3', 5000).ok).toBe(true);
     expect(relay.join(tickets.get('g1')!, 'c4', 5000 + NET_LIMITS.rejoinMs).ok).toBe(true); // still connected via c3 → replaced
-    const end = relay.leave('c1', 6000);
-    expect(end?.ended).toBe(true);
+    // host blips: the match waits for them
+    expect(relay.leave('c1', 6000)?.ended).toBe(false);
+    expect(relay.expiredHosts(6000 + NET_LIMITS.hostGraceMs - 1)).toEqual([]);
+    expect(relay.join(tickets.get('host')!, 'c9', 7000).ok).toBe(true);
+    // host gone for good
+    relay.leave('c9', 8000);
+    expect(relay.expiredHosts(8000 + NET_LIMITS.hostGraceMs + 1)).toEqual(['ALPHA-1']);
     expect(relay.roomCount).toBe(0);
-    expect(relay.join(tickets.get('g1')!, 'c5', 6001).ok).toBe(false);
+    expect(relay.join(tickets.get('g1')!, 'c5', 60_000).ok).toBe(false);
+  });
+
+  it('hands a departed guest their ticket again, and lets newcomers join late', () => {
+    const { relay, tickets } = setup();
+    expect(relay.rejoinTicket('ALPHA-1', players[1]!, 1)).toBeNull(); // not running yet
+    relay.join(tickets.get('host')!, 'c1', 1);
+    relay.join(tickets.get('g1')!, 'c2', 1);
+    relay.leave('c2', 100);
+    const back = relay.rejoinTicket('ALPHA-1', players[1]!, 10 * 60_000)!;
+    expect(back.ticket).toBe(tickets.get('g1'));
+    expect(relay.join(back.ticket, 'c3', 10 * 60_000 + 5).ok).toBe(true);
+    const late = relay.rejoinTicket('ALPHA-1', { playerId: 'new', displayName: 'N', operativeId: 'tox' }, 11 * 60_000)!;
+    expect(late.late).toBe(true);
+    expect(relay.join(late.ticket, 'c4', 11 * 60_000 + 1).ok).toBe(true);
+    expect(relay.rejoinTicket('ALPHA-1', players[0]!, 11 * 60_000)).toBeNull(); // the host cannot be re-seated
+  });
+
+  it('ends at once when everybody is gone', () => {
+    const { relay, tickets } = setup();
+    relay.join(tickets.get('host')!, 'c1', 1);
+    relay.join(tickets.get('g1')!, 'c2', 1);
+    relay.leave('c2', 5);
+    expect(relay.leave('c1', 6)?.ended).toBe(true);
+    expect(relay.roomCount).toBe(0);
   });
 
   it('a new start replaces the old match of the room', () => {
