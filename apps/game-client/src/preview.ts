@@ -332,10 +332,20 @@ const renderSidePanel = (hud: ArenaHudState) => {
     .join('');
 };
 
+let upgradeKey = '';
 const renderUpgradeCards = (hud: ArenaHudState) => {
+  // Rebuild only when the draft itself changes: re-creating the buttons every HUD tick
+  // (co-op keeps the clock running) swallowed clicks between mousedown and mouseup.
+  const key = `${hud.choices.map((c) => c.id).join('|')}#${hud.lockedChoiceIndex ?? -1}#${hud.level}`;
+  if (key === upgradeKey && el.upgradeCards.childElementCount === hud.choices.length) {
+    el.upgradeCards.querySelectorAll('.pcard').forEach((n, idx) => n.classList.toggle('focus', idx === focusIndex));
+    return;
+  }
+  upgradeKey = key;
   el.upgradeCards.replaceChildren();
   hud.choices.forEach((card, i) => {
-    const lines = cardStatLines(card);
+    const lines = cardStatLines(card, hud.cardCtx);
+    const taken = hud.pickCounts?.[card.id] ?? 0;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `pcard ${card.rarity}${card.runSkill ? ` rs rs-${card.runSkill.kind}` : ''}${i === focusIndex ? ' focus' : ''}${
@@ -344,7 +354,7 @@ const renderUpgradeCards = (hud: ArenaHudState) => {
     btn.innerHTML = `
       <div class="key">${i + 1}</div>
       <div class="gem"><b>${gemLetter(card)}</b></div>
-      <div class="name">${card.name}</div>
+      <div class="name">${card.name}${taken ? ` <span class="stack">×${taken + 1}</span>` : ''}</div>
       <div class="desc">${card.description}</div>
       <div class="stats">
         ${lines
@@ -364,6 +374,7 @@ const renderUpgradeCards = (hud: ArenaHudState) => {
     });
     btn.addEventListener('click', () => {
       focusIndex = i;
+      upgradeKey = '';
       arena.selectUpgrade(i);
       renderHud(arena.getHudState());
     });
@@ -557,7 +568,7 @@ const renderHud = (hud: ArenaHudState) => {
     while (ind.children.length < list.length) {
       const d = document.createElement('div');
       d.className = 'ind';
-      d.innerHTML = '<i class="ar"></i><span class="ic"></span><span class="tx"></span>';
+      d.innerHTML = '<i class="ar"></i><span class="ic"></span><span class="tx"></span><b class="pg"><i></i></b>';
       ind.append(d);
     }
     for (let i = 0; i < ind.children.length; i++) {
@@ -574,8 +585,11 @@ const renderHud = (hud: ArenaHudState) => {
       if (d.className !== cls) d.className = cls;
       (d.children[0] as HTMLElement).style.transform = `rotate(${it.ang.toFixed(3)}rad)`;
       d.children[1]!.textContent = it.icon;
-      const t = it.timer !== undefined ? `${Math.ceil(it.timer)} sn` : `${Math.round(it.dist)} m`;
-      d.children[2]!.textContent = it.on ? t : `${it.label} · ${t}`;
+      const t = it.timer !== undefined ? `${it.timer < 10 && it.progress !== undefined ? it.timer.toFixed(1) : Math.ceil(it.timer)} sn` : `${Math.round(it.dist)} m`;
+      d.children[2]!.textContent = it.on && !it.named ? t : `${it.label} · ${t}`;
+      const pg = d.children[3] as HTMLElement;
+      pg.style.display = it.progress !== undefined ? '' : 'none';
+      if (it.progress !== undefined) (pg.firstElementChild as HTMLElement).style.width = `${Math.round(it.progress * 100)}%`;
     }
   }
   const sub = document.getElementById('subtitle');
@@ -632,6 +646,7 @@ const renderHud = (hud: ArenaHudState) => {
   } else {
     el.upgrade.classList.remove('on');
     el.upgradeCards.replaceChildren();
+    upgradeKey = '';
   }
 };
 

@@ -30,7 +30,7 @@ import { createGameAudio, type AudioBusId, type AudioBusLevels } from './audio';
 import { waveKindForLevel } from '@protocol-z/shared';
 import { buildSpawnField } from './spawnField';
 import type { NetSession } from './netSession';
-import { tickDowned } from './coopRules';
+import { PICKUP_RADIUS, PICKUP_SECONDS, tickDowned } from './coopRules';
 import { NET_MAX_MARKS, type NetHero, type NetMark, type NetObjective } from '@protocol-z/shared';
 import {
   HORDE_WARN_SECONDS,
@@ -115,8 +115,7 @@ import {
   tickProgressTimers,
   weaponDisplayName,
   weaponUnlockLabel,
-  type UpgradeCardDef,
-} from './progression';
+  type UpgradeCardDef, type CardStatContext } from './progression';
 import {
   MAX_SQUAD_SIZE,
   createRescueSlots,
@@ -175,7 +174,7 @@ export interface ArenaHudState {
   support?: { icon: string; name: string; cd: number; max: number } | null;
   /** radio chatter subtitles */
   subtitle?: { text: string; who: 'me' | 'radio' } | null;
-  indicators?: Array<{ x: number; y: number; ang: number; on: boolean; color: string; icon: string; label: string; timer?: number; urgent?: boolean; dist: number }>;
+  indicators?: Array<{ x: number; y: number; ang: number; on: boolean; color: string; icon: string; label: string; timer?: number; urgent?: boolean; dist: number; named?: boolean; progress?: number }>;
   /** active timed power-ups */
   buffs?: Array<{ icon: string; name: string; left: number; color: string }>;
   heroAbilities: Array<{ slot: string; name: string; icon: string; color: number; cooldown: number; maxCooldown: number; level: number }>;
@@ -214,6 +213,10 @@ export interface ArenaHudState {
   choices: UpgradeCardDef[];
   unlockedWeapons: Array<{ id: WeaponId; label: string }>;
   modsSummary: string[];
+  /** current stats, so upgrade cards show "now >> after" */
+  cardCtx?: CardStatContext;
+  /** how many times each upgrade card was taken this run */
+  pickCounts?: Record<string, number>;
   overdrive: boolean;
   pierceShots: number;
       squad: Array<{
@@ -1540,6 +1543,33 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const netSeen = new Set<number>();
   const netTarget = new Map<string, NetHero>();
 
+  /** co-op: every player gets a colour (roster order, the same on every screen) */
+  const COOP_COLORS = [0x38bdf8, 0xf472b6, 0xfacc15, 0x4ade80, 0xa78bfa, 0xfb923c, 0xf87171, 0x2dd4bf];
+  const coopColorOf = (id: string): number => {
+    const i = net?.roster?.players.findIndex((p) => p.playerId === id) ?? -1;
+    if (i >= 0) return COOP_COLORS[i % COOP_COLORS.length]!;
+    let h = 0;
+    for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0;
+    return COOP_COLORS[Math.abs(h) % COOP_COLORS.length]!;
+  };
+  const coopNameOf = (id: string): string => net?.roster?.players.find((p) => p.playerId === id)?.displayName || 'Takım arkadaşı';
+  const coopRingGeo = new THREE.RingGeometry(0.78, 0.98, 40);
+  /** coloured ground ring under a co-op hero (re-coloured if the roster changes) */
+  const setCoopRing = (op: OperativeVisual, color: number) => {
+    let ring = op.root.getObjectByName('coopRing') as THREE.Mesh | undefined;
+    if (!ring) {
+      ring = new THREE.Mesh(coopRingGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+      ring.name = 'coopRing';
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.05;
+      ring.renderOrder = 2;
+      op.root.add(ring);
+    }
+    (ring.material as THREE.MeshBasicMaterial).color.setHex(color);
+  };
+  /** how long I have stood next to each downed team mate (mirrors coopRules on their side) */
+  const reviveProgress = new Map<string, number>();
+
   const ensureNetAlly = (id: string): OperativeVisual | null => {
     const have = netAllies.get(id);
     if (have) return have;
@@ -1561,6 +1591,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     });
     ally.root.userData.rosterId = def.id;
     ally.root.userData.netPlayer = id;
+    setCoopRing(ally, coopColorOf(id));
     ally.root.position.copy(player.root.position);
     scene.add(ally.root);
     healthBars.push(ally.healthBar);
@@ -2184,11 +2215,34 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       if (sl.status === 'active' && sl.captive) srcs.push({ pos: sl.captive.root.position, color: 0x3cff6a, icon: '✚', label: sl.template.name, timer: sl.timer, urgent: sl.timer < 12 });
     }
     srcs.push(...(isGuest ? netMarkSrcs : modeRt.indicators()), ...powerUps.indicators());
+    if (net) {
+      if (player.root.getObjectByName('coopRing') === undefined || frameNo % 60 === 0) setCoopRing(player, coopColorOf(net.playerId));
+      for (const [id, ally] of netAllies) {
+        const name = coopNameOf(id);
+        if (ally.alive) {
+          srcs.push({ pos: ally.root.position, color: coopColorOf(id), icon: '●', label: name, named: true, y: 2.7 });
+        } else {
+          const prog = Math.min(1, (reviveProgress.get(id) ?? 0) / PICKUP_SECONDS);
+          const near = prog > 0 && ally.root.position.distanceTo(player.root.position) < PICKUP_RADIUS;
+          srcs.push({
+            pos: ally.root.position,
+            color: 0xff4d4d,
+            icon: '✚',
+            label: near ? `${name} · kaldırılıyor` : `${name} DÜŞTÜ · yanına git`,
+            named: true,
+            urgent: !near,
+            y: 1.2,
+            timer: near ? Math.max(0, PICKUP_SECONDS * (1 - prog)) : undefined,
+            progress: near ? prog : undefined,
+          });
+        }
+      }
+    }
     const cw = renderer.domElement.clientWidth || 1;
     const ch = renderer.domElement.clientHeight || 1;
     const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
     const indicators = srcs.map((src) => {
-      _ind.copy(src.pos).setY(1.4).project(camera);
+      _ind.copy(src.pos).setY(src.y ?? 1.4).project(camera);
       let x = (_ind.x * 0.5 + 0.5) * cw;
       let y = (-_ind.y * 0.5 + 0.5) * ch;
       if (_ind.z > 1) {
@@ -2208,7 +2262,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         y = cy + dy * k;
       }
       const dist = Math.hypot(src.pos.x - player.root.position.x, src.pos.z - player.root.position.z);
-      return { x, y, ang, on, color: hex(src.color), icon: src.icon, label: src.label, timer: src.timer, urgent: src.urgent, dist };
+      return { x, y, ang, on, color: hex(src.color), icon: src.icon, label: src.label, timer: src.timer, urgent: src.urgent, dist, named: src.named, progress: src.progress };
     });
     const buffs = powerUps.activeList(simTime).map((b) => ({ icon: b.def.icon, name: b.def.name, left: b.left, color: hex(b.def.color) }));
     return {
@@ -2258,6 +2312,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       pausedBy: netPause.on ? netPause.by : '',
       choices: [...progress.choices],
       unlockedWeapons: listUnlockedWeaponDefs(progress).map((w) => ({ id: w.id, label: weaponUnlockLabel(w.id) })),
+      cardCtx: { mods: { ...progress.mods }, abilityPowerMult: progress.abilityPowerMult, masteries: progress.masteries.map((m) => ({ ...m })) },
+      pickCounts: progress.pickedIds.reduce<Record<string, number>>((acc, id) => ((acc[id] = (acc[id] ?? 0) + 1), acc), {}),
       modsSummary: [
         `DMG x${progress.mods.damageMult.toFixed(2)}`,
         `FR x${progress.mods.fireRateMult.toFixed(2)}`,
@@ -2821,6 +2877,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       const remote = ally.root.userData.netPlayer as string | undefined;
       if (remote) {
         driveNetAlly(ally, remote, dt, t + i);
+        // revive progress as their client counts it: someone alive standing close
+        if (ally.alive) reviveProgress.delete(remote);
+        else {
+          const near = player.alive && ally.root.position.distanceTo(player.root.position) < PICKUP_RADIUS;
+          const cur = reviveProgress.get(remote) ?? 0;
+          reviveProgress.set(remote, near ? Math.min(PICKUP_SECONDS, cur + dt) : Math.max(0, cur - dt * 0.5));
+        }
         continue;
       }
       if (!ally.alive) continue;

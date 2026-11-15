@@ -24,17 +24,24 @@ export interface CostumeDef {
   /** 0..1 how strongly cloth texels are pulled to the palette */
   strength: number;
   glow?: number;
+  /** camo pattern (default solid two-tone) */
+  pattern?: 'solid' | 'woodland' | 'desert' | 'digital' | 'tiger' | 'arctic' | 'urban';
+  /** third and darkest pattern colours */
+  accent?: number;
+  dark?: number;
 }
 
 export const COSTUMES: CostumeDef[] = [
   { id: 'standard', name: 'Standart', cost: 0, primary: null, secondary: null, strength: 0 },
-  { id: 'urban_night', name: 'Gece Operasyonu', cost: 250, primary: 0x1b1e22, secondary: 0x3a3f46, strength: 0.85 },
-  { id: 'desert', name: 'Çöl Kamuflaj', cost: 250, primary: 0xb8965f, secondary: 0x6e5838, strength: 0.75 },
-  { id: 'woodland', name: 'Orman', cost: 250, primary: 0x4d5a32, secondary: 0x2b3020, strength: 0.75 },
-  { id: 'arctic', name: 'Kutup', cost: 350, primary: 0xdfe6ea, secondary: 0x8b98a2, strength: 0.8 },
-  { id: 'crimson', name: 'Kızıl Birlik', cost: 450, primary: 0x7a1414, secondary: 0x241010, strength: 0.8 },
-  { id: 'neon_ops', name: 'Neon Ops', cost: 650, primary: 0x101418, secondary: 0x1e2a30, strength: 0.85, glow: 0x00ff87 },
-  { id: 'gold_elite', name: 'Altın Elit', cost: 1200, primary: 0xc9a23a, secondary: 0x2a2418, strength: 0.7 },
+  { id: 'urban_night', name: 'Gece Operasyonu', cost: 250, primary: 0x2a2e33, secondary: 0x1a1d21, accent: 0x40464e, dark: 0x0e1012, strength: 0.92, pattern: 'urban' },
+  { id: 'desert', name: 'Çöl Kamuflaj', cost: 250, primary: 0xc2a16a, secondary: 0x8f7046, accent: 0xd8c08e, dark: 0x5a4328, strength: 0.92, pattern: 'desert' },
+  { id: 'woodland', name: 'Orman', cost: 250, primary: 0x55603a, secondary: 0x2f3a22, accent: 0x6e5a3a, dark: 0x16180f, strength: 0.92, pattern: 'woodland' },
+  { id: 'digital', name: 'Dijital Kamuflaj', cost: 300, primary: 0x6b7356, secondary: 0x4a5139, accent: 0x8c8a6a, dark: 0x262a1c, strength: 0.92, pattern: 'digital' },
+  { id: 'arctic', name: 'Kutup', cost: 350, primary: 0xe4eaee, secondary: 0xb5c0c8, accent: 0x8b98a2, dark: 0x4f5a62, strength: 0.9, pattern: 'arctic' },
+  { id: 'tiger', name: 'Kaplan Çizgisi', cost: 400, primary: 0x6a7a44, secondary: 0x8b8a52, accent: 0x6a7a44, dark: 0x1a1c10, strength: 0.92, pattern: 'tiger' },
+  { id: 'crimson', name: 'Kızıl Birlik', cost: 450, primary: 0x7a1414, secondary: 0x3a0e0e, accent: 0x9a2a1a, dark: 0x160808, strength: 0.9, pattern: 'woodland' },
+  { id: 'neon_ops', name: 'Neon Ops', cost: 650, primary: 0x101418, secondary: 0x1e2a30, strength: 0.9, glow: 0x00ff87 },
+  { id: 'gold_elite', name: 'Altın Elit', cost: 1200, primary: 0xc9a23a, secondary: 0x2a2418, strength: 0.85 },
 ];
 
 export type AccessoryId = 'belt' | 'holster' | 'chest_rig' | 'kneepads' | 'headlamp' | 'helmet_mil' | 'helmet_swat' | 'helmet_fire' | 'vest_swat';

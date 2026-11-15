@@ -22,19 +22,19 @@ export function createHealthBar(opts: {
 
   const back = new THREE.Mesh(
     new THREE.PlaneGeometry(width, 0.12),
-    new THREE.MeshBasicMaterial({ color: opts.backColor ?? 0x1a0a0a, transparent: true, opacity: 0.85, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: opts.backColor ?? 0x1a0a0a, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }),
   );
   back.position.z = 0.01;
 
   const fill = new THREE.Mesh(
     new THREE.PlaneGeometry(width, 0.09),
-    new THREE.MeshBasicMaterial({ color: opts.fillColor ?? 0xef4444, transparent: true, opacity: 0.95, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: opts.fillColor ?? 0xef4444, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }),
   );
   fill.position.z = 0.02;
 
   const border = new THREE.Mesh(
     new THREE.PlaneGeometry(width + 0.06, 0.16),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }),
   );
 
   root.add(border, back, fill);
@@ -69,10 +69,20 @@ export function createHealthBar(opts: {
   };
 }
 
+const _parentQ = new THREE.Quaternion();
+/**
+ * Face the camera in WORLD space. Bars hang under characters that turn, so copying the
+ * camera rotation as the local rotation spun them with the body (and showed their dark
+ * back face when the hero / zombie faced away).
+ */
 export function billboardHealthBars(bars: HealthBar[], camera: THREE.Camera): void {
   for (const bar of bars) {
     if (!bar.root.visible) continue;
-    bar.root.quaternion.copy(camera.quaternion);
+    const parent = bar.root.parent;
+    if (parent) {
+      parent.getWorldQuaternion(_parentQ).invert();
+      bar.root.quaternion.copy(_parentQ).multiply(camera.quaternion);
+    } else bar.root.quaternion.copy(camera.quaternion);
   }
 }
 

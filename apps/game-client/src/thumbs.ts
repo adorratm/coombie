@@ -177,8 +177,8 @@ export function heroPortrait(key: string, url: string, gender: 'male' | 'female'
 }
 
 /** Camouflage fabric swatch (2D canvas) for a costume. */
-export function costumeSwatch(primary: number | null, secondary: number | null, glow?: number): string {
-  const key = `cs:${primary}:${secondary}:${glow ?? ''}`;
+export function costumeSwatch(primary: number | null, secondary: number | null, glow?: number, extra?: { pattern?: string; accent?: number; dark?: number }): string {
+  const key = `cs:${primary}:${secondary}:${glow ?? ''}:${extra?.pattern ?? ''}:${extra?.accent ?? ''}:${extra?.dark ?? ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const c = document.createElement('canvas');
@@ -193,8 +193,32 @@ export function costumeSwatch(primary: number | null, secondary: number | null, 
   // deterministic pseudo-random camo blobs
   let seed = (base ^ sec) >>> 0 || 7;
   const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const tones = [sec, primary === null ? 0x6e7a52 : new THREE.Color(base).lerp(new THREE.Color(0x000000), 0.35).getHex(), new THREE.Color(base).lerp(new THREE.Color(0xffffff), 0.18).getHex()];
-  for (let i = 0; i < 46; i++) {
+  const tones = extra?.pattern
+    ? [sec, extra.accent ?? sec, extra.dark ?? 0x15170f]
+    : [sec, primary === null ? 0x6e7a52 : new THREE.Color(base).lerp(new THREE.Color(0x000000), 0.35).getHex(), new THREE.Color(base).lerp(new THREE.Color(0xffffff), 0.18).getHex()];
+  if (extra?.pattern === 'digital') {
+    for (let y = 0; y < 120; y += 8)
+      for (let x = 0; x < 240; x += 8) {
+        const r = rnd();
+        if (r < 0.45) continue;
+        g.fillStyle = hex(tones[Math.floor(rnd() * tones.length)]!);
+        g.fillRect(x, y, 8 * (1 + Math.floor(rnd() * 2)), 8);
+      }
+  } else if (extra?.pattern === 'tiger') {
+    g.fillStyle = hex(tones[0]!);
+    for (let i = 0; i < 12; i++) g.fillRect(rnd() * 240, rnd() * 120, 40 + rnd() * 50, 18);
+    g.fillStyle = hex(tones[2]!);
+    for (let i = 0; i < 9; i++) {
+      const y = 6 + i * 13 + rnd() * 4;
+      g.beginPath();
+      g.moveTo(0, y);
+      for (let x = 0; x <= 240; x += 20) g.lineTo(x, y + Math.sin(x * 0.05 + i) * 4 + rnd() * 3);
+      for (let x = 240; x >= 0; x -= 20) g.lineTo(x, y + 5 + Math.sin(x * 0.05 + i) * 4);
+      g.closePath();
+      g.fill();
+    }
+  }
+  for (let i = 0; i < (extra?.pattern === 'digital' || extra?.pattern === 'tiger' ? 0 : 46); i++) {
     g.fillStyle = hex(tones[i % tones.length]!);
     g.beginPath();
     const x = rnd() * 240;

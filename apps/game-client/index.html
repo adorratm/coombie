@@ -207,6 +207,9 @@
       #indic .ind.on .ic { top: -48px; }
       #indic .ind.on .tx { top: -16px; }
       #indic .ind.urg .ic { animation: indPulse .5s ease-in-out infinite alternate; }
+      #indic .ind .pg { position: absolute; top: 34px; left: -32px; width: 64px; height: 6px; border-radius: 3px; background: rgba(0,0,0,.65); border: 1px solid var(--c); overflow: hidden; }
+      #indic .ind.on .pg { top: 2px; }
+      #indic .ind .pg i { display: block; height: 100%; width: 0; background: var(--c); }
       @keyframes indPulse { from { transform: scale(1); } to { transform: scale(1.22); } }
       #subtitle { position: absolute; left: 50%; bottom: 196px; transform: translateX(-50%); max-width: 70%; padding: 7px 16px; background: rgba(6,8,8,0.82); border-left: 3px solid #c8a868; font: 600 17px var(--display); color: #f0e6c8; pointer-events: none; z-index: 19; opacity: 0; transition: opacity .2s; text-shadow: 0 1px 2px #000; }
       #subtitle.on { opacity: 1; }
@@ -680,6 +683,7 @@
         font-size: 20px;
         font-weight: 700;
       }
+      .pcard .name .stack { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 8px; font-size: .75em; background: rgba(61,255,154,.18); color: #3dff9a; vertical-align: middle; }
       .pcard .name {
         font-family: var(--display);
         font-size: 20px;
@@ -864,11 +868,20 @@
       }
       #hint.gone { opacity: 0; }
 
-      @media (max-width: 1100px) {
-        #upMain { inset: 70px 16px 170px 16px; }
+      /* laptops / small windows: four cards in one row that always fit above the action bar
+         (the old 2×2 grid overflowed under the buttons, which then ate the clicks) */
+      @media (max-width: 1100px), (max-height: 820px) {
+        #upMain { inset: 64px 16px 118px 16px; gap: 10px; }
         #sidePanel { display: none; }
-        #upgradeCards { grid-template-columns: repeat(2, minmax(0, 210px)); }
-        .pcard { min-height: 360px; }
+        #upgradeCards { grid-template-columns: repeat(4, minmax(0, 220px)); gap: 10px; max-width: 940px; }
+        .pcard { min-height: 0; padding: 12px 10px 14px; }
+        .pcard .gem { width: 56px; height: 56px; margin: 6px auto 10px; }
+        .pcard .name, .pcard .desc { min-height: 0; }
+        .pcard .tier { margin: 10px auto 0; width: auto; height: auto; transform: none; border: 0; background: none; }
+        .pcard .tier > span { transform: none; font-size: 10px; }
+      }
+      @media (max-width: 700px) and (min-height: 561px) {
+        #upgradeCards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
 
       /* ——— TOUCH (phones / tablets): stick on the left, ability cluster on the right ——— */

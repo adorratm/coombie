@@ -135,18 +135,18 @@ export const DEFAULT_MODS: PlayerMods = {
 export const WEAPON_CLASSES: WeaponClassDef[] = [
   {
     id: 'assaulter',
-    name: 'Assaulter',
+    name: 'Taarruz',
     role: 'Rifle',
     weaponId: 'rifle',
     unlockLevel: 1,
     accent: 0x6ea8ff,
     icon: 'AS',
-    passiveLabel: '+8% damage',
+    passiveLabel: 'Hasar +%8',
     passive: { damageMult: 0.08 },
     ability: {
       id: 'kinetic_nova',
-      name: 'Kinetic Nova',
-      description: 'AoE shockwave around you',
+      name: 'Kinetik Nova',
+      description: 'Etrafında şok dalgası',
       kind: 'kinetic_nova',
       cooldown: 9,
       power: 8,
@@ -154,18 +154,18 @@ export const WEAPON_CLASSES: WeaponClassDef[] = [
   },
   {
     id: 'medic',
-    name: 'Field Medic',
+    name: 'Sıhhiyeci',
     role: 'SMG',
     weaponId: 'smg',
     unlockLevel: 1,
     accent: 0x38bdf8,
     icon: 'MD',
-    passiveLabel: '+10% fire rate',
+    passiveLabel: 'Ateş hızı +%10',
     passive: { fireRateMult: 0.1 },
     ability: {
       id: 'biotic_mist',
-      name: 'Biotic Mist',
-      description: 'Heal self and nearby allies',
+      name: 'Biyotik Sis',
+      description: 'Kendini ve yakındaki ekibi iyileştirir',
       kind: 'biotic_mist',
       cooldown: 11,
       power: 28,
@@ -173,18 +173,18 @@ export const WEAPON_CLASSES: WeaponClassDef[] = [
   },
   {
     id: 'breacher',
-    name: 'Breacher',
+    name: 'Kapı Kırıcı',
     role: 'Shotgun',
     weaponId: 'shotgun',
     unlockLevel: 2,
     accent: 0xfbbf24,
     icon: 'BR',
-    passiveLabel: '+12% AoE',
+    passiveLabel: 'Alan +%12',
     passive: { aoeRadiusMult: 0.12 },
     ability: {
       id: 'concussive_blast',
-      name: 'Concussive Blast',
-      description: 'Cone knockback + heavy pellets',
+      name: 'Sarsıcı Patlama',
+      description: 'Koni geri itme + ağır saçma',
       kind: 'concussive_blast',
       cooldown: 8,
       power: 4,
@@ -192,18 +192,18 @@ export const WEAPON_CLASSES: WeaponClassDef[] = [
   },
   {
     id: 'ghost',
-    name: 'Ghost',
+    name: 'Hayalet',
     role: 'Sniper',
     weaponId: 'sniper',
     unlockLevel: 3,
     accent: 0x88eeff,
     icon: 'GH',
-    passiveLabel: '+10% crit',
+    passiveLabel: 'Kritik +%10',
     passive: { critChance: 0.1 },
     ability: {
       id: 'thermal_pierce',
-      name: 'Thermal Pierce',
-      description: 'Next shots pierce + bonus damage',
+      name: 'Termal Delici',
+      description: 'Sonraki mermiler deler + ek hasar',
       kind: 'thermal_pierce',
       cooldown: 12,
       duration: 5,
@@ -212,18 +212,18 @@ export const WEAPON_CLASSES: WeaponClassDef[] = [
   },
   {
     id: 'gunner',
-    name: 'Gunner',
+    name: 'Makineli',
     role: 'LMG',
     weaponId: 'lmg',
     unlockLevel: 4,
     accent: 0x22d3ee,
     icon: 'GN',
-    passiveLabel: '+8% max HP',
+    passiveLabel: 'Azami can +%8',
     passive: { maxHpMult: 0.08 },
     ability: {
       id: 'overdrive',
-      name: 'Overdrive',
-      description: 'Massive fire-rate surge',
+      name: 'Aşırı Hız',
+      description: 'Büyük ateş hızı artışı',
       kind: 'overdrive',
       cooldown: 14,
       duration: 5,
@@ -232,18 +232,18 @@ export const WEAPON_CLASSES: WeaponClassDef[] = [
   },
   {
     id: 'alchemist',
-    name: 'Alchemist',
+    name: 'Simyacı',
     role: 'Toxin',
     weaponId: 'smg',
     unlockLevel: 5,
     accent: 0x84cc16,
     icon: 'AL',
-    passiveLabel: '4% lifesteal',
+    passiveLabel: 'Can çalma %4',
     passive: { lifesteal: 0.04 },
     ability: {
       id: 'toxin_cloud',
-      name: 'Toxin Cloud',
-      description: 'Poison zone that melts horde',
+      name: 'Zehir Bulutu',
+      description: 'Sürüyü eriten zehir alanı',
       kind: 'toxin_cloud',
       cooldown: 13,
       duration: 4,
@@ -252,18 +252,18 @@ export const WEAPON_CLASSES: WeaponClassDef[] = [
   },
   {
     id: 'engineer',
-    name: 'Engineer',
+    name: 'Mühendis',
     role: 'Support',
     weaponId: 'rifle',
     unlockLevel: 3,
     accent: 0xf97316,
     icon: 'EN',
-    passiveLabel: '+12% ability CDR',
+    passiveLabel: 'Yetenek bekleme −%12',
     passive: { abilityCdr: 0.12 },
     ability: {
       id: 'sentry_pulse',
-      name: 'Sentry Pulse',
-      description: 'Deploy a damaging pulse field',
+      name: 'Nöbetçi Darbe',
+      description: 'Hasar veren darbe alanı kurar',
       kind: 'sentry_pulse',
       cooldown: 11,
       duration: 5,
@@ -272,18 +272,18 @@ export const WEAPON_CLASSES: WeaponClassDef[] = [
   },
   {
     id: 'demolisher',
-    name: 'Demolisher',
+    name: 'Yıkıcı',
     role: 'Explosives',
     weaponId: 'shotgun',
     unlockLevel: 4,
     accent: 0xfb7185,
     icon: 'DM',
-    passiveLabel: '+15% AoE + damage',
+    passiveLabel: 'Alan ve hasar +%15',
     passive: { aoeRadiusMult: 0.15, damageMult: 0.06 },
     ability: {
       id: 'cluster_barrage',
-      name: 'Cluster Barrage',
-      description: 'Ring of delayed explosions',
+      name: 'Salkım Bombardıman',
+      description: 'Gecikmeli patlama halkası',
       kind: 'cluster_barrage',
       cooldown: 12,
       power: 5.5,
@@ -298,8 +298,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   { id: 'hero_rank_r', name: 'Nihai Ustalık [R]', description: 'R yeteneği +1 seviye: daha güçlü, geniş, sık', rarity: 'epic', kind: 'ability_boost', heroRank: 'r', icon: 'R', weight: 6 },
   {
     id: 'dmg_amp',
-    name: 'Kinetic Amplifiers',
-    description: '+12% weapon damage',
+    name: 'Kinetik Yükselteç',
+    description: 'Silah hasarı +%12',
     rarity: 'common',
     kind: 'stat',
     mods: { damageMult: 0.12 },
@@ -307,8 +307,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'servo_triggers',
-    name: 'Servo Triggers',
-    description: '+12% fire rate',
+    name: 'Servo Tetik',
+    description: 'Ateş hızı +%12',
     rarity: 'common',
     kind: 'stat',
     mods: { fireRateMult: 0.12 },
@@ -316,8 +316,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'exo_actuators',
-    name: 'Exo-Actuators',
-    description: '+8% move speed',
+    name: 'Dış İskelet',
+    description: 'Hareket hızı +%8',
     rarity: 'common',
     kind: 'stat',
     mods: { moveSpeedMult: 0.08 },
@@ -325,8 +325,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'reactive_plate',
-    name: 'Reactive Plating',
-    description: '+18 armor (damage reduction)',
+    name: 'Reaktif Zırh',
+    description: '+18 zırh (hasar azaltma)',
     rarity: 'common',
     kind: 'stat',
     mods: { armorFlat: 18 },
@@ -334,8 +334,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'vital_weave',
-    name: 'Vital Weave',
-    description: '+10% max HP',
+    name: 'Can Örgüsü',
+    description: 'Azami can +%10',
     rarity: 'common',
     kind: 'stat',
     mods: { maxHpMult: 0.1 },
@@ -343,8 +343,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'threat_optics',
-    name: 'Threat Optics',
-    description: '+8% crit chance',
+    name: 'Tehdit Optiği',
+    description: 'Kritik şansı +%8',
     rarity: 'rare',
     kind: 'stat',
     mods: { critChance: 0.08 },
@@ -352,8 +352,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'hemophage',
-    name: 'Hemophage Protocol',
-    description: '+5% lifesteal',
+    name: 'Kan Emici Protokol',
+    description: 'Can çalma +%5',
     rarity: 'rare',
     kind: 'stat',
     mods: { lifesteal: 0.05 },
@@ -361,8 +361,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'blast_focus',
-    name: 'Blast Focusing',
-    description: '+20% ability / AoE radius',
+    name: 'Patlama Odağı',
+    description: 'Yetenek / alan yarıçapı +%20',
     rarity: 'rare',
     kind: 'stat',
     mods: { aoeRadiusMult: 0.2 },
@@ -370,8 +370,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'neuro_coolant',
-    name: 'Neuro Coolant',
-    description: '-15% ability cooldown',
+    name: 'Nöro Soğutucu',
+    description: 'Yetenek bekleme süresi −%15',
     rarity: 'rare',
     kind: 'ability_boost',
     abilityCdrFlat: 0.15,
@@ -380,8 +380,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'ability_surge',
-    name: 'Ability Surge',
-    description: '+25% ability power',
+    name: 'Yetenek Dalgası',
+    description: 'Yetenek gücü +%25',
     rarity: 'rare',
     kind: 'ability_boost',
     abilityPowerMult: 0.25,
@@ -389,8 +389,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'xp_antenna',
-    name: 'XP Antenna',
-    description: '+15% XP gain',
+    name: 'XP Anteni',
+    description: 'XP kazancı +%15',
     rarity: 'rare',
     kind: 'stat',
     mods: { xpMult: 0.15 },
@@ -398,8 +398,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'unlock_shotgun',
-    name: 'Authorize Breacher Kit',
-    description: 'Unlock Combat Shotgun class',
+    name: 'Kapı Kırıcı Kiti',
+    description: 'Savaş Pompalısı sınıfını açar',
     rarity: 'epic',
     kind: 'unlock_weapon',
     unlockWeapon: 'shotgun',
@@ -407,8 +407,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'unlock_sniper',
-    name: 'Authorize Ghost Kit',
-    description: 'Unlock Coil Marksman class',
+    name: 'Hayalet Kiti',
+    description: 'Bobin Nişancı sınıfını açar',
     rarity: 'epic',
     kind: 'unlock_weapon',
     unlockWeapon: 'sniper',
@@ -416,8 +416,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'unlock_lmg',
-    name: 'Authorize Gunner Kit',
-    description: 'Unlock LMG class',
+    name: 'Makineli Kiti',
+    description: 'Hafif makineli sınıfını açar',
     rarity: 'epic',
     kind: 'unlock_weapon',
     unlockWeapon: 'lmg',
@@ -425,7 +425,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'mastery_rifle',
-    name: 'Rifle Doctrine',
+    name: 'Tüfek Doktrini',
     description: 'Piyade Tüfeği +%18 hasar',
     rarity: 'rare',
     kind: 'weapon_mastery',
@@ -435,8 +435,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'mastery_smg',
-    name: 'SMG Doctrine',
-    description: 'SMG +15% fire rate',
+    name: 'Hafif Makineli Doktrini',
+    description: 'Hafif makineli ateş hızı +%15',
     rarity: 'rare',
     kind: 'weapon_mastery',
     masteryWeapon: 'smg',
@@ -445,8 +445,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'mastery_shotgun',
-    name: 'Breacher Doctrine',
-    description: 'Shotgun +20% damage',
+    name: 'Pompalı Doktrini',
+    description: 'Pompalı hasarı +%20',
     rarity: 'rare',
     kind: 'weapon_mastery',
     masteryWeapon: 'shotgun',
@@ -455,8 +455,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'mastery_pistol',
-    name: 'Sidearm Doctrine',
-    description: 'Pistol +20% fire rate',
+    name: 'Tabanca Doktrini',
+    description: 'Tabanca ateş hızı +%20',
     rarity: 'rare',
     kind: 'weapon_mastery',
     masteryWeapon: 'pistol',
@@ -465,7 +465,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'mastery_knife',
-    name: 'Blade Doctrine',
+    name: 'Bıçak Doktrini',
     description: 'Savaş Bıçağı +%25 hasar',
     rarity: 'rare',
     kind: 'weapon_mastery',
@@ -475,7 +475,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'mastery_bat',
-    name: 'Riot Doctrine',
+    name: 'Sopa Doktrini',
     description: 'Beyzbol Sopası +%22 hasar',
     rarity: 'rare',
     kind: 'weapon_mastery',
@@ -485,8 +485,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'mastery_axe',
-    name: 'Cleaver Doctrine',
-    description: 'Fire Axe +28% damage',
+    name: 'Balta Doktrini',
+    description: 'Yangın Baltası hasarı +%28',
     rarity: 'rare',
     kind: 'weapon_mastery',
     masteryWeapon: 'axe',
@@ -495,7 +495,7 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'unlock_bat',
-    name: 'Authorize Riot Kit',
+    name: 'Sopa Kiti',
     description: 'Beyzbol Sopası açılır',
     rarity: 'epic',
     kind: 'unlock_weapon',
@@ -504,8 +504,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'unlock_axe',
-    name: 'Authorize Cleaver Kit',
-    description: 'Unlock Fire Axe',
+    name: 'Balta Kiti',
+    description: 'Yangın Baltası açılır',
     rarity: 'epic',
     kind: 'unlock_weapon',
     unlockWeapon: 'axe',
@@ -513,8 +513,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'melee_tempo',
-    name: 'Adrenaline Swing',
-    description: '+15% fire rate (melee cadence)',
+    name: 'Adrenalin Savuruşu',
+    description: 'Saldırı hızı +%15 (yakın dövüş)',
     rarity: 'common',
     kind: 'stat',
     mods: { fireRateMult: 0.15 },
@@ -522,8 +522,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'command_beacon',
-    name: 'Command Beacon',
-    description: '+10% damage & +6% move',
+    name: 'Komuta İşareti',
+    description: 'Hasar +%10, hareket +%6',
     rarity: 'epic',
     kind: 'stat',
     mods: { damageMult: 0.1, moveSpeedMult: 0.06 },
@@ -533,8 +533,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   // ——— Class evolutions (YAZ-style unique ability power-ups) ———
   {
     id: 'evo_nova_overload',
-    name: 'Kinetic Nova: Overload',
-    description: 'Nova radius and power surge',
+    name: 'Kinetik Nova: Aşırı Yük',
+    description: 'Nova alanı ve gücü artar',
     rarity: 'epic',
     kind: 'ability_boost',
     classId: 'assaulter',
@@ -545,8 +545,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_mist_cascade',
-    name: 'Biotic Mist: Cascade',
-    description: 'Stronger heals, wider mist',
+    name: 'Biyotik Sis: Çağlayan',
+    description: 'Daha güçlü iyileştirme, daha geniş sis',
     rarity: 'epic',
     kind: 'ability_boost',
     classId: 'medic',
@@ -557,8 +557,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_concussive_breach',
-    name: 'Concussive: Breach Charge',
-    description: 'Blast damage and knockback up',
+    name: 'Sarsıcı: Kırma Şarjı',
+    description: 'Patlama hasarı ve geri itme artar',
     rarity: 'epic',
     kind: 'ability_boost',
     classId: 'breacher',
@@ -569,8 +569,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_thermal_rail',
-    name: 'Thermal Pierce: Rail',
-    description: 'More pierce shots, higher crit',
+    name: 'Termal Delici: Ray',
+    description: 'Daha çok delici mermi, daha yüksek kritik',
     rarity: 'epic',
     kind: 'ability_boost',
     classId: 'ghost',
@@ -581,8 +581,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_overdrive_redline',
-    name: 'Overdrive: Redline',
-    description: 'Longer overdrive, more fire rate',
+    name: 'Aşırı Hız: Kırmızı Çizgi',
+    description: 'Daha uzun süre, daha çok ateş hızı',
     rarity: 'epic',
     kind: 'ability_boost',
     classId: 'gunner',
@@ -593,8 +593,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_toxin_virulent',
-    name: 'Toxin Cloud: Virulent',
-    description: 'Cloud DPS and duration climb',
+    name: 'Zehir Bulutu: Öldürücü',
+    description: 'Bulut hasarı ve süresi artar',
     rarity: 'epic',
     kind: 'ability_boost',
     classId: 'alchemist',
@@ -605,8 +605,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_sentry_fortify',
-    name: 'Sentry Pulse: Fortify',
-    description: 'Pulse lasts longer, hits harder',
+    name: 'Nöbetçi Darbe: Tahkimat',
+    description: 'Darbe daha uzun sürer, daha sert vurur',
     rarity: 'epic',
     kind: 'ability_boost',
     classId: 'engineer',
@@ -618,8 +618,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_cluster_apocalypse',
-    name: 'Cluster Barrage: Apocalypse',
-    description: 'More blasts, bigger radius',
+    name: 'Salkım Bombardıman: Kıyamet',
+    description: 'Daha çok patlama, daha geniş alan',
     rarity: 'epic',
     kind: 'ability_boost',
     classId: 'demolisher',
@@ -631,8 +631,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   // ——— On-hit status packs ———
   {
     id: 'status_incendiary',
-    name: 'Incendiary Tips',
-    description: '25% chance to burn on hit',
+    name: 'Yakıcı Uçlar',
+    description: 'İsabette %25 yakma şansı',
     rarity: 'rare',
     kind: 'status',
     icon: 'BR',
@@ -641,8 +641,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'status_venom',
-    name: 'Venom Magazine',
-    description: '25% chance to toxin on hit',
+    name: 'Zehirli Şarjör',
+    description: 'İsabette %25 zehirleme şansı',
     rarity: 'rare',
     kind: 'status',
     icon: 'TX',
@@ -651,8 +651,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'status_cryo',
-    name: 'Cryo Coating',
-    description: '20% chance to chill on hit',
+    name: 'Kriyo Kaplama',
+    description: 'İsabette %20 dondurma şansı',
     rarity: 'rare',
     kind: 'status',
     icon: 'CR',
@@ -661,8 +661,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'status_catalyst',
-    name: 'Catalyst Core',
-    description: '+35% status effect power',
+    name: 'Katalizör Çekirdek',
+    description: 'Durum etkisi gücü +%35',
     rarity: 'rare',
     kind: 'status',
     mods: { statusPower: 0.35 },
@@ -671,8 +671,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   // ——— Synergies (gated by prior status) ———
   {
     id: 'syn_combustion',
-    name: 'Combustion Loop',
-    description: 'Burn builds: +8% crit, +20% status power',
+    name: 'Yanma Döngüsü',
+    description: 'Yanma için: kritik +%8, durum gücü +%20',
     rarity: 'epic',
     kind: 'synergy',
     icon: 'CB',
@@ -682,8 +682,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'syn_neuroshock',
-    name: 'Neuroshock',
-    description: 'Toxin builds: +10% fire rate, +toxin chance',
+    name: 'Nöroşok',
+    description: 'Zehir için: ateş hızı +%10, zehir şansı artar',
     rarity: 'epic',
     kind: 'synergy',
     icon: 'NS',
@@ -693,8 +693,8 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'syn_glacial',
-    name: 'Glacial Pressure',
-    description: 'Chill builds: +armor, stronger chill uptime',
+    name: 'Buzul Baskısı',
+    description: 'Dondurma için: zırh ve dondurma süresi artar',
     rarity: 'epic',
     kind: 'synergy',
     icon: 'GL',
@@ -705,13 +705,13 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   // ——— Weapon evolutions (once per base weapon) ———
   {
     id: 'evo_weapon_rifle',
-    name: 'Pulse Lance',
+    name: 'Darbe Mızrağı',
     description: 'Piyade Tüfeği evrimi: +%28 hasar, yakıcı mermi',
     rarity: 'epic',
     kind: 'evolution',
     icon: 'PL',
     evolveWeapon: 'rifle',
-    evolutionName: 'Pulse Lance',
+    evolutionName: 'Darbe Mızrağı',
     masteryWeapon: 'rifle',
     masteryDamage: 0.28,
     weaponStatus: 'burn',
@@ -720,13 +720,13 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_weapon_smg',
-    name: 'Neuro Storm',
-    description: 'Evolve SMG: +22% fire rate, toxin spray',
+    name: 'Nöro Fırtına',
+    description: 'Hafif makineli evrimi: ateş hızı +%22, zehirli mermi',
     rarity: 'epic',
     kind: 'evolution',
     icon: 'NS',
     evolveWeapon: 'smg',
-    evolutionName: 'Neuro Storm',
+    evolutionName: 'Nöro Fırtına',
     masteryWeapon: 'smg',
     masteryFireRate: 0.22,
     weaponStatus: 'toxin',
@@ -735,13 +735,13 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_weapon_shotgun',
-    name: 'Frost Breach',
-    description: 'Evolve Shotgun: +25% dmg, chill pellets',
+    name: 'Buz Kırıcı',
+    description: 'Pompalı evrimi: hasar +%25, dondurucu saçma',
     rarity: 'epic',
     kind: 'evolution',
     icon: 'FB',
     evolveWeapon: 'shotgun',
-    evolutionName: 'Frost Breach',
+    evolutionName: 'Buz Kırıcı',
     masteryWeapon: 'shotgun',
     masteryDamage: 0.25,
     weaponStatus: 'chill',
@@ -750,13 +750,13 @@ export const UPGRADE_CARDS: UpgradeCardDef[] = [
   },
   {
     id: 'evo_weapon_axe',
-    name: 'Infernal Cleaver',
-    description: 'Evolve Fire Axe: +32% dmg, heavy burn',
+    name: 'Cehennem Baltası',
+    description: 'Yangın Baltası evrimi: hasar +%32, ağır yanma',
     rarity: 'epic',
     kind: 'evolution',
     icon: 'IC',
     evolveWeapon: 'axe',
-    evolutionName: 'Infernal Cleaver',
+    evolutionName: 'Cehennem Baltası',
     masteryWeapon: 'axe',
     masteryDamage: 0.32,
     weaponStatus: 'burn',
@@ -1228,77 +1228,77 @@ export function skipUpgrade(state: ProgressState): boolean {
   return true;
 }
 
-export function cardStatLines(card: UpgradeCardDef): Array<{ label: string; before: string; after: string }> {
+/** What the hero has now, so a card shows "current >> after" (stacks add up). */
+export interface CardStatContext {
+  mods: PlayerMods;
+  abilityPowerMult: number;
+  masteries: ReadonlyArray<{ weaponId: WeaponId; damage: number; fireRate: number }>;
+}
+
+const MOD_LABEL: Partial<Record<keyof PlayerMods, string>> = {
+  damageMult: 'Hasar',
+  fireRateMult: 'Ateş hızı',
+  moveSpeedMult: 'Hareket',
+  maxHpMult: 'Can',
+  critChance: 'Kritik',
+  armorFlat: 'Zırh',
+  xpMult: 'XP',
+  lifesteal: 'Can çalma',
+  aoeRadiusMult: 'Alan',
+  abilityCdr: 'Bekleme −',
+  burnChance: 'Yanma şansı',
+  toxinChance: 'Zehir şansı',
+  chillChance: 'Dondurma şansı',
+  statusPower: 'Durum gücü',
+};
+
+export function cardStatLines(card: UpgradeCardDef, ctx?: CardStatContext): Array<{ label: string; before: string; after: string }> {
   const lines: Array<{ label: string; before: string; after: string }> = [];
   const pct = (v: number) => `${Math.round(v * 100)}%`;
-  if (card.mods?.damageMult) {
-    lines.push({ label: 'Hasar', before: '100%', after: pct(1 + card.mods.damageMult) });
-  }
-  if (card.mods?.fireRateMult) {
-    lines.push({ label: 'Ateş hızı', before: '100%', after: pct(1 + card.mods.fireRateMult) });
-  }
-  if (card.mods?.moveSpeedMult) {
-    lines.push({ label: 'Hareket', before: '100%', after: pct(1 + card.mods.moveSpeedMult) });
-  }
-  if (card.mods?.maxHpMult) {
-    lines.push({ label: 'Can', before: '100%', after: pct(1 + card.mods.maxHpMult) });
-  }
-  if (card.mods?.critChance) {
-    lines.push({
-      label: 'Kritik',
-      before: '12%',
-      after: `${Math.round((0.12 + card.mods.critChance) * 100)}%`,
-    });
-  }
-  if (card.mods?.armorFlat) {
-    lines.push({ label: 'Zırh', before: '0', after: `+${card.mods.armorFlat}` });
-  }
-  if (card.mods?.xpMult) {
-    lines.push({ label: 'XP', before: '100%', after: pct(1 + card.mods.xpMult) });
-  }
-  if (card.mods?.lifesteal) {
-    lines.push({ label: 'Can çal', before: '0%', after: pct(card.mods.lifesteal) });
-  }
-  if (card.mods?.aoeRadiusMult) {
-    lines.push({ label: 'Alan', before: '100%', after: pct(1 + card.mods.aoeRadiusMult) });
+  const defaults = DEFAULT_MODS;
+  if (card.mods) {
+    for (const [k, v] of Object.entries(card.mods) as [keyof PlayerMods, number][]) {
+      if (!v || !MOD_LABEL[k]) continue;
+      const cur = ctx ? ctx.mods[k] : defaults[k];
+      const additive = ADDITIVE_MOD_KEYS.has(k);
+      const next = additive ? cur + v : cur * (1 + v);
+      if (k === 'armorFlat') lines.push({ label: MOD_LABEL[k]!, before: String(Math.round(cur)), after: String(Math.round(next)) });
+      else lines.push({ label: MOD_LABEL[k]!, before: pct(cur), after: pct(next) });
+    }
   }
   if (card.abilityPowerMult) {
-    lines.push({ label: 'Yetenek', before: '100%', after: pct(card.abilityPowerMult) });
+    const cur = ctx?.abilityPowerMult ?? 1;
+    lines.push({ label: 'Yetenek gücü', before: pct(cur), after: pct(cur * (1 + card.abilityPowerMult)) });
   }
   if (card.abilityCdrFlat) {
-    lines.push({ label: 'CD', before: '0%', after: `-${Math.round(card.abilityCdrFlat * 100)}%` });
+    const cur = ctx?.mods.abilityCdr ?? 0;
+    lines.push({ label: 'Bekleme −', before: pct(cur), after: pct(cur + card.abilityCdrFlat) });
   }
-  if (card.masteryDamage) {
-    lines.push({ label: 'Hasar', before: '100%', after: pct(1 + card.masteryDamage) });
-  }
-  if (card.masteryFireRate) {
-    lines.push({ label: 'Ateş hızı', before: '100%', after: pct(1 + card.masteryFireRate) });
+  if (card.masteryWeapon && (card.masteryDamage || card.masteryFireRate)) {
+    const m = ctx?.masteries.find((x) => x.weaponId === card.masteryWeapon);
+    if (card.masteryDamage) lines.push({ label: 'Silah hasarı', before: pct(1 + (m?.damage ?? 0)), after: pct(1 + (m?.damage ?? 0) + card.masteryDamage) });
+    if (card.masteryFireRate) lines.push({ label: 'Silah ateş hızı', before: pct(1 + (m?.fireRate ?? 0)), after: pct(1 + (m?.fireRate ?? 0) + card.masteryFireRate) });
   }
   if (card.unlockWeapon) {
-    lines.push({ label: 'Silah', before: '—', after: card.unlockWeapon.toUpperCase() });
+    lines.push({ label: 'Silah', before: '—', after: weaponById(card.unlockWeapon).name });
   }
   if (card.evolveWeapon) {
-    lines.push({ label: 'Evrim', before: card.evolveWeapon.toUpperCase(), after: card.evolutionName ?? card.name });
-  }
-  if (card.mods?.burnChance) {
-    lines.push({ label: 'Yanma', before: '0%', after: pct(card.mods.burnChance) });
-  }
-  if (card.mods?.toxinChance) {
-    lines.push({ label: 'Toksin', before: '0%', after: pct(card.mods.toxinChance) });
-  }
-  if (card.mods?.chillChance) {
-    lines.push({ label: 'Donma', before: '0%', after: pct(card.mods.chillChance) });
-  }
-  if (card.mods?.statusPower) {
-    lines.push({ label: 'Status', before: '100%', after: pct(1 + card.mods.statusPower) });
+    lines.push({ label: 'Evrim', before: weaponById(card.evolveWeapon).name, after: card.evolutionName ?? card.name });
   }
   if (card.weaponStatus) {
-    lines.push({
-      label: 'Silah DoT',
-      before: '—',
-      after: `${card.weaponStatus.toUpperCase()} ${Math.round((card.weaponStatusChance ?? 0.35) * 100)}%`,
-    });
+    const tr: Record<StatusId, string> = { burn: 'Yanma', toxin: 'Zehir', chill: 'Dondurma' };
+    lines.push({ label: 'Silah etkisi', before: '—', after: `${tr[card.weaponStatus] ?? card.weaponStatus} %${Math.round((card.weaponStatusChance ?? 0.35) * 100)}` });
   }
+  if (card.runSkill) {
+    const lv = card.runSkill.level;
+    if (card.runSkill.kind === 'evo') lines.push({ label: 'Evrim', before: 'Sv 5', after: 'EVRİM' });
+    else lines.push({ label: card.runSkill.kind === 'passive' ? 'Pasif seviye' : 'Seviye', before: lv <= 1 ? '—' : `Sv ${lv - 1}`, after: `Sv ${lv}` });
+  }
+  if (card.weaponLevel) {
+    const lv = card.weaponLevel.level;
+    lines.push({ label: 'Silah seviyesi', before: lv <= 1 ? 'Sv 0' : `Sv ${lv - 1}`, after: `Sv ${lv}` });
+  }
+  if (card.heroRank) lines.push({ label: `${card.heroRank.toUpperCase()} yeteneği`, before: 'Sv', after: '+1' });
   if (lines.length === 0) {
     lines.push({ label: 'Etki', before: '—', after: 'Aktif' });
   }

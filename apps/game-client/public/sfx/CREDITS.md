@@ -34,3 +34,11 @@ No attribution is legally required; credits kept here for provenance.
 ## Processing
 
 Samples were converted to mono Ogg Vorbis (44.1 kHz) and loudness-normalized with ffmpeg for in-game use. Original packs remain CC0; derivatives inherit CC0.
+
+## Radio voice lines (duster / dolmus / trafo calls, gunship sortie lines)
+
+- `voice/duster_*.ogg`, `voice/dolmus_*.ogg`, `voice/trafo_*.ogg`, `voice/hover_*.ogg`
+- Synthesized with Piper TTS, voice `tr_TR-dfki-medium` (https://huggingface.co/rhasspy/piper-voices)
+- Voice dataset: DFKI MaryTTS Turkish (https://github.com/marytts/dfki-ot-data/), licensed **CC BY-NC-SA 4.0**
+- Radio processing (band-pass, compression, static) with ffmpeg
+- Note: non-commercial licence — re-record or replace these lines before any paid release.

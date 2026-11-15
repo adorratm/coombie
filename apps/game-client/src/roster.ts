@@ -48,7 +48,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     gender: 'male',
     icon: 'IC',
     role: 'Assault',
-    specialLabel: 'Kinetic Nova',
+    specialLabel: 'Kinetik Nova',
   },
   {
     id: 'valkyrie',
@@ -63,7 +63,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     gender: 'female',
     icon: 'VK',
     role: 'Medic',
-    specialLabel: 'Biotic Mist',
+    specialLabel: 'Biyotik Sis',
   },
   {
     id: 'breaker',
@@ -78,7 +78,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     gender: 'male',
     icon: 'BR',
     role: 'Breacher',
-    specialLabel: 'Concussive Blast',
+    specialLabel: 'Sarsıcı Patlama',
   },
   {
     id: 'ghost',
@@ -93,7 +93,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     gender: 'female',
     icon: 'GH',
     role: 'Recon',
-    specialLabel: 'Thermal Pierce',
+    specialLabel: 'Termal Delici',
   },
   {
     id: 'tox',
@@ -108,7 +108,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     gender: 'female',
     icon: 'TX',
     role: 'Alchemist',
-    specialLabel: 'Toxin Cloud',
+    specialLabel: 'Zehir Bulutu',
   },
   {
     id: 'spark',
@@ -123,7 +123,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     gender: 'female',
     icon: 'SP',
     role: 'Engineer',
-    specialLabel: 'Sentry Pulse',
+    specialLabel: 'Nöbetçi Darbe',
   },
   {
     id: 'warden',
@@ -138,7 +138,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     gender: 'male',
     icon: 'WD',
     role: 'Gunner',
-    specialLabel: 'Overdrive',
+    specialLabel: 'Aşırı Hız',
   },
   {
     id: 'havoc',
@@ -153,7 +153,7 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     gender: 'male',
     icon: 'HV',
     role: 'Demolisher',
-    specialLabel: 'Cluster Barrage',
+    specialLabel: 'Salkım Bombardıman',
   },
 ];
 

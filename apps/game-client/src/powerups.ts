@@ -46,6 +46,12 @@ export interface IndicatorSrc {
   urgent?: boolean;
   /** ground ring radius for objectives that are a place (co-op guests draw it) */
   radius?: number;
+  /** keep the label (name) visible on screen too, not only the distance */
+  named?: boolean;
+  /** marker height above the position (default 1.4) */
+  y?: number;
+  /** 0..1 progress bar under the marker (revive) */
+  progress?: number;
 }
 
 const caseGeo = new THREE.BoxGeometry(0.75, 0.32, 0.5);

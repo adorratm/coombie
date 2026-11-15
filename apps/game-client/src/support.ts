@@ -702,8 +702,10 @@ export class SupportCalls {
    */
   heliHover(T: THREE.Vector3, lv: number, evo: boolean, power: number): void {
     const P = this.ctx.player.root.position;
-    this.ctx.say(HOVER_LINES[Math.floor(Math.random() * HOVER_LINES.length)]!, 'radio');
+    const line = Math.floor(Math.random() * HOVER_LINES.length);
+    this.ctx.say(HOVER_LINES[line]!, 'radio');
     this.ctx.radio();
+    this.ctx.sample(`v_heli_hover_${line}`, { bus: 'player', gain: 0.95 });
     const away = T.clone().sub(P).setY(0);
     if (away.lengthSq() < 1) away.set(0, 0, -1);
     away.normalize();

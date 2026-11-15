@@ -27,6 +27,7 @@ import {
   currentMission,
   setMission,
   type AbilitySlot,
+  type HeroLoadout,
 } from './loadout';
 import { OPERATIVE_ROSTER, rosterById, type OperativeId } from './roster';
 import { WEAPONS, attachWeaponMesh, weaponByVariant, weaponVariantId, type WeaponDef, type WeaponId } from './weapons';
@@ -237,6 +238,12 @@ const CSS = /* css */ `
 #lobby .wdet .wact { display: flex; gap: 8px; margin-top: 12px; }
 #lobby .wdet .wact .btn { flex: 1 1 auto; width: 100%; padding: 10px; font-size: 14px; }
 #lobby .btn.buy { background: var(--gold); color: #1a1406; border-color: var(--gold); }
+#lobby .buybar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--gold); border-radius: 10px; background: rgba(20, 16, 6, 0.94); box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+#lobby .buybar > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#lobby .buybar small { font-size: 10px; letter-spacing: .18em; color: var(--gold); }
+#lobby .buybar b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lobby .buybar span { font-size: 11px; opacity: .75; }
+#lobby .buybar .btn { white-space: nowrap; }
 /* slots */
 #lobby .wslots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
 #lobby .wslot { position: relative; height: 62px; border: 1px solid var(--line); background: rgba(14,18,22,0.85); cursor: pointer; padding: 0; color: inherit; overflow: hidden; }
@@ -454,6 +461,8 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
   let famSel: WeaponId | null = null;
   let selSlot = 0;
   let previewWeapon: string | null = null;
+  /** locker item being tried on before buying (shown on the avatar, bought with the button) */
+  let previewItem: { key: string; cost: number; name: string; apply: (h: HeroLoadout) => void } | null = null;
 
   // ---------------------------------------------------------------- 3D stage
   const stage = $('lbStage');
@@ -537,6 +546,11 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     const p = loadProfile();
     const hero = rosterById(p.hero);
     const h = heroLoadout(p.hero);
+    if (previewItem) {
+      const tryOn = structuredClone(h);
+      previewItem.apply(tryOn);
+      Object.assign(h, tryOn);
+    }
     const next = await createVrmAvatar({
       url: hero.avatarUrl,
       accentColor: hero.accent,
@@ -644,6 +658,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
           selectHero(h.id);
           selSlot = 0;
           previewWeapon = null;
+          previewItem = null;
           renderAll();
           void rebuildAvatar();
         };
@@ -678,7 +693,15 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     const h = heroLoadout(heroId);
     const sec = (t: string) => Object.assign(document.createElement('h3'), { textContent: t });
     const grid = (two = false) => Object.assign(document.createElement('div'), { className: `cards${two ? ' two' : ''}` });
-
+    /** owned → equip now; not owned → try it on, the bar below buys it */
+    const pick = (key: string, cost: number, name: string, apply: (x: HeroLoadout) => void) => {
+      if (owns(key)) {
+        previewItem = null;
+        updateHero(heroId, apply);
+      } else previewItem = previewItem?.key === key ? null : { key, cost, name, apply };
+      renderAll();
+      void rebuildAvatar();
+    };
     panel.append(sec('Kamuflaj / Kostüm'));
     const g1 = grid();
     for (const c of COSTUMES) {
@@ -686,17 +709,13 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
       const on = h.costume === c.id;
       g1.append(
         card({
-          img: thumbImg(costumeSwatch(c.primary, c.secondary, c.glow)),
+          img: thumbImg(costumeSwatch(c.primary, c.secondary, c.glow, c)),
           picCls: 'sw',
           name: c.name,
           ...priceStatus(owns(key), on, c.cost),
           on,
-          onClick: () => {
-            if (!buy(key, c.cost, c.name)) return;
-            updateHero(heroId, (x) => (x.costume = c.id));
-            renderAll();
-            void rebuildAvatar();
-          },
+          sel: previewItem?.key === key,
+          onClick: () => pick(key, c.cost, c.name, (x) => (x.costume = c.id)),
         }),
       );
     }
@@ -713,7 +732,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
         status: h.backpack === 0 ? 'TAKILI' : 'SAHİP',
         statusCls: h.backpack === 0 ? 'eq' : 'own',
         on: h.backpack === 0,
-        onClick: () => (updateHero(heroId, (x) => (x.backpack = 0)), renderAll(), void rebuildAvatar()),
+        onClick: () => ((previewItem = null), updateHero(heroId, (x) => (x.backpack = 0)), renderAll(), void rebuildAvatar()),
       }),
     );
     for (const bp of BACKPACKS) {
@@ -728,12 +747,8 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
           ...priceStatus(owns(key), on, bp.cost),
           on,
           tier: bp.tier + 1,
-          onClick: () => {
-            if (!buy(key, bp.cost, bp.name)) return;
-            updateHero(heroId, (x) => (x.backpack = bp.tier));
-            renderAll();
-            void rebuildAvatar();
-          },
+          sel: previewItem?.key === key,
+          onClick: () => pick(key, bp.cost, bp.name, (x) => (x.backpack = bp.tier)),
         }),
       );
     }
@@ -752,20 +767,45 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
           desc: a.desc,
           ...priceStatus(owns(key), on, a.cost),
           on,
-          onClick: () => {
-            if (!buy(key, a.cost, a.name)) return;
-            updateHero(heroId, (x) => {
+          sel: previewItem?.key === key,
+          onClick: () =>
+            pick(key, a.cost, a.name, (x) => {
               // one item per slot (a helmet replaces the headlamp, etc.)
               const sameSlot = new Set(ACCESSORIES.filter((o) => o.slot === a.slot).map((o) => o.id));
               x.accessories = on ? x.accessories.filter((v) => v !== a.id) : [...x.accessories.filter((v) => !sameSlot.has(v)), a.id];
-            });
-            renderAll();
-            void rebuildAvatar();
-          },
+            }),
         }),
       );
     }
     panel.append(g3);
+  };
+
+  /** Buy bar for the item being tried on (locker steps). */
+  const buyBar = (): HTMLElement | null => {
+    if (!previewItem || owns(previewItem.key)) return null;
+    const heroId = loadProfile().hero;
+    const it = previewItem;
+    const bar = document.createElement('div');
+    bar.className = 'buybar';
+    const short = credits() < it.cost;
+    bar.innerHTML = `<div><small>ÖNİZLEME</small><b>${it.name}</b><span>${short ? `Yetersiz kredi · ${cr(it.cost - credits())} eksik` : 'Karakterin üzerinde deniyorsun'}</span></div>`;
+    const ok = Object.assign(document.createElement('button'), { type: 'button', className: 'btn buy', textContent: `SATIN AL · ${cr(it.cost)}` });
+    ok.disabled = short;
+    ok.onclick = () => {
+      if (!buy(it.key, it.cost, it.name)) return;
+      updateHero(heroId, it.apply);
+      previewItem = null;
+      renderAll();
+      void rebuildAvatar();
+    };
+    const no = Object.assign(document.createElement('button'), { type: 'button', className: 'btn', textContent: 'VAZGEÇ' });
+    no.onclick = () => {
+      previewItem = null;
+      renderAll();
+      void rebuildAvatar();
+    };
+    bar.append(ok, no);
+    return bar;
   };
 
   const renderArmory = (panel: HTMLElement) => {
@@ -1151,6 +1191,10 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
 
   const go = (i: number) => {
     achOpen = false;
+    if (previewItem) {
+      previewItem = null;
+      void rebuildAvatar();
+    }
     step = Math.max(0, Math.min(STEPS.length - 1, i));
     $('lbPanel').scrollTop = 0;
     renderAll();
@@ -1177,6 +1221,10 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     else if (id === 'mode') (renderMission(panel), keep(2, 99));
     else if (id === 'costume') (renderLocker(panel), keep(0, 2));
     else if (id === 'gear') (renderLocker(panel), keep(2, 99));
+    if (!achOpen && (id === 'costume' || id === 'gear')) {
+      const bb = buyBar();
+      if (bb) panel.prepend(bb);
+    }
     else if (id === 'weapons') renderArmory(panel);
     else if (id === 'skills') renderSkills(panel);
     else if (id === 'tree') renderTree(panel);

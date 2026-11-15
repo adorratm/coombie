@@ -23,34 +23,85 @@ const HEAD = /* glsl */ `
 varying vec3 vCzp;
 uniform vec3 uCPrim;
 uniform vec3 uCSec;
+uniform vec3 uCAcc;
+uniform vec3 uCDark;
 uniform vec3 uCGlow;
 uniform float uCStr;
 uniform float uCNeck;
+uniform float uCPat;
+uniform float uCUnit;
+uniform vec3 uCUp;
+float cHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float cNoise(vec3 x) {
+  vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(cHash(i), cHash(i + vec3(1,0,0)), f.x), mix(cHash(i + vec3(0,1,0)), cHash(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(cHash(i + vec3(0,0,1)), cHash(i + vec3(1,0,1)), f.x), mix(cHash(i + vec3(0,1,1)), cHash(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+float cFbm(vec3 p) { return cNoise(p) * 0.6 + cNoise(p * 2.03 + 7.1) * 0.3 + cNoise(p * 4.1 + 3.7) * 0.1; }
+/* pattern: 0 solid two-tone, 1 woodland, 2 desert, 3 digital, 4 tiger, 5 arctic, 6 urban */
+vec3 camo(vec3 p) {
+  if (uCPat < 0.5) return uCPrim;
+  if (uCPat > 2.5 && uCPat < 3.5) p = floor(p * 3.2) / 3.2; // digital: square pixels
+  float a = cFbm(p * 0.9);
+  float b = cFbm(p * 1.6 + vec3(13.0, 5.0, 2.0));
+  vec3 c = uCPrim;
+  if (uCPat > 3.5 && uCPat < 4.5) {
+    // tiger stripes: wavy horizontal bands
+    float st = sin(dot(p, uCUp) * 7.0 + a * 5.0 + p.x * 0.8 + p.z * 0.8);
+    c = mix(uCPrim, uCSec, step(0.55, b));
+    c = mix(c, uCDark, smoothstep(0.35, 0.6, st));
+    return c;
+  }
+  float edge = uCPat > 2.5 && uCPat < 3.5 ? 0.0 : 0.035;
+  c = mix(c, uCSec, smoothstep(0.5 - edge, 0.5 + edge, a));
+  c = mix(c, uCAcc, smoothstep(0.58 - edge, 0.58 + edge, b) * (1.0 - smoothstep(0.62, 0.66, a)));
+  c = mix(c, uCDark, smoothstep(0.7 - edge, 0.7 + edge, cFbm(p * 1.2 + vec3(4.0, 9.0, 1.0))));
+  return c;
+}
 `;
 
 const BODY = /* glsl */ `
 {
   vec3 c = diffuseColor.rgb;
   float lum = dot(c, vec3(0.299, 0.587, 0.114));
-  float skin = clamp((c.r - c.b) * 3.2, 0.0, 1.0) * clamp((c.r - c.g) * 7.0, 0.0, 1.0) * step(0.12, lum);
-  float body = 1.0 - smoothstep(uCNeck - 4.0, uCNeck + 2.0, vCzp.y);
-  float cloth = (1.0 - skin) * body;
-  vec3 tint = mix(uCSec, uCPrim, smoothstep(0.05, 0.42, lum)) * (0.78 + lum * 0.9);
+  float mx = max(c.r, max(c.g, c.b));
+  float chroma = (c.r - c.b) / max(mx, 0.04);
+  float hue = (c.r - c.g) / max(c.r - c.b, 0.02);
+  // skin: warm, moderately saturated, hue ~ 15-35 deg (khaki / olive cloth falls outside)
+  float skin = smoothstep(0.12, 0.2, chroma) * (1.0 - smoothstep(0.62, 0.75, chroma)) * smoothstep(0.32, 0.42, hue) * (1.0 - smoothstep(0.8, 0.92, hue)) * step(0.16, lum) * step(c.b, c.g);
+  float hy = dot(vCzp, uCUp);
+  float aboveNeck = smoothstep(uCNeck - 4.0 * uCUnit, uCNeck + 2.0 * uCUnit, hy);
+  // head: only the top (cap / hair line), never the face; eye whites stay
+  float capLine = smoothstep(uCNeck + 11.5 * uCUnit, uCNeck + 13.5 * uCUnit, hy);
+  float white = step(0.72, lum) * step(chroma, 0.12);
+  float region = mix(1.0, capLine * (1.0 - white), aboveNeck);
+  float cloth = (1.0 - skin) * region;
+  vec3 base = uCPat < 0.5 ? mix(uCSec, uCPrim, smoothstep(0.05, 0.42, lum)) : camo(vCzp * (0.055 / uCUnit));
+  // keep the fabric folds / seams of the original texture as shading
+  vec3 tint = base * (0.55 + lum * 0.95);
   diffuseColor.rgb = mix(c, tint, cloth * uCStr);
   vCClothMask = cloth;
 }
 `;
 
-function costumeMaterial(src: THREE.MeshStandardMaterial, c: CostumeDef, neckY: number): THREE.MeshStandardMaterial {
+const PATTERN_ID: Record<string, number> = { solid: 0, woodland: 1, desert: 2, digital: 3, tiger: 4, arctic: 5, urban: 6 };
+
+function costumeMaterial(src: THREE.MeshStandardMaterial, c: CostumeDef, neckY: number, up = new THREE.Vector3(0, 1, 0), unit = neckY / 145): THREE.MeshStandardMaterial {
   const m = src.clone();
-  const col = (hex: number | null) => new THREE.Color(hex ?? 0xffffff);
-  const prim = col(c.primary);
+  const col = (hex: number | null | undefined) => new THREE.Color(hex ?? 0xffffff);
+  const v = (hex: number | null | undefined) => new THREE.Vector3().setFromColor(col(hex));
   const uniforms = {
-    uCPrim: { value: new THREE.Vector3(prim.r, prim.g, prim.b) },
-    uCSec: { value: new THREE.Vector3().setFromColor(col(c.secondary)) },
-    uCGlow: { value: new THREE.Vector3().setFromColor(col(c.glow ?? 0)) },
+    uCPrim: { value: v(c.primary) },
+    uCSec: { value: v(c.secondary) },
+    uCAcc: { value: v(c.accent ?? c.secondary) },
+    uCDark: { value: v(c.dark ?? 0x15170f) },
+    uCGlow: { value: v(c.glow ?? 0) },
     uCStr: { value: c.strength },
     uCNeck: { value: neckY },
+    uCPat: { value: PATTERN_ID[c.pattern ?? 'solid'] ?? 0 },
+    // rigs differ in units: scale the pattern to the body (neck ≈ 145 cm)
+    uCUnit: { value: Math.max(1e-4, unit) },
+    uCUp: { value: up.clone() },
   };
   if (!c.glow) uniforms.uCGlow.value.set(0, 0, 0);
   m.onBeforeCompile = (shader) => {
@@ -71,7 +122,10 @@ function costumeMaterial(src: THREE.MeshStandardMaterial, c: CostumeDef, neckY: 
         }`,
       );
   };
-  m.customProgramCacheKey = () => 'protocolz-costume-v1';
+  // matte fabric reads better than the source's sheen once recoloured
+  m.roughness = Math.max(m.roughness, 0.82);
+  m.metalness = Math.min(m.metalness, 0.05);
+  m.customProgramCacheKey = () => 'protocolz-costume-v2';
   return m;
 }
 
@@ -323,7 +377,18 @@ export async function applyCosmetics(rig: HumanoidRig, cos: Cosmetics): Promise<
       if (!mesh.isSkinnedMesh) return;
       const mat = mesh.material as THREE.MeshStandardMaterial;
       if (!mat?.isMeshStandardMaterial) return;
-      const m = costumeMaterial(mat, cos.costume!, neckY);
+      // geometry space can differ from the rig (units / Z-up exports): measure in it
+      mesh.updateMatrixWorld(true);
+      const inv = new THREE.Matrix4().copy(mesh.matrixWorld).invert();
+      rig.scene.updateMatrixWorld(true);
+      const neckW = neck ? neck.clone().applyMatrix4(rig.scene.matrixWorld) : new THREE.Vector3(0, neckY, 0).applyMatrix4(rig.scene.matrixWorld);
+      const footW = new THREE.Vector3(0, 0, 0).applyMatrix4(rig.scene.matrixWorld);
+      const neckL = neckW.applyMatrix4(inv);
+      const footL = footW.applyMatrix4(inv);
+      const upL = neckL.clone().sub(footL);
+      const h = upL.length();
+      upL.normalize();
+      const m = costumeMaterial(mat, cos.costume!, h > 1e-6 ? neckL.dot(upL) : neckY, h > 1e-6 ? upL : undefined, h > 1e-6 ? h / 145 : undefined);
       mesh.material = m;
       owned.push(m);
     });
