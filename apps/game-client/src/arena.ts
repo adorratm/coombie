@@ -63,7 +63,7 @@ import {
   type ZombieVisual,
 } from './characters';
 import { SpatialHash2D } from './spatialHash';
-import { applyStatus, rollStatusOnHit, statusTint, tickZombieStatuses } from './statusEffects';
+import { advanceReactionClock, applyStatus, freezeZombie, rollStatusOnHit, setReactionHandler, statusTint, tickZombieStatuses, type ReactionId } from './statusEffects';
 import { beginZombieLodFrame, zombieVrmLod } from './vrmLod';
 import {
   deathBurstScale,
@@ -878,6 +878,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     runStats.level = progress.level;
     runStats.maxCombo = Math.max(runStats.maxCombo, combo);
     runStats.evolutions = progress.runSkills.evolved.size;
+    runStats.fusions = progress.runSkills.fusions?.size ?? 0;
+    if (coopMirror && progress.runSkills.team) coopMirror.teamSkills(progress.runSkills.team);
     runStats.skills = progress.runSkills.skills.size;
     runStats.timeSec = simTime;
     runStats.coreHp = modeRt.coreHp;
@@ -1346,6 +1348,65 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
     audio.playGem();
   };
+
+  /* ───────────── elemental reactions (status combos) ───────────── */
+  const reactionSeen = new Set<ReactionId>();
+  const reactionMult = () => 1 + (tree.comboPower ?? 0) + (progress.mods.statusPower - 1) * 0.5;
+  setReactionHandler((z, r, power) => {
+    if (z.hp <= 0) return;
+    runStats.reactions = (runStats.reactions ?? 0) + 1;
+    runStats.reactionKinds = { ...(runStats.reactionKinds ?? {}), [r.id]: ((runStats.reactionKinds ?? {})[r.id] ?? 0) + 1 };
+    if (!reactionSeen.has(r.id)) {
+      reactionSeen.add(r.id);
+      notePickup(`KOMBO: ${r.name}`, r.desc);
+    }
+    const at = z.root.position.clone().setY(1.1);
+    const mult = reactionMult();
+    const hurt = (o: ZombieVisual, base: number, share: number) => {
+      // guests only draw it: the host resolves reactions on the real zombies
+      if (isGuest || o.hp <= 0) return;
+      const ob = o.kind === 'boss' || o.maxHp > 2500;
+      damageZombie(o, Math.max(base, o.maxHp * (ob ? 0.025 : 0.12) * share) * mult, o.root.position.clone().setY(1.1), new THREE.Vector3(), { fromPlayer: true, raw: true });
+    };
+    switch (r.id) {
+      case 'thermal': {
+        skillFx.flashLight(at, 0xfff0d8, 30, 0.18);
+        skillFx.sparks(at, 22, 0xffe2c0, 9);
+        skillFx.emit('flash', at.x, at.y, at.z, { life: 0.12, s0: 1.2, s1: 2.6, color: 0xfff4e0, spin: 0, a: 0.95 });
+        for (let i = 0; i < 6; i++) skillFx.emit('smoke', at.x, at.y, at.z, { vx: (Math.random() - 0.5) * 3, vz: (Math.random() - 0.5) * 3, vy: 1.5, life: 0.9, s0: 0.4, s1: 1.4, color: 0xd8e8f0, a: 0.5 });
+        hurt(z, power * 34, 1);
+        break;
+      }
+      case 'toxicBlast': {
+        const rad = 3.6 * progress.mods.aoeRadiusMult;
+        skillFx.explosion(at.clone().setY(0.6), rad * 0.55, 0x9cff3a);
+        fx.spawnHitRing(z.root.position.clone(), 0xb6ff3a, 0.2);
+        shake = Math.max(shake, 0.12);
+        zombieHash.query(z.root.position.x, z.root.position.z, rad, zombieQuery);
+        const near = zombieQuery.slice();
+        for (const o of near) {
+          if (o.hp <= 0) continue;
+          hurt(o, power * (o === z ? 22 : 14), o === z ? 0.7 : 0.4);
+          if (o !== z && !isGuest) applyStatus(o, 'toxin', power * 0.8);
+        }
+        break;
+      }
+      case 'cryoToxin': {
+        freezeZombie(z, 2.4);
+        z.attackCooldown = Math.max(z.attackCooldown, 2.4);
+        skillFx.emit('flash', at.x, at.y, at.z, { life: 0.2, s0: 1, s1: 2.2, color: 0xc8f4ff, spin: 0, a: 0.8 });
+        skillFx.dustRing(z.root.position, 4, 0x9fd8f0);
+        hurt(z, power * 12, 0.35);
+        zombieHash.query(z.root.position.x, z.root.position.z, 4.2, zombieQuery);
+        const near = zombieQuery.slice();
+        for (const o of near) {
+          if (o === z || o.hp <= 0 || isGuest) continue;
+          applyStatus(o, 'chill', power * 0.8);
+        }
+        break;
+      }
+    }
+  });
 
   const pickupWorldItem = (item: WorldItem) => {
     const def = ITEM_DEFS[item.defId];
@@ -2090,6 +2151,12 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       else audio.playAbility();
     },
     vfx: skillFx,
+    onCombo: (chain, mult) => {
+      runStats.abilityCombo = Math.max(runStats.abilityCombo ?? 0, chain);
+      notePickup(`YETENEK KOMBOSU ×${chain}`, `Arka arkaya farklı yetenek: güç ×${mult.toFixed(2)}`);
+      fx.spawnHitRing(player.root.position, chain >= 3 ? 0xffd23c : 0x7cd4ff, 0.2);
+      shake = Math.max(shake, 0.1 + chain * 0.05);
+    },
     powerMult: () => progress.abilityPowerMult,
     aoeMult: () => progress.mods.aoeRadiusMult,
     cdrMult: () => 1 - Math.min(0.6, progress.mods.abilityCdr),
@@ -2100,6 +2167,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   progress.runSkills.hero = hero.id;
   progress.runSkills.maxSkills += tree.skillSlot;
   progress.runSkills.evoAnyBranch = tree.evoAny;
+  progress.runSkills.fusionLevel = tree.fusionEarly ? 2 : 3;
+  progress.runSkills.fusionPower = tree.fusionPower;
+  progress.runSkills.teamFusionPower = tree.teamFusion;
+  progress.runSkills.team = new Set();
   if (tree.startSkill > 0) {
     const sid = HERO_START_SKILL[hero.id];
     progress.runSkills.skills.set(sid, Math.min(SKILL_MAX, (progress.runSkills.skills.get(sid) ?? 1) + tree.startSkill));
@@ -3335,6 +3406,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     abilityRuntime.update(dt, zombies, damageZombie);
     heroRt?.update(dt, simTime);
     coopMirror?.update(dt, simTime);
+    advanceReactionClock(dt);
     publishKit(dt);
     runSkills.update(dt, moving);
     for (let i = beams.length - 1; i >= 0; i--) {
@@ -3552,6 +3624,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       abilityRuntime.dispose();
       heroRt?.dispose();
       coopMirror?.dispose();
+      setReactionHandler(null);
       seeThrough.dispose();
       runSkills.dispose();
       modeRt.dispose();

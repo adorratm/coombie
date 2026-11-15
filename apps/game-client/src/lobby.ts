@@ -48,7 +48,7 @@ const STEPS: Array<{ id: StepId; group: string; icon: string; title: string; hin
   { id: 'gear', group: 'DOLAP', icon: '🎒', title: 'Çanta ve Teçhizat', hint: 'Çanta ek silah slotu açar; kask ve yelekler görünümü değiştirir.' },
   { id: 'weapons', group: 'SİLAHLAR', icon: '🔫', title: 'Cephanelik', hint: 'Slot seç, silaha tıkla, alttaki düğmeyle tak.' },
   { id: 'skills', group: 'YETENEK', icon: '⚡', title: 'Yetenekler', hint: 'Q / E / R yeteneklerini kalıcı olarak geliştir.' },
-  { id: 'tree', group: 'YETENEK', icon: '🌳', title: 'Yetenek Ağacı', hint: 'Operatör seviyesi (maks 75) her seviyede 1 puan verir. Pasif, aktif ve silah özelliklerini aç.' },
+  { id: 'tree', group: 'YETENEK', icon: '🌳', title: 'Yetenek Ağacı', hint: 'Operatör seviyesi (maks 100) her seviyede 1 puan verir. Saldırı, dayanıklılık, taktik ve sinerji (kombo & füzyon) dallarını aç.' },
   { id: 'ready', group: 'HAZIR', icon: '✔', title: 'Göreve Hazır', hint: 'Son kontrol — her şey tamamsa başla.' },
 ];
 
@@ -150,7 +150,8 @@ const CSS = /* css */ `
 #lobby .tlv .big { font: 700 30px var(--display); color: var(--gold); min-width: 64px; text-align: center; }
 #lobby .tlv .bar { height: 6px; background: rgba(255,255,255,0.08); margin-top: 6px; }
 #lobby .tlv .bar i { display: block; height: 100%; background: var(--gold); }
-#lobby .tcols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+#lobby .tcols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 1100px) { #lobby .tcols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 #lobby .tcol h4 { margin: 0 0 6px; font: 700 13px var(--display); letter-spacing: .08em; color: var(--dim); }
 #lobby .tnode { display: grid; grid-template-columns: 30px 1fr; gap: 8px; width: 100%; text-align: left; padding: 8px; margin-bottom: 6px; border: 1px solid var(--line); background: rgba(14,18,22,0.8); color: inherit; cursor: pointer; font: inherit; }
 #lobby .tnode .ti { font-size: 20px; line-height: 30px; text-align: center; }
@@ -1005,7 +1006,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     }
   };
 
-  const BRANCH_LABEL: Record<TreeBranch, string> = { attack: 'SALDIRI', defense: 'DAYANIKLILIK', tactic: 'TAKTİK' };
+  const BRANCH_LABEL: Record<TreeBranch, string> = { attack: 'SALDIRI', defense: 'DAYANIKLILIK', tactic: 'TAKTİK', synergy: 'SİNERJİ' };
   const TYPE_LABEL = { passive: 'PASİF', active: 'AKTİF', weapon: 'SİLAH' } as const;
   const renderTree = (panel: HTMLElement) => {
     const heroId = loadProfile().hero;
@@ -1035,7 +1036,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     head.append(reset);
     panel.append(head);
     const cols = Object.assign(document.createElement('div'), { className: 'tcols' });
-    for (const br of ['attack', 'defense', 'tactic'] as TreeBranch[]) {
+    for (const br of ['attack', 'defense', 'tactic', 'synergy'] as TreeBranch[]) {
       const col = Object.assign(document.createElement('div'), { className: 'tcol' });
       col.append(Object.assign(document.createElement('h4'), { textContent: BRANCH_LABEL[br] }));
       for (const n of TREE_NODES.filter((x) => x.branch === br)) {

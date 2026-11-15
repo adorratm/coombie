@@ -146,6 +146,13 @@ export class CoopMirror {
     }
   }
 
+  /** every run skill the team mates own (team fusion cards) */
+  teamSkills(into: Set<RunSkillId>): Set<RunSkillId> {
+    into.clear();
+    for (const m of this.mates.values()) for (const id of m.skillState.skills.keys()) into.add(id);
+    return into;
+  }
+
   /** team buffs a mate's abilities put on the local hero */
   buffsFor(op: OperativeVisual, now: number, into: HeroBuffs): HeroBuffs {
     if (this.mates.size === 0) return into;

@@ -46,7 +46,7 @@ beforeEach(() => {
 });
 
 describe('hero tree', () => {
-  it('holds exactly the points a Lv 75 operative earns', () => {
+  it('holds exactly the points a max-level operative earns', () => {
     expect(TREE_TOTAL_RANKS).toBe(HERO_LEVEL_MAX - 1);
     expect(new Set(TREE_NODES.map((n) => n.id)).size).toBe(TREE_NODES.length);
     for (const n of TREE_NODES) {
@@ -68,7 +68,7 @@ describe('hero tree', () => {
   });
 
   it('a maxed operative can fill the whole tree', () => {
-    localStorage.setItem('protocol-z-heroes-v1', JSON.stringify({ ironclad: { xp: 0, level: 75, ranks: {} } }));
+    localStorage.setItem('protocol-z-heroes-v1', JSON.stringify({ ironclad: { xp: 0, level: HERO_LEVEL_MAX, ranks: {} } }));
     let guard = 0;
     let progressed = true;
     while (progressed && guard++ < 500) {
@@ -79,11 +79,12 @@ describe('hero tree', () => {
     expect(availablePoints(p)).toBe(0);
     for (const n of TREE_NODES) expect(p.ranks[n.id]).toBe(n.maxRank);
     const t = treeTotals(p);
-    expect(t.earlySlot && t.evoAny && t.startSupport).toBe(true);
+    expect(t.earlySlot && t.evoAny && t.startSupport && t.fusionEarly).toBe(true);
+    expect(t.comboPower).toBeGreaterThan(0.5);
     expect(t.revives).toBe(1);
   });
 
-  it('levels up and caps at 75', () => {
+  it('levels up and caps at 100', () => {
     const p: HeroProgress = { xp: 0, level: 1, ranks: {} };
     expect(addXpTo(p, heroXpForLevel(1) + 1)).toBe(1);
     expect(p.level).toBe(2);

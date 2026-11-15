@@ -23,6 +23,13 @@ export interface RunStats {
   rescued: number;
   fuel: number;
   coreHp: number;
+  /** elemental reactions set off */
+  reactions?: number;
+  reactionKinds?: Partial<Record<string, number>>;
+  /** skill fusions made */
+  fusions?: number;
+  /** longest Q/E/R ability chain */
+  abilityCombo?: number;
 }
 
 interface LifeStats {

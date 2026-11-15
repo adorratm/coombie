@@ -137,7 +137,14 @@ export interface HeroAbilityContext {
   cdrMult: () => number;
   /** shared particle / explosion FX (optional) */
   vfx?: SkillFx;
+  /** ability chain: a different Q/E/R within the combo window (chain length 2+) */
+  onCombo?: (chain: number, mult: number) => void;
 }
+
+/** Q → E → R within this many seconds of each other chain into an ability combo. */
+export const ABILITY_COMBO_WINDOW = 3.5;
+/** extra power per link in the chain (2nd cast ×1.25, 3rd ×1.5) */
+export const ABILITY_COMBO_STEP = 0.25;
 
 export interface HeroBuffs {
   damage: number;
@@ -870,12 +877,21 @@ export function createHeroAbilityRuntime(
     ctx.sfx('buff');
   };
 
+  let comboSlots: AbilitySlot[] = [];
+  let comboAt = -99;
   const cast = (slot: AbilitySlot, now: number): boolean => {
     const p = ctx.player;
     if (!p.alive || cooldowns[slot] > 0) return false;
     const def = defs[slot];
     const L = lvl(slot);
-    const power = levelPower(L) * ctx.powerMult();
+    // ability combo: a fresh slot inside the window extends the chain
+    if (now - comboAt > ABILITY_COMBO_WINDOW || comboSlots.includes(slot)) comboSlots = [];
+    comboSlots.push(slot);
+    comboAt = now;
+    const chain = comboSlots.length;
+    const comboMult = 1 + ABILITY_COMBO_STEP * (chain - 1);
+    if (chain >= 2) ctx.onCombo?.(chain, comboMult);
+    const power = levelPower(L) * ctx.powerMult() * comboMult;
     const size = levelSize(L);
     const eff = def.effect;
     cooldowns[slot] = maxCooldown(slot);

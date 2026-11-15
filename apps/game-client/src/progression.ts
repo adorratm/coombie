@@ -1035,7 +1035,7 @@ function runSkillUpgradeCards(state: ProgressState): UpgradeCardDef[] {
     kind: 'skill' as const,
     icon: c.icon,
     // hero-exclusive radio support shows up almost immediately once
-    weight: c.kind === 'evo' ? 70 : c.kind === 'skill' ? (RUN_SKILLS[c.id as keyof typeof RUN_SKILLS]?.heroes ? (c.level === 1 ? 60 : 12) : c.level === 1 ? 8 : 11) : 6,
+    weight: c.kind === 'evo' ? 70 : c.kind === 'fuse' ? 55 : c.kind === 'skill' ? (RUN_SKILLS[c.id as keyof typeof RUN_SKILLS]?.heroes ? (c.level === 1 ? 60 : 12) : c.level === 1 ? 8 : 11) : 6,
     runSkill: { kind: c.kind, id: c.id, level: c.level },
   }));
 }
@@ -1292,6 +1292,7 @@ export function cardStatLines(card: UpgradeCardDef, ctx?: CardStatContext): Arra
   if (card.runSkill) {
     const lv = card.runSkill.level;
     if (card.runSkill.kind === 'evo') lines.push({ label: 'Evrim', before: 'Sv 5', after: 'EVRİM' });
+    else if (card.runSkill.kind === 'fuse') lines.push({ label: 'Füzyon', before: '2 yetenek', after: 'BİRLEŞİK' });
     else lines.push({ label: card.runSkill.kind === 'passive' ? 'Pasif seviye' : 'Seviye', before: lv <= 1 ? '—' : `Sv ${lv - 1}`, after: `Sv ${lv}` });
   }
   if (card.weaponLevel) {

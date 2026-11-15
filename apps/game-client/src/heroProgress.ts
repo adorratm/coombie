@@ -4,21 +4,21 @@ import type { PlayerMods } from './progression';
 /**
  * Persistent per-operative progression.
  *
- * Every operative has its own XP / level (cap 75) and its own skill tree. XP comes
+ * Every operative has its own XP / level (cap 100) and its own skill tree. XP comes
  * from runs: the player's hero gets every point collected, squad mates get a share.
- * Each level gives one tree point; the tree holds exactly 74 ranks, so a Lv 75
+ * Each level gives one tree point; the tree holds exactly 99 ranks, so a Lv 100
  * operative can fill it completely. Nodes also need a minimum operative level.
  *
  * XP is written to storage while a run is still going (see `HeroXpLedger`), so
  * quitting, crashing or closing the window never loses collected XP.
  */
 
-export const HERO_LEVEL_MAX = 75;
+export const HERO_LEVEL_MAX = 100;
 export const HERO_SAVE_KEY = 'protocol-z-heroes-v1';
 /** Share of run XP that squad mates (not the player) receive. */
 export const ALLY_XP_SHARE = 0.6;
 
-export type TreeBranch = 'attack' | 'defense' | 'tactic';
+export type TreeBranch = 'attack' | 'defense' | 'tactic' | 'synergy';
 
 /** Run-start effects a node can grant (per rank). */
 export interface TreeEffect {
@@ -49,6 +49,14 @@ export interface TreeEffect {
   draftTools?: number;
   /** signature evolution never needs its passive */
   evoAny?: boolean;
+  /** elemental reaction (combo) damage, additive */
+  comboPower?: number;
+  /** fused run skills hit harder, additive */
+  fusionPower?: number;
+  /** fusions are offered once both skills reach level 2 (instead of 3) */
+  fusionEarly?: boolean;
+  /** co-op team fusions (your skill + a mate's) get stronger, additive */
+  teamFusion?: number;
 }
 
 export interface TreeNodeDef {
@@ -98,6 +106,16 @@ export const TREE_NODES: TreeNodeDef[] = [
   N({ id: 't_draft', branch: 'tactic', type: 'active', icon: '🃏', name: 'Taktik Deha', desc: '+1 yenile / kilitle / ele / sv', maxRank: 3, reqLevel: 62, requires: 't_aoe', effect: { draftTools: 1 } }),
   N({ id: 't_evo', branch: 'tactic', type: 'active', icon: '🧬', name: 'Evrim Ustası', desc: 'İmza evrimi için pasif eşya gerekmez (her zaman 3 dal)', maxRank: 1, reqLevel: 70, requires: 't_draft', effect: { evoAny: true } }),
   N({ id: 't_cap', branch: 'tactic', type: 'passive', icon: '♛', name: 'Komutan', desc: '+%10 XP, yetenek hasarı +%10', maxRank: 1, reqLevel: 75, requires: 't_evo', effect: { mods: { xpMult: 0.1 }, skillPower: 0.1 } }),
+  // --------------------------------------------------------------- SYNERGY (25)
+  N({ id: 's_combo', branch: 'synergy', type: 'passive', icon: '⚗', name: 'Kimyager', desc: 'Element kombolarının hasarı +%10 / sv (yanma+donma, yanma+zehir, donma+zehir)', maxRank: 5, reqLevel: 1, effect: { comboPower: 0.1 } }),
+  N({ id: 's_status', branch: 'synergy', type: 'passive', icon: '☣', name: 'Katalizör', desc: 'Yanma / zehir / donma gücü +%6 / sv', maxRank: 5, reqLevel: 12, requires: 's_combo', effect: { mods: { statusPower: 0.06 } } }),
+  N({ id: 's_fuse', branch: 'synergy', type: 'active', icon: '🧪', name: 'Füzyon Teorisi', desc: 'Birleşmiş (füzyon) yeteneklerin hasarı +%8 / sv', maxRank: 3, reqLevel: 25, requires: 's_status', effect: { fusionPower: 0.08 } }),
+  N({ id: 's_early', branch: 'synergy', type: 'active', icon: '⏩', name: 'Erken Füzyon', desc: 'Füzyon kartı iki yetenek de Sv 2 olunca çıkar (normalde Sv 3)', maxRank: 1, reqLevel: 38, requires: 's_fuse', effect: { fusionEarly: true } }),
+  N({ id: 's_team', branch: 'synergy', type: 'active', icon: '🤝', name: 'Takım Ruhu', desc: 'Co-op takım füzyonları (senin yeteneğin + takım arkadaşınınki) +%25 güç / sv', maxRank: 2, reqLevel: 50, requires: 's_early', effect: { teamFusion: 0.25 } }),
+  N({ id: 's_sync', branch: 'synergy', type: 'passive', icon: '🔁', name: 'Senkron', desc: '−%2 Q/E/R bekleme / sv', maxRank: 3, reqLevel: 62, requires: 's_team', effect: { mods: { abilityCdr: 0.02 } } }),
+  N({ id: 's_chain', branch: 'synergy', type: 'passive', icon: '⛓', name: 'Zincirleme', desc: '+%3 etki alanı, kombo hasarı +%5 / sv', maxRank: 3, reqLevel: 74, requires: 's_sync', effect: { mods: { aoeRadiusMult: 0.03 }, comboPower: 0.05 } }),
+  N({ id: 's_overload', branch: 'synergy', type: 'active', icon: '🔋', name: 'Aşırı Yük', desc: 'Yetenek hasarı +%5 / sv', maxRank: 2, reqLevel: 86, requires: 's_chain', effect: { skillPower: 0.05 } }),
+  N({ id: 's_cap', branch: 'synergy', type: 'passive', icon: '🜍', name: 'Simyacı', desc: 'Kombo hasarı +%25, füzyon hasarı +%15', maxRank: 1, reqLevel: 100, requires: 's_overload', effect: { comboPower: 0.25, fusionPower: 0.15 } }),
 ];
 
 export const TREE_TOTAL_RANKS = TREE_NODES.reduce((s, n) => s + n.maxRank, 0);
@@ -110,7 +128,7 @@ export interface HeroProgress {
 
 type Store = Partial<Record<OperativeId, HeroProgress>>;
 
-/** XP from level L to L+1. Lv 1→75 ≈ 820k XP (≈ 7 full 20 min runs as the player). */
+/** XP from level L to L+1. Lv 1→75 ≈ 820k XP, Lv 75→100 another ≈ 1.1M (late levels are a long haul). */
 export function heroXpForLevel(level: number): number {
   return Math.round(300 + 90 * level + 4 * level * level);
 }
@@ -187,7 +205,7 @@ export function spentPoints(p: HeroProgress): number {
   return s;
 }
 
-/** One point per level after 1 (Lv 75 = 74 points = the whole tree). */
+/** One point per level after 1 (Lv 100 = 99 points = the whole tree). */
 export function availablePoints(p: HeroProgress): number {
   return Math.max(0, p.level - 1 - spentPoints(p));
 }
@@ -239,6 +257,10 @@ export interface TreeTotals {
   startSupport: boolean;
   draftTools: number;
   evoAny: boolean;
+  comboPower: number;
+  fusionPower: number;
+  fusionEarly: boolean;
+  teamFusion: number;
 }
 
 export function treeTotals(p: HeroProgress): TreeTotals {
@@ -257,6 +279,10 @@ export function treeTotals(p: HeroProgress): TreeTotals {
     startSupport: false,
     draftTools: 0,
     evoAny: false,
+    comboPower: 0,
+    fusionPower: 0,
+    fusionEarly: false,
+    teamFusion: 0,
   };
   for (const n of TREE_NODES) {
     const r = p.ranks[n.id] ?? 0;
@@ -280,6 +306,10 @@ export function treeTotals(p: HeroProgress): TreeTotals {
     if (e.earlySlot) t.earlySlot = true;
     if (e.startSupport) t.startSupport = true;
     if (e.evoAny) t.evoAny = true;
+    t.comboPower += (e.comboPower ?? 0) * r;
+    t.fusionPower += (e.fusionPower ?? 0) * r;
+    t.teamFusion += (e.teamFusion ?? 0) * r;
+    if (e.fusionEarly) t.fusionEarly = true;
   }
   return t;
 }

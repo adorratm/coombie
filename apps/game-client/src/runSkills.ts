@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { OperativeVisual, ZombieVisual } from './characters';
 import type { OperativeId } from './roster';
-import { applyStatus } from './statusEffects';
+import { applyStatus, type StatusId } from './statusEffects';
 import type { SkillFx } from './skillFx';
 import { SupportCalls, type SupportKind } from './support';
 import { buildSentryTurret, kickBarrel, settleBarrel, turretWarmObjects, type TurretModel } from './turretModels';
@@ -200,6 +200,119 @@ export interface RunSkillState {
   maxSkills: number;
   /** hero tree perk: the signature evolution never needs its passive */
   evoAnyBranch: boolean;
+  /** fused skill pairs; `team: true` = made with a co-op mate's skill */
+  fusions?: Map<FusionId, { team: boolean }>;
+  /** skills the co-op team mates own (fills team fusion cards) */
+  team?: Set<RunSkillId>;
+  /** both skills need this level before their fusion is offered (tree perk lowers it to 2) */
+  fusionLevel?: number;
+  /** tree: fused skills' extra damage (additive) */
+  fusionPower?: number;
+  /** tree: team fusion strength (additive) */
+  teamFusionPower?: number;
+}
+
+/**
+ * Skill fusions: two skills that work together merge, both hit harder and cool down
+ * faster, and the fused element infuses every skill hit (burn / chill / toxin), which
+ * feeds the elemental reactions. In co-op a fusion can also pair one of your skills
+ * with a team mate's (team fusion, weaker unless the Sinerji tree says otherwise).
+ */
+export type FusionId =
+  | 'flameSaw'
+  | 'superconductor'
+  | 'napalmBomb'
+  | 'missileSwarm'
+  | 'bladeStorm'
+  | 'baitTrap'
+  | 'gunFortress'
+  | 'doomRain'
+  | 'thermalCycle'
+  | 'steamBurst'
+  | 'toxicNapalm'
+  | 'airDominance'
+  | 'carpetFire'
+  | 'stormBattery'
+  | 'hunterKiller'
+  | 'blackout'
+  | 'roadkill'
+  | 'fieldDepot';
+
+export interface FusionDef {
+  id: FusionId;
+  a: RunSkillId;
+  b: RunSkillId;
+  name: string;
+  icon: string;
+  desc: string;
+  /** extra damage on both skills */
+  dmg: number;
+  /** element infused into every skill hit */
+  infuse?: { status: StatusId | 'mixed'; chance: number };
+}
+
+const F = (d: FusionDef) => d;
+export const FUSIONS: readonly FusionDef[] = [
+  F({ id: 'flameSaw', a: 'saws', b: 'fireAura', name: 'Alevli Testere', icon: '🔥', desc: 'Testere ve hale kızgın: ikisi de +%35 hasar, her yetenek vuruşu %18 tutuşturur.', dmg: 0.35, infuse: { status: 'burn', chance: 0.18 } }),
+  F({ id: 'superconductor', a: 'frostNova', b: 'tesla', name: 'Süper İletken', icon: '🧊', desc: 'Azot ve Tesla: +%35 hasar, her yetenek vuruşu %18 dondurur.', dmg: 0.35, infuse: { status: 'chill', chance: 0.18 } }),
+  F({ id: 'napalmBomb', a: 'molotov', b: 'grenade', name: 'Napalm Bombası', icon: '💣', desc: 'Bombalar alev saçar: +%40 hasar, %15 tutuşturma.', dmg: 0.4, infuse: { status: 'burn', chance: 0.15 } }),
+  F({ id: 'missileSwarm', a: 'drone', b: 'rockets', name: 'Füze Sürüsü', icon: '🛸', desc: 'Dronlar roket taşır: ikisi de +%55 hasar.', dmg: 0.55 }),
+  F({ id: 'bladeStorm', a: 'knives', b: 'boomerang', name: 'Bıçak Kasırgası', icon: '🌀', desc: 'Bütün bıçaklar tek fırtına: +%55 hasar.', dmg: 0.55 }),
+  F({ id: 'baitTrap', a: 'mines', b: 'gravity', name: 'Yem Tuzağı', icon: '🪤', desc: 'Yemle toplanan sürü mayına basar: +%45 hasar, %15 zehir.', dmg: 0.45, infuse: { status: 'toxin', chance: 0.15 } }),
+  F({ id: 'gunFortress', a: 'laser', b: 'turret', name: 'Makineli Kale', icon: '🏰', desc: 'Taret ağır makineliyle donanır: +%50 hasar.', dmg: 0.5 }),
+  F({ id: 'doomRain', a: 'lightning', b: 'meteor', name: 'Kıyamet Yağmuru', icon: '☄', desc: 'Havan ve füze aynı anda: +%45 hasar, %15 tutuşturma.', dmg: 0.45, infuse: { status: 'burn', chance: 0.15 } }),
+  F({ id: 'thermalCycle', a: 'fireAura', b: 'frostNova', name: 'Termal Döngü', icon: '♨', desc: 'Sıcak ve soğuk sırayla: +%30 hasar, vuruşlar %22 yakar ya da dondurur (kombo yağmuru).', dmg: 0.3, infuse: { status: 'mixed', chance: 0.22 } }),
+  F({ id: 'steamBurst', a: 'molotov', b: 'frostNova', name: 'Buhar Patlaması', icon: '💨', desc: 'Alev ve azot buhar olur: +%35 hasar, %18 dondurma.', dmg: 0.35, infuse: { status: 'chill', chance: 0.18 } }),
+  F({ id: 'toxicNapalm', a: 'cropDuster', b: 'molotov', name: 'Zehirli Napalm', icon: '☣', desc: 'İlaç bulutu tutuşur: +%45 hasar, %20 zehir.', dmg: 0.45, infuse: { status: 'toxin', chance: 0.2 } }),
+  F({ id: 'airDominance', a: 'gunship', b: 'rockets', name: 'Hava Hakimiyeti', icon: '🚁', desc: 'Helikopterler roket salvosuyla döner: +%45 hasar.', dmg: 0.45 }),
+  F({ id: 'carpetFire', a: 'airstrike', b: 'meteor', name: 'Halı Ateşi', icon: '✈', desc: 'Jetler ve füzeler aynı hat: +%45 hasar, %15 tutuşturma.', dmg: 0.45, infuse: { status: 'burn', chance: 0.15 } }),
+  F({ id: 'stormBattery', a: 'barrage', b: 'lightning', name: 'Fırtına Bataryası', icon: '🎯', desc: 'Obüs ve havan birlikte: +%45 hasar.', dmg: 0.45 }),
+  F({ id: 'hunterKiller', a: 'siha', b: 'drone', name: 'Avcı-Katil', icon: '🛩', desc: 'SİHA dron sürüsünü yönetir: +%50 hasar.', dmg: 0.5 }),
+  F({ id: 'blackout', a: 'trafo', b: 'tesla', name: 'Karartma', icon: '🔌', desc: 'Trafo ve Tesla aynı şebeke: +%45 hasar, %15 dondurma (şok).', dmg: 0.45, infuse: { status: 'chill', chance: 0.15 } }),
+  F({ id: 'roadkill', a: 'dolmus', b: 'mines', name: 'Mayınlı Güzergâh', icon: '🚌', desc: 'Dolmuş geçtiği yere mayın döşer gibi: +%45 hasar.', dmg: 0.45 }),
+  F({ id: 'fieldDepot', a: 'supplyDrop', b: 'turret', name: 'Sahra Deposu', icon: '🪂', desc: 'İkmal sandığı taret mühimmatı da getirir: taret +%60 hasar, daha sık.', dmg: 0.6 }),
+];
+export const FUSION_BY_ID: ReadonlyMap<FusionId, FusionDef> = new Map(FUSIONS.map((f) => [f.id, f]));
+
+/** Base strength of a team fusion (before the Sinerji tree). */
+export const TEAM_FUSION_BASE = 0.6;
+
+/** Damage / cooldown factor a skill gets from the fusions it is part of. */
+export function fusionFactor(st: RunSkillState, id: RunSkillId): { dmg: number; cd: number } {
+  let dmg = 1;
+  let cd = 1;
+  if (!st.fusions?.size) return { dmg, cd };
+  for (const [fid, f] of st.fusions) {
+    const def = FUSION_BY_ID.get(fid);
+    if (!def || (def.a !== id && def.b !== id)) continue;
+    const k = f.team ? TEAM_FUSION_BASE + (st.teamFusionPower ?? 0) : 1;
+    dmg *= 1 + (def.dmg + (st.fusionPower ?? 0)) * k;
+    cd *= 1 - 0.15 * k;
+  }
+  return { dmg, cd: Math.max(0.5, cd) };
+}
+
+/** Fusion cards on offer: own pair at the fusion level, or own skill + a team mate's. */
+export function fusionCards(st: RunSkillState): RunSkillCard[] {
+  const need = st.fusionLevel ?? 3;
+  const lvOf = (id: RunSkillId) => (st.evolved.has(id) ? SKILL_MAX : (st.skills.get(id) ?? 0));
+  const out: RunSkillCard[] = [];
+  for (const f of FUSIONS) {
+    if (st.fusions?.has(f.id)) continue;
+    const la = lvOf(f.a);
+    const lb = lvOf(f.b);
+    if (la >= need && lb >= need) {
+      out.push({ kind: 'fuse', id: f.id, name: `FÜZYON: ${f.name}`, description: `${RUN_SKILLS[f.a].name} + ${RUN_SKILLS[f.b].name}. ${f.desc}`, icon: f.icon, level: 1, rarity: 'epic' });
+      continue;
+    }
+    // team fusion: one of the pair is mine (at the fusion level), the other a mate's
+    const mine = la >= need ? f.a : lb >= need ? f.b : null;
+    const other = mine === f.a ? f.b : f.a;
+    if (mine && st.team?.has(other) && !st.skills.has(other)) {
+      out.push({ kind: 'fuse', id: `${f.id}@team`, name: `TAKIM FÜZYONU: ${f.name}`, description: `Senin ${RUN_SKILLS[mine].name} + takım arkadaşının ${RUN_SKILLS[other].name}. ${f.desc} (takım gücü)`, icon: f.icon, level: 1, rarity: 'epic' });
+    }
+  }
+  return out;
 }
 
 export function createRunSkillState(start?: RunSkillId): RunSkillState {
@@ -244,7 +357,7 @@ export function evolutionCards(st: RunSkillState, id: RunSkillId): RunSkillCard[
 }
 
 export interface RunSkillCard {
-  kind: 'skill' | 'passive' | 'evo';
+  kind: 'skill' | 'passive' | 'evo' | 'fuse';
   /** skill / passive id; evo cards use `${skillId}:${branch}` */
   id: RunSkillId | PassiveId | string;
   name: string;
@@ -276,6 +389,7 @@ export function runSkillCards(st: RunSkillState): RunSkillCard[] {
       rarity: lv === 0 ? (def.heroes ? 'epic' : 'rare') : 'common',
     });
   }
+  out.push(...fusionCards(st));
   for (const def of Object.values(PASSIVES)) {
     const lv = st.passives.get(def.id) ?? 0;
     if (lv >= PASSIVE_MAX) continue;
@@ -297,7 +411,12 @@ export function runSkillCards(st: RunSkillState): RunSkillCard[] {
 export function applyRunSkillCard(st: RunSkillState, kind: RunSkillCard['kind'], id: string): void {
   if (kind === 'skill') st.skills.set(id as RunSkillId, Math.min(SKILL_MAX, (st.skills.get(id as RunSkillId) ?? 0) + 1));
   else if (kind === 'passive') st.passives.set(id as PassiveId, Math.min(PASSIVE_MAX, (st.passives.get(id as PassiveId) ?? 0) + 1));
-  else {
+  else if (kind === 'fuse') {
+    const [fid, team] = id.split('@') as [FusionId, string | undefined];
+    if (!FUSION_BY_ID.has(fid)) return;
+    st.fusions ??= new Map();
+    if (!st.fusions.has(fid)) st.fusions.set(fid, { team: team === 'team' });
+  } else {
     const [sid, branch] = id.split(':') as [RunSkillId, EvoBranch | undefined];
     if ((st.skills.get(sid) ?? 0) >= SKILL_MAX && !st.evolved.has(sid)) st.evolved.set(sid, branch ?? 'signature');
   }
@@ -526,10 +645,10 @@ export class RunSkillRuntime {
   }
   private branchDmg(id: RunSkillId): number {
     const b = this.ctx.state.evolved.get(id);
-    return b === 'power' ? 1.9 : b === 'rapid' ? 1.15 : 1;
+    return (b === 'power' ? 1.9 : b === 'rapid' ? 1.15 : 1) * fusionFactor(this.ctx.state, id).dmg;
   }
   private branchCd(id: RunSkillId): number {
-    return this.ctx.state.evolved.get(id) === 'rapid' ? 0.55 : 1;
+    return (this.ctx.state.evolved.get(id) === 'rapid' ? 0.55 : 1) * fusionFactor(this.ctx.state, id).cd;
   }
   private pv(id: PassiveId): number {
     return this.ctx.state.passives.get(id) ?? 0;
@@ -567,6 +686,17 @@ export class RunSkillRuntime {
     if (_d.lengthSq() < 1e-6) _d.set(0, 0, 1);
     _d.normalize();
     this.ctx.damageZombie(z, dmg * this.dmgMul() * (crit ? 2 : 1), at, _d);
+    // fused elements ride on every skill hit
+    const fu = this.ctx.state.fusions;
+    if (fu?.size && z.hp > 0) {
+      for (const [fid, f] of fu) {
+        const inf = FUSION_BY_ID.get(fid)?.infuse;
+        if (!inf || Math.random() > inf.chance * (f.team ? TEAM_FUSION_BASE + (this.ctx.state.teamFusionPower ?? 0) : 1)) continue;
+        const st: StatusId = inf.status === 'mixed' ? (Math.random() < 0.5 ? 'burn' : 'chill') : inf.status;
+        applyStatus(z, st, 1.2 * this.ctx.powerMult());
+        break;
+      }
+    }
   }
   private inRadius(x: number, z: number, r: number, fn: (zz: ZombieVisual, d: number) => void): void {
     const r2 = r * r;
