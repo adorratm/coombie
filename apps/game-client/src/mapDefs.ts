@@ -8,9 +8,11 @@ import { MapBuilder, type PropId } from './mapBuilder';
 
 export type MapId = 'city' | 'hospital' | 'military' | 'harbor' | 'forest' | 'highway' | 'industrial' | 'snow' | 'desert' | 'lab' | 'village' | 'mall' | 'airport' | 'campus';
 export type Weather = 'none' | 'rain' | 'snow' | 'dust' | 'ash';
-export type ModeId = 'survival' | 'horde' | 'defense' | 'rescue' | 'evac' | 'boss' | 'endless' | 'zones' | 'hunt' | 'blitz';
+export type ModeId =
+  | 'survival' | 'horde' | 'defense' | 'rescue' | 'evac' | 'boss' | 'endless' | 'zones' | 'hunt' | 'blitz'
+  | 'convoy' | 'supply' | 'king' | 'nests' | 'darkness' | 'siege' | 'mutation' | 'onelife' | 'delivery' | 'infection';
 /** Modes that need no map-specific anchors beyond the common ones, so every map offers them. */
-export const UNIVERSAL_MODES: ModeId[] = ['zones', 'hunt', 'blitz'];
+export const UNIVERSAL_MODES: ModeId[] = ['zones', 'hunt', 'blitz', 'convoy', 'supply', 'king', 'nests', 'darkness', 'siege', 'mutation', 'onelife', 'delivery', 'infection'];
 
 export interface MapLighting {
   bg: number;

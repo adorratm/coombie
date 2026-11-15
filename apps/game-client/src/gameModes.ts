@@ -5,6 +5,8 @@ import type { MissionHudState } from './mission';
 import { MAPS, type MapId, type ModeId } from './mapDefs';
 import type { GameMap } from './gameMap';
 import type { IndicatorSrc } from './powerups';
+import { ExtraMode, isExtraMode } from './extraModes';
+import { CONVOY_SPEED, DARK_SECONDS, DELIVERIES, INFECTION_SECONDS, KING_TARGET, MUTATION_EVERY, MUTATION_SECONDS, NESTS, ONELIFE_SECONDS, SIEGE_SECONDS, SUPPLY_CRATES, SUPPLY_SECONDS } from './modeRules';
 import { BLITZ_BOSS_BONUS, BLITZ_SECONDS, blitzTarget, HUNT_RESPITE_SECONDS, HUNT_TARGET_HP_MUL, HUNT_TARGETS, huntTargetKind, pickNextZone, ZONE_COUNT, ZONE_HOLD_SECONDS, ZONE_RADIUS, zoneProgress } from './modeRules';
 
 /**
@@ -64,6 +66,16 @@ export const MODES: Record<ModeId, ModeDef> = {
   zones: { id: 'zones', name: 'Bölge Kontrol', icon: '⚑', desc: `${ZONE_COUNT} bölgeyi sırayla ele geçir: halkanın içinde ${ZONE_HOLD_SECONDS} sn dur, çıkarsan ilerleme erir.` },
   hunt: { id: 'hunt', name: 'İnfaz Listesi', icon: '🎯', desc: `${HUNT_TARGETS} işaretli hedefi sırayla avla. Sonuncusu boss.` },
   blitz: { id: 'blitz', name: 'Katliam', icon: '⚡', desc: `${BLITZ_SECONDS / 60} dakikada öldürme kotasını doldur. Her boss +${BLITZ_BOSS_BONUS} sn kazandırır.` },
+  convoy: { id: 'convoy', name: 'Konvoy', icon: '🚚', desc: `Zırhlı kamyonu tahliye noktasına götür. Sadece yanında bir oyuncu varken ilerler (${CONVOY_SPEED} m/sn); etrafını saran zombiler onu parçalar.` },
+  supply: { id: 'supply', name: 'İkmal Avı', icon: '🎁', desc: `${SUPPLY_SECONDS / 60} dakikada ${SUPPLY_CRATES} ikmal sandığını topla; her biri haritanın başka yerine düşer.` },
+  king: { id: 'king', name: 'Tepenin Kralı', icon: '👑', desc: `Gezen bölgeyi toplam ${KING_TARGET / 60 >= 1 ? `${Math.floor(KING_TARGET / 60)} dk ${KING_TARGET % 60} sn` : `${KING_TARGET} sn`} tut. Bölge belli aralıklarla yer değiştirir.` },
+  nests: { id: 'nests', name: 'Yuva Avı', icon: '🕷', desc: `${NESTS} zombi yuvasına patlayıcı kur. Yuvalar yok edilene kadar zombi doğurur.` },
+  darkness: { id: 'darkness', name: 'Karanlık Çöküyor', icon: '🌑', desc: `Gece gittikçe kararıyor, görüş daralıyor. ${DARK_SECONDS / 60} dakika dayan, sonra boss.` },
+  siege: { id: 'siege', name: 'Kuşatma', icon: '🏰', desc: `Üç jeneratörü ${SIEGE_SECONDS / 60} dakika savun; en az biri ayakta kalmalı.` },
+  mutation: { id: 'mutation', name: 'Mutasyon', icon: '🧬', desc: `Sürü her ${MUTATION_EVERY} saniyede yeni bir mutasyon kazanır (hız, can, sertlik, kalabalık…). ${MUTATION_SECONDS / 60} dakika dayan.` },
+  onelife: { id: 'onelife', name: 'Tek Can', icon: '💀', desc: `Dirilme yok. ${ONELIFE_SECONDS / 60} dakika dayan ve son boss'u indir.` },
+  delivery: { id: 'delivery', name: 'Kurye', icon: '📦', desc: `${DELIVERIES} paketi alım noktasından teslim noktasına taşı. Taşıyan düşerse paket yere düşer.` },
+  infection: { id: 'infection', name: 'Salgın', icon: '☣', desc: `Enfektesin: numune toplamazsan canın erir, her numune iyileştirir. ${INFECTION_SECONDS / 60} dakika dayan.` },
 };
 
 export interface MissionSelection {
@@ -82,6 +94,9 @@ export const TIMED_MODES: ModeId[] = ['survival', 'defense'];
 export const HORDE_WAVES = 20;
 
 export interface ModeCtx {
+  /** local hero takes / regains health (mode effects such as infection) */
+  hurtLocal?: (amount: number) => void;
+  healLocal?: (amount: number) => void;
   scene: THREE.Scene;
   map: GameMap;
   player: OperativeVisual;
@@ -113,7 +128,7 @@ const fmt = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.flo
 export class ModeRuntime {
   readonly sel: MissionSelection;
   readonly diff: DifficultyDef;
-  private readonly ctx: ModeCtx;
+  readonly ctx: ModeCtx;
   private t = 0;
   private stage = 0;
   private stageT = 0;
@@ -133,7 +148,7 @@ export class ModeRuntime {
   private freeT = 0;
   private readonly rescueMarkers: THREE.Group[] = [];
   private finalBoss: ZombieVisual | null = null;
-  private readonly owned: THREE.Material[] = [];
+  readonly owned: THREE.Material[] = [];
   /** timed-mode length (s) */
   readonly total: number;
   // horde mode
@@ -154,6 +169,9 @@ export class ModeRuntime {
   private blitzKills0 = -1;
   private blitzKills = 0;
   private blitzBonus = 0;
+
+  /** the ten newer modes live in extraModes.ts */
+  readonly extra: ExtraMode | null;
 
   /** Horde mode spawns every zombie itself; the arena's wave/ambient spawner stays off. */
   get ownsSpawning(): boolean {
@@ -176,6 +194,18 @@ export class ModeRuntime {
     if (sel.mode === 'rescue') this.spawnSurvivors();
     if (sel.mode === 'defense') ctx.map.core.visible = true;
     if (sel.mode === 'zones') this.nextZone();
+    this.extra = isExtraMode(sel.mode) ? new ExtraMode(sel.mode, this) : null;
+  }
+
+  /** every client, every frame */
+  localTick(dt: number): void {
+    this.extra?.localTick(dt);
+  }
+  onZombieSpawned(z: ZombieVisual): void {
+    this.extra?.onZombieSpawned(z);
+  }
+  onSampleCollected(): void {
+    this.extra?.onSampleCollected();
   }
 
   /** Candidate zone centres: every objective anchor the map has. */
@@ -200,16 +230,16 @@ export class ModeRuntime {
   }
 
   /** Is a player-controlled hero (local or co-op teammate, not an AI ally) within `r` of `pos`? */
-  private humanWithin(pos: THREE.Vector3, r: number): boolean {
+  humanWithin(pos: THREE.Vector3, r: number): boolean {
     return this.ctx.squad.some((op) => op.alive && (op.isPlayer || op.root.userData.netPlayer) && op.root.position.distanceTo(pos) < r);
   }
 
-  private banner(s: string): void {
+  banner(s: string): void {
     this.bannerText = s;
     this.bannerT = 3.2;
   }
 
-  private beacon(color: number, r = 1.6): THREE.Group {
+  beacon(color: number, r = 1.6): THREE.Group {
     const g = new THREE.Group();
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).lerp(new THREE.Color(0x8a8070), 0.4), transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
     const beam = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.08, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -249,6 +279,7 @@ export class ModeRuntime {
 
   /** Co-op guest: the host owns the objectives, so this client's own copies are hidden. */
   goRemote(): void {
+    this.extra?.goRemote();
     for (const p of this.pickups) p.mesh.visible = false;
     for (const r of this.rescueMarkers) r.visible = false;
     if (this.zoneMarker) this.zoneMarker.visible = false;
@@ -269,6 +300,7 @@ export class ModeRuntime {
     for (const b of this.bosses) if (b.hp > 0) out.push({ pos: b.root.position, color: 0xff3a30, icon: '☠', label: 'Mutant' });
     if (this.zoneMarker && !this.outcome) out.push({ pos: this.zoneMarker.position, color: 0x38bdf8, icon: '⚑', label: 'Bölge', urgent: true, radius: ZONE_RADIUS });
     if (this.huntTarget && this.huntTarget.hp > 0) out.push({ pos: this.huntTarget.root.position, color: 0xffd23c, icon: '🎯', label: 'Hedef', urgent: true });
+    if (this.extra) out.push(...this.extra.indicators());
     return out;
   }
 
@@ -288,7 +320,7 @@ export class ModeRuntime {
     if (this.bosses.delete(z) && this.sel.mode === 'boss') this.banner(`Boss düştü! (${this.bossKills}/3)`);
   }
 
-  private spawnBoss(): ZombieVisual | null {
+  spawnBoss(): ZombieVisual | null {
     const p = this.ctx.map.anchors.boss;
     const pl = this.ctx.player.root.position;
     // keep the boss arrival a fair distance away
@@ -347,6 +379,7 @@ export class ModeRuntime {
 
   /** May the player revive after going down? Consumes one revive. */
   tryRevive(): boolean {
+    if (this.extra?.noRevives) return false;
     if (this.revivesLeft <= 0) return false;
     this.revivesLeft -= 1;
     return true;
@@ -356,7 +389,7 @@ export class ModeRuntime {
     if (this.outcome) return;
     this.outcome = { won: false, title: 'GÖREV BAŞARISIZ', subtitle: reason };
   }
-  private win(subtitle: string): void {
+  win(subtitle: string): void {
     if (this.outcome) return;
     this.outcome = { won: true, title: 'GÖREV TAMAMLANDI', subtitle };
     this.ctx.sfx('win');
@@ -375,6 +408,10 @@ export class ModeRuntime {
     this.bannerT = Math.max(0, this.bannerT - dt);
     const pl = this.ctx.player.root.position;
     const m = this.ctx.map;
+    if (this.extra) {
+      this.extra.update(dt);
+      return;
+    }
     switch (this.sel.mode) {
       case 'survival': {
         const total = this.total;
@@ -626,6 +663,8 @@ export class ModeRuntime {
         prog = 0;
         target = 1;
         break;
+      default:
+        if (this.extra) ({ label, prog, target } = this.extra.hud());
     }
     return {
       ...base,
@@ -654,6 +693,7 @@ export class ModeRuntime {
     for (const p of this.pickups) p.mesh.removeFromParent();
     for (const r of this.rescueMarkers) r.removeFromParent();
     this.zoneMarker?.removeFromParent();
+    this.extra?.dispose();
     this.owned.forEach((m) => m.dispose());
   }
 }

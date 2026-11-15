@@ -50,3 +50,42 @@ export function huntTargetKind(index: number): 'tank' | 'riot' | 'hooker' | 'bos
   if (index >= HUNT_TARGETS - 1) return 'boss';
   return (['tank', 'riot', 'hooker'] as const)[index % 3]!;
 }
+
+/* ───────────── the ten newer modes (extraModes.ts) ───────────── */
+
+export const CONVOY_HP = 100;
+/** m/s while a hero is near the truck */
+export const CONVOY_SPEED = 1.6;
+export const SUPPLY_CRATES = 8;
+export const SUPPLY_SECONDS = 10 * 60;
+export const KING_RADIUS = 6;
+export const KING_TARGET = 150;
+export const KING_MOVE_SECONDS = 75;
+export const NESTS = 5;
+export const NEST_PLANT_SECONDS = 6;
+export const DARK_SECONDS = 12 * 60;
+export const SIEGE_SECONDS = 12 * 60;
+export const MUTATION_EVERY = 90;
+export const MUTATION_SECONDS = 15 * 60;
+export const ONELIFE_SECONDS = 12 * 60;
+export const DELIVERIES = 4;
+export const INFECTION_SECONDS = 12 * 60;
+/** share of max hp lost per second while no sample was collected for 2 s */
+export const INFECTION_DRAIN = 0.012;
+/** share of max hp a collected sample restores */
+export const INFECTION_SAMPLE_HEAL = 0.05;
+
+export type MutationId = 'fast' | 'tough' | 'brutal' | 'giant' | 'swarm';
+export const MUTATIONS: Record<MutationId, { name: string; desc: string }> = {
+  fast: { name: 'Çevik', desc: 'zombiler %18 daha hızlı' },
+  tough: { name: 'Kalın Deri', desc: 'zombilerin canı %35 fazla' },
+  brutal: { name: 'Vahşi', desc: 'zombiler %30 sert vuruyor' },
+  giant: { name: 'Dev Hücre', desc: 'zombiler büyüyor ve dayanıklılaşıyor' },
+  swarm: { name: 'Sürü Bilinci', desc: 'daha kalabalık geliyorlar' },
+};
+const MUTATION_ORDER: MutationId[] = ['fast', 'tough', 'swarm', 'brutal', 'giant', 'fast', 'tough', 'swarm', 'brutal', 'giant'];
+/** Mutations active after `t` seconds (one more every MUTATION_EVERY). */
+export function mutationAt(t: number): MutationId[] {
+  const n = Math.min(MUTATION_ORDER.length, Math.floor(t / MUTATION_EVERY));
+  return MUTATION_ORDER.slice(0, n);
+}

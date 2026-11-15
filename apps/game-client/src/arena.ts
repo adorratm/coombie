@@ -695,6 +695,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     aura.name = 'bossAura';
     z.root.add(aura);
   };
+  /** mode hooks wired once the mode runtime exists (spawns can come first) */
+  const modeHooks: { spawned?: (z: ZombieVisual) => void } = {};
   const spawnZombie = (
     kind: ZombieVisual['kind'] = 'grunt',
     nearPlayer = true,
@@ -752,6 +754,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       queueZombieAnim(z, { kind: 'spawn', dur: 2.1 });
       fx.spawnBloodBurst(z.root.position, 0.8, 0x3b2a1a);
     }
+    modeHooks.spawned?.(z);
     return z;
   };
 
@@ -856,6 +859,17 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     });
   };
   const modeRt = new ModeRuntime(mission, {
+    hurtLocal: (amount) => {
+      if (!player.alive || amount <= 0) return;
+      player.hp = Math.max(0, player.hp - amount);
+      player.healthBar.setRatio(player.hp / player.maxHp);
+      if (player.hp <= 0) damageOperative(player, 1, player.root.position.clone());
+    },
+    healLocal: (amount) => {
+      if (!player.alive) return;
+      player.hp = Math.min(player.maxHp, player.hp + amount);
+      player.healthBar.setRatio(player.hp / player.maxHp);
+    },
     scene,
     map,
     player,
@@ -870,6 +884,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       else audio.playLevelUp();
     },
   });
+  modeHooks.spawned = (z) => modeRt.onZombieSpawned(z);
   if (isGuest) modeRt.goRemote();
   if (Number.isFinite(modeRt.revivesLeft)) modeRt.revivesLeft += tree.revives;
   let runOver: RunOutcome | null = null;
@@ -3407,6 +3422,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     heroRt?.update(dt, simTime);
     coopMirror?.update(dt, simTime);
     advanceReactionClock(dt);
+    modeRt.localTick(dt);
     publishKit(dt);
     runSkills.update(dt, moving);
     for (let i = beams.length - 1; i >= 0; i--) {
@@ -3443,6 +3459,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         }
         if (d < 1.4) {
           gainXp(gem.xp * (1 + Math.min(combo, 10) * 0.05));
+          modeRt.onSampleCollected();
           audio.playGem();
           scene.remove(gem.mesh);
           if (!sampleHintShown) {

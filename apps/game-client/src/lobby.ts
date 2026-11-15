@@ -4,7 +4,7 @@ import { curlHand, holdGunRig, holdStyleOf, orientGun, seatMeleeInHand, supportM
 import { MAPS, MAP_ORDER } from './mapDefs';
 import { DEFAULT_RUN_MINUTES, DIFFICULTIES, DIFFICULTY_ORDER, HORDE_WAVES, MODES, RUN_MINUTES, TIMED_MODES } from './gameModes';
 import { HERO_LEVEL_MAX, TREE_NODES, TREE_TOTAL_RANKS, availablePoints, heroXpForLevel, loadHeroProgress, resetTree, spentPoints, unlockBlock, unlockTreeNode, type TreeBranch } from './heroProgress';
-import { achievementCounts, listAchievements } from './achievements';
+import { ACHIEVEMENT_CATEGORY_LABEL, achievementCounts, listAchievements, type AchievementCategory } from './achievements';
 import { createVrmAvatar, type VrmAvatarHandle } from './avatars';
 import { HERO_ABILITIES, levelCd, levelPower } from './heroAbilities';
 import {
@@ -195,6 +195,8 @@ const CSS = /* css */ `
 #lobby .diff small { color: var(--dim); font-size: 10px; line-height: 1.25; }
 #lobby .diff span { font: 600 10px var(--display); color: var(--gold, #f5c542); }
 #lobby .diff.on { background: color-mix(in srgb, var(--ac) 16%, #0e1216); box-shadow: inset 0 0 0 1px var(--ac); }
+#lobby .achcat { margin: 14px 0 6px; font: 700 12px var(--display); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+#lobby .ach.secret { opacity: .7; border-style: dashed; }
 #lobby .ach { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line);
   background: rgba(14,18,22,0.8); margin-bottom: 5px; opacity: .78; }
 #lobby .ach.done { opacity: 1; border-color: #f5c54266; }
@@ -1128,14 +1130,24 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     const list = listAchievements();
     const c = achievementCounts();
     panel.append(Object.assign(document.createElement('h3'), { textContent: `Başarımlar · ${c.done}/${c.total}` }));
-    for (const a of list) {
-      const d = document.createElement('div');
-      d.className = `ach${a.unlocked ? ' done' : ''}`;
-      const pct = Math.round((a.value / a.def.target) * 100);
-      d.innerHTML = `<span class="i">${a.def.icon}</span><div><b>${a.def.name}</b><small>${a.def.desc}</small>
+    const order: AchievementCategory[] = ['combat', 'missions', 'world', 'skills', 'hero', 'secret'];
+    for (const cat of order) {
+      const items = list.filter((a) => (a.def.category ?? 'combat') === cat);
+      if (!items.length) continue;
+      const got = items.filter((a) => a.unlocked).length;
+      panel.append(Object.assign(document.createElement('h4'), { className: 'achcat', textContent: `${ACHIEVEMENT_CATEGORY_LABEL[cat]} · ${got}/${items.length}` }));
+      for (const a of items) {
+        const d = document.createElement('div');
+        const secret = a.def.hidden && !a.unlocked;
+        d.className = `ach${a.unlocked ? ' done' : ''}${secret ? ' secret' : ''}`;
+        const pct = Math.round((a.value / a.def.target) * 100);
+        d.innerHTML = secret
+          ? `<span class="i">❔</span><div><b>Gizli başarım</b><small>Ne olduğunu bulmak sana kalmış.</small></div><span class="rw">+${a.def.reward} CR</span>`
+          : `<span class="i">${a.def.icon}</span><div><b>${a.def.name}</b><small>${a.def.desc}</small>
         <div class="bar"><i style="width:${a.unlocked ? 100 : pct}%"></i></div></div>
         <span class="rw">${a.unlocked ? '✓' : `${a.def.target > 1 ? `${a.value.toLocaleString('tr-TR')}/${a.def.target.toLocaleString('tr-TR')} · ` : ''}+${a.def.reward} CR`}</span>`;
-      panel.append(d);
+        panel.append(d);
+      }
     }
   };
 
