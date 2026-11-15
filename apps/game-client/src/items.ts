@@ -221,7 +221,7 @@ export function createWorldItem(defId: ItemId, pos: THREE.Vector3): WorldItem {
     id: `item-${itemSeq++}`,
     defId,
     mesh,
-    life: 45,
+    life: 30,
     bob: Math.random() * Math.PI * 2,
   };
 }
@@ -268,7 +268,7 @@ export function rollItemDrop(
 }
 
 export function updateWorldItem(item: WorldItem, dt: number): void {
-  // dropped items never expire (nothing collected may be lost); `life` is kept for save/HUD compat
+  // `life` (30 s) is counted down by the arena, which removes uncollected items
   item.bob += dt * 3;
   // lies on the ground with a slow turn; marker ring stays flat at ground level
   item.mesh.position.y = 0.3 + Math.sin(item.bob) * 0.03;

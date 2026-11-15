@@ -944,6 +944,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     else pickupLog.push({ name, desc, at: now });
     while (pickupLog.length > 4) pickupLog.shift();
   };
+  /** Uncollected samples / items vanish after this long (piles of them cost frame rate late in a run). */
+  const GROUND_LOOT_LIFE = 30;
+  /** last seconds on the ground: blink so the player sees it is about to go */
+  const LOOT_BLINK = 4;
   /** Each sample model is up to ~11 meshes (draw calls); cap how many lie around. */
   const MAX_GEMS = 60;
   const spawnGem = (x: number, z: number, value: number) => {
@@ -969,7 +973,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     mesh.position.set(x + (Math.random() - 0.5) * 0.4, 0.3, z + (Math.random() - 0.5) * 0.4);
     mesh.rotation.y = Math.random() * Math.PI * 2;
     scene.add(mesh);
-    gems.push({ mesh, life: 16, xp: value });
+    gems.push({ mesh, life: GROUND_LOOT_LIFE, xp: value });
   };
 
   const flashGeo = new THREE.SphereGeometry(0.16, 8, 6);
@@ -3070,7 +3074,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           continue;
         }
       }
-      // items stay on the ground until picked up (updateWorldItem no longer expires them)
+      item.life -= dt;
+      if (item.life <= 0) {
+        scene.remove(item.mesh);
+        worldItems.splice(i, 1);
+        continue;
+      }
+      item.mesh.visible = item.life > LOOT_BLINK || Math.sin(item.life * 14) > -0.3;
     }
 
     if (player.alive) {
@@ -3339,7 +3349,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
 
     for (let i = gems.length - 1; i >= 0; i--) {
       const gem = gems[i]!;
-      // XP samples never expire: collected XP must never be lost
+      gem.life -= dt;
+      if (gem.life <= 0) {
+        scene.remove(gem.mesh);
+        gems.splice(i, 1);
+        continue;
+      }
+      gem.mesh.visible = gem.life > LOOT_BLINK || Math.sin(gem.life * 14) > -0.3;
       gem.mesh.rotation.y += dt * 0.6;
       gem.mesh.position.y = 0.3;
       if (player.alive) {
