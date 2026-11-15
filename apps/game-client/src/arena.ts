@@ -270,6 +270,8 @@ export interface ArenaHandle {
   scene: THREE.Scene;
   devGoto: (label: string) => boolean;
   devHurtPlayer: (amount: number) => void;
+  /** dev: the player's root (camera rigs in tests) */
+  devPlayerRoot: () => THREE.Object3D;
   devGainXp: (amount: number) => void;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
@@ -3231,6 +3233,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     devGainXp: (amount: number): void => {
       if (DEV_GOD) gainXp(amount);
     },
+    devPlayerRoot: () => player.root,
     devHurtPlayer: (amount: number): void => {
       if (DEV_GOD) damageOperative(player, amount, player.root.position.clone());
     },

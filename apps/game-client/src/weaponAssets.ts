@@ -36,11 +36,24 @@ function supportFraction(file: string): number {
  * Where the support (left) palm goes, in gun-group units. Pistols: cupping the
  * firing hand under the grip; long guns: under the handguard.
  */
+export type SupportKind = 'handguard' | 'cup' | 'topHandle' | 'foregrip';
+
 export function addSupportPoint(group: THREE.Group, muzzle: THREE.Vector3, frac: number, s: number): THREE.Object3D {
   const p = new THREE.Object3D();
   p.name = 'supportPoint';
   if (frac <= 0) p.position.set(0, -0.075 * s, 0.0);
   else p.position.set(0, muzzle.y - 0.065 * s, muzzle.z * frac);
+  p.userData.kind = (frac <= 0 ? 'cup' : 'handguard') satisfies SupportKind;
+  group.add(p);
+  return p;
+}
+
+/** Support point at an explicit spot (carry handle, vertical foregrip). */
+export function addSupportPointAt(group: THREE.Group, at: THREE.Vector3, kind: SupportKind): THREE.Object3D {
+  const p = new THREE.Object3D();
+  p.name = 'supportPoint';
+  p.position.copy(at);
+  p.userData.kind = kind;
   group.add(p);
   return p;
 }

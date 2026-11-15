@@ -1,7 +1,7 @@
 import { MELEE_STYLES, meleeClipSeconds, meleeStyleOf, type MeleeStyle } from './meleeStyles';
 import * as THREE from 'three';
 import { preloadWeaponModels } from './weaponAssets';
-import { holdGun } from './gunHold';
+import { curlHand, holdGunRig, holdStyleOf, seatMeleeInHand, supportMelee, TWO_HANDED_MELEE } from './gunHold';
 import { ZOMBIE_ANIM_URL, ZombieAnimator, type ClipSeg } from './zombieAnim';
 import { createHookerModel } from './hooker';
 
@@ -308,6 +308,8 @@ export function bindGunToVrmHand(op: OperativeVisual, avatar: VrmAvatarHandle): 
     const hs = hand.getWorldScale(_gunFwd).x / Math.max(1e-6, op.root.getWorldScale(_gunAim).x);
     const base = grip === 'pistol' ? 0.95 : grip === 'melee' ? 1.0 : grip === 'smg' ? 0.95 : 0.92;
     op.gun.scale.setScalar(base / hs);
+    op.gun.userData.rigBase = base;
+    delete op.gun.userData.meleeSeated;
     op.gun.userData.rigGrip = new THREE.Vector3(0.075 / hs, -0.01 / hs, 0.02 / hs);
     op.gun.userData.rigUnit = 1 / hs;
     op.gun.position.copy(op.gun.userData.rigGrip as THREE.Vector3);
@@ -1527,18 +1529,41 @@ export function updateOperativeVrm(
     anim: avatar.animator ? operativeAnimInput(op, dt) : undefined,
   });
   const isRig = (avatar.vrm as unknown as { isHumanoidRig?: boolean }).isHumanoidRig === true;
-  if (isRig && op.gun.userData.vrmBound && !op.weapon.melee) {
-    // proxies → raw bones, then seat the gun and pull the support hand onto it
+  if (isRig && op.gun.userData.vrmBound) {
+    // proxies → raw bones, then place the weapon and the hands on it
     avatar.vrm.update(0);
     op.gun.userData.rigHeld = true;
-    const ud = op.gun.userData as { ikW?: number };
+    const rig = avatar.vrm as unknown as HumanoidRig;
+    const hand = avatar.rightHand;
     const free = avatar.animator?.freeHand ?? 0;
-    const want = reloading || !op.alive ? 0 : 1 - free;
-    ud.ikW = THREE.MathUtils.damp(ud.ikW ?? want, want, 12, dt);
-    const pitch = reloading ? 0.55 + reloadProgress * 0.3 : 0.06 + op.recoil * 0.25;
-    const rg = op.gun.userData.rigGrip as THREE.Vector3 | undefined;
-    if (rg) op.gun.position.copy(rg);
-    holdGun(avatar.vrm as unknown as HumanoidRig, op.root, op.gun, pitch, ud.ikW);
+    // melee or dead: the weapon rides in the fist
+    if (op.weapon.melee || !op.alive) {
+      if (hand && op.gun.parent !== hand) {
+        hand.attach(op.gun);
+        delete op.gun.userData.meleeSeated;
+      }
+      if (hand && op.weapon.melee) {
+        seatMeleeInHand(rig, op.gun, hand);
+        curlHand(rig, 'right', 1.3, 1.25, 1);
+        if (op.alive && TWO_HANDED_MELEE.has(op.weapon.variant ?? op.weapon.id)) supportMelee(rig, op.gun, 1 - free);
+      }
+      return;
+    }
+    const ud = op.gun.userData as { ikW?: number; rightW?: number };
+    // throws / radio calls free the support hand only; reloads keep it on the magazine
+    const wantL = reloading ? 1 : 1 - free;
+    ud.ikW = THREE.MathUtils.damp(ud.ikW ?? wantL, wantL, 14, dt);
+    ud.rightW = 1;
+    const pitch = reloading ? 0.35 + Math.sin(reloadProgress * Math.PI) * 0.25 : 0.04;
+    holdGunRig(rig, op.root, op.gun, {
+      style: holdStyleOf(op.weapon),
+      pitch,
+      recoil: Math.min(1, op.recoil * 2.2),
+      rightW: ud.rightW,
+      leftW: ud.ikW,
+      scale: (op.gun.userData.rigBase as number | undefined) ?? 0.92,
+      reload: reloading ? reloadProgress : -1,
+    });
     return;
   }
   op.gun.userData.rigHeld = false;

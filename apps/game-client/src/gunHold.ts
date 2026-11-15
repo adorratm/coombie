@@ -23,6 +23,7 @@ const _q = new THREE.Quaternion();
 const _pq = new THREE.Quaternion();
 const _wq = new THREE.Quaternion();
 const _ident = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
 const _Z = new THREE.Vector3(0, 0, 1);
 
 const _A = new THREE.Vector3();
@@ -68,18 +69,37 @@ function supportPoint(gun: THREE.Object3D): THREE.Object3D | null {
   return sp;
 }
 
+const _rp = new THREE.Vector3();
+const _rM = new THREE.Matrix4();
+const _rT = new THREE.Matrix4();
+const _rL = new THREE.Matrix4();
+const _rPos = new THREE.Vector3();
+const _rScl = new THREE.Vector3();
+
+/**
+ * Apply a world-space rotation `q` to `obj` about its own origin. Done with matrices:
+ * Rocketbox skeletons are mirrored (negative scale), where quaternion maths on
+ * decomposed world rotations silently goes wrong and the IK never reached its target.
+ */
+function applyWorldRotation(obj: THREE.Object3D, q: THREE.Quaternion): void {
+  obj.updateWorldMatrix(true, false);
+  _rp.setFromMatrixPosition(obj.matrixWorld);
+  _rM.makeRotationFromQuaternion(q);
+  _rT.makeTranslation(_rp.x, _rp.y, _rp.z).multiply(_rM).multiply(_rL.makeTranslation(-_rp.x, -_rp.y, -_rp.z));
+  _rT.multiply(obj.matrixWorld);
+  if (obj.parent) _rL.copy(obj.parent.matrixWorld).invert().multiply(_rT);
+  else _rL.copy(_rT);
+  _rL.decompose(_rPos, _q2, _rScl);
+  obj.quaternion.copy(_q2);
+  obj.updateWorldMatrix(false, true);
+}
+
 /** Rotate `obj` by a world-space delta (slerped from identity by w). */
 function rotateWorld(obj: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, w: number): void {
   if (from.lengthSq() < 1e-10 || to.lengthSq() < 1e-10) return;
   _q.setFromUnitVectors(from.normalize(), to.normalize());
   if (w < 1) _q.slerpQuaternions(_ident, _q, w);
-  obj.getWorldQuaternion(_wq);
-  _wq.premultiply(_q);
-  if (obj.parent) {
-    obj.parent.getWorldQuaternion(_pq);
-    obj.quaternion.copy(_pq.invert().multiply(_wq));
-  } else obj.quaternion.copy(_wq);
-  obj.updateWorldMatrix(false, true);
+  applyWorldRotation(obj, _q);
 }
 
 /** Analytic two-bone IK: moves `hand`'s origin onto `target`, elbow kept on its current side (biased down). */
@@ -156,4 +176,289 @@ export function solveSupportHand(rig: BoneSource, gun: THREE.Object3D, w: number
 export function holdGun(rig: BoneSource, root: THREE.Object3D, gun: THREE.Object3D, pitch: number, ikWeight: number): void {
   orientGun(root, gun, pitch);
   solveSupportHand(rig, gun, ikWeight);
+}
+
+// ---------------------------------------------------------------------------
+// World-anchored hold: the gun sits where a soldier carries that kind of weapon
+// (shouldered rifle, compact SMG, hip-carried heavy gun, two-handed pistol) and
+// BOTH hands are pulled onto it — the firing hand on the pistol grip, the support
+// hand on the handguard — then turned so the fingers wrap the grip.
+// ---------------------------------------------------------------------------
+
+export type HoldStyle = 'rifle' | 'smg' | 'heavy' | 'pistol';
+
+const _R = new THREE.Vector3();
+const _L = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _right = new THREE.Vector3();
+const _gf = new THREE.Vector3();
+const _gu = new THREE.Vector3();
+const _grip = new THREE.Vector3();
+const _tgt = new THREE.Vector3();
+const _w = new THREE.Vector3();
+const _k = new THREE.Vector3();
+const _i = new THREE.Vector3();
+const _l = new THREE.Vector3();
+const _cur = new THREE.Vector3();
+const _des = new THREE.Vector3();
+const _m = new THREE.Matrix4();
+
+/** Carry style for a firearm (heavy guns are carried at the hip). */
+export function holdStyleOf(weapon: { id: string; variant?: string; grip?: string }): HoldStyle {
+  const v = weapon.variant ?? weapon.id;
+  if (weapon.id === 'lmg' || v === 'shredder' || v === 'thumper_gl' || v === 'boru_havan' || v === 'anti_materiel') return 'heavy';
+  if (weapon.grip === 'pistol') return 'pistol';
+  if (weapon.grip === 'smg') return 'smg';
+  return 'rifle';
+}
+
+/** Turn a hand (absolute, world space) so wrist→middle knuckle = `finger` and little→index knuckle ≈ `side`. */
+function orientHand(rig: BoneSource, side: 'left' | 'right', finger: THREE.Vector3, across: THREE.Vector3): void {
+  const hand = rig.bone(`${side}Hand`);
+  const mid = rig.bone(`${side}MiddleProximal`);
+  const idx = rig.bone(`${side}IndexProximal`);
+  const lit = rig.bone(`${side}LittleProximal`) ?? rig.bone(`${side}RingProximal`);
+  if (!hand || !mid || !idx || !lit) return;
+  hand.updateWorldMatrix(true, true);
+  hand.getWorldPosition(_w);
+  mid.getWorldPosition(_k);
+  idx.getWorldPosition(_i);
+  lit.getWorldPosition(_l);
+  _cur.subVectors(_k, _w).normalize();
+  _des.copy(finger).normalize();
+  _q.setFromUnitVectors(_cur, _des);
+  // twist about the finger axis so the knuckle line matches
+  _cur.subVectors(_i, _l).applyQuaternion(_q);
+  _cur.addScaledVector(_des, -_cur.dot(_des));
+  _v.copy(across).addScaledVector(_des, -across.dot(_des));
+  if (_cur.lengthSq() > 1e-8 && _v.lengthSq() > 1e-8) {
+    _q2.setFromUnitVectors(_cur.normalize(), _v.normalize());
+    _q.premultiply(_q2);
+  }
+  applyWorldRotation(hand, _q);
+}
+
+/** Wrist IK so the palm centre lands on `target`, then the hand is turned to wrap. */
+function placeHand(rig: BoneSource, side: 'left' | 'right', target: THREE.Vector3, finger: THREE.Vector3, across: THREE.Vector3, w: number): void {
+  const upper = rig.bone(`${side}UpperArm`);
+  const lower = rig.bone(`${side}LowerArm`);
+  const hand = rig.bone(`${side}Hand`);
+  if (!upper || !lower || !hand || w <= 0.001) return;
+  const knuckle = rig.bone(`${side}MiddleProximal`) ?? rig.bone(`${side}IndexProximal`);
+  for (let it = 0; it < 2; it++) {
+    if (w > 0.5) orientHand(rig, side, finger, across);
+    hand.updateWorldMatrix(true, true);
+    hand.getWorldPosition(_C);
+    if (knuckle) {
+      knuckle.getWorldPosition(_knuckle);
+      _palm.lerpVectors(_C, _knuckle, 0.5);
+    } else _palm.copy(_C);
+    _T.copy(target).sub(_palm).add(_C);
+    twoBoneIK(upper, lower, hand, _T, w);
+  }
+  if (w > 0.5) orientHand(rig, side, finger, across);
+}
+
+const FINGERS = ['Index', 'Middle', 'Ring', 'Little'] as const;
+const _ca = new THREE.Vector3();
+const _cf = new THREE.Vector3();
+const _cw = new THREE.Vector3();
+
+/**
+ * Close the fingers around whatever the hand holds. Axis = knuckle line, measured from
+ * bone positions (so it is right on mirrored skeletons too); `index` is the trigger finger.
+ */
+export function curlHand(rig: BoneSource, side: 'left' | 'right', others: number, index: number, w: number): void {
+  if (w <= 0.001) return;
+  const hand = rig.bone(`${side}Hand`);
+  const idx = rig.bone(`${side}IndexProximal`);
+  const lit = rig.bone(`${side}LittleProximal`) ?? rig.bone(`${side}RingProximal`);
+  const mid = rig.bone(`${side}MiddleProximal`);
+  if (!hand || !idx || !lit || !mid) return;
+  hand.updateWorldMatrix(true, true);
+  idx.getWorldPosition(_ca);
+  lit.getWorldPosition(_cw);
+  _ca.sub(_cw); // little → index (knuckle line)
+  hand.getWorldPosition(_cw);
+  mid.getWorldPosition(_cf);
+  _cf.sub(_cw).normalize(); // wrist → knuckles
+  _ca.addScaledVector(_cf, -_ca.dot(_cf));
+  if (_ca.lengthSq() < 1e-10) return;
+  _ca.normalize();
+  // right palm = across × finger → curl axis +across; left mirrored
+  if (side === 'left') _ca.negate();
+  for (const f of FINGERS) {
+    const a = (f === 'Index' ? index : others) * w;
+    const share = [0.8, 1.0, 0.7];
+    [`${side}${f}Proximal`, `${side}${f}Intermediate`, `${side}${f}Distal`].forEach((n, i) => {
+      const b = rig.bone(n);
+      if (!b) return;
+      _q.setFromAxisAngle(_ca, a * share[i]!);
+      applyWorldRotation(b, _q);
+    });
+  }
+}
+
+export interface RigHoldOpts {
+  style: HoldStyle;
+  /** + = muzzle down */
+  pitch: number;
+  /** 0..1 recoil kick */
+  recoil: number;
+  /** 0..1: firing hand on the grip */
+  rightW: number;
+  /** 0..1: support hand on the handguard */
+  leftW: number;
+  /** gun scale in root space */
+  scale: number;
+  /** reload 0..1 (the support hand works the magazine), or < 0 */
+  reload?: number;
+}
+
+/**
+ * Put the gun at its carry anchor (root space) and both hands on it.
+ * The gun group's origin is the pistol grip, +Z the barrel, +Y up.
+ */
+export function holdGunRig(rig: BoneSource, root: THREE.Object3D, gun: THREE.Object3D, o: RigHoldOpts): void {
+  const rUp = rig.bone('rightUpperArm');
+  const lUp = rig.bone('leftUpperArm');
+  if (!rUp || !lUp) return;
+  if (gun.parent !== root) {
+    root.add(gun);
+    gun.scale.setScalar(o.scale);
+  }
+  root.updateWorldMatrix(true, true);
+  rUp.getWorldPosition(_R);
+  lUp.getWorldPosition(_L);
+  // body frame from the shoulders (works for any rig scale)
+  _right.subVectors(_R, _L);
+  _right.y = 0;
+  const span = Math.max(0.2, _right.length());
+  _right.normalize();
+  root.getWorldQuaternion(_rootQ);
+  _fwd.set(0, 0, 1).applyQuaternion(_rootQ);
+  _fwd.y = 0;
+  _fwd.normalize();
+  const s = span / 0.34; // ≈ 1 for an adult
+  const st = o.style;
+  // grip position in the world
+  if (st === 'pistol') {
+    _grip.lerpVectors(_R, _L, 0.5).addScaledVector(_fwd, 0.44 * s).addScaledVector(_up, -0.1 * s).addScaledVector(_right, 0.02 * s);
+  } else if (st === 'heavy') {
+    _grip.copy(_R).addScaledVector(_fwd, 0.26 * s).addScaledVector(_up, -0.44 * s).addScaledVector(_right, 0.04 * s);
+  } else if (st === 'smg') {
+    _grip.copy(_R).addScaledVector(_fwd, 0.27 * s).addScaledVector(_up, -0.15 * s).addScaledVector(_right, -0.07 * s);
+  } else {
+    _grip.copy(_R).addScaledVector(_fwd, 0.22 * s).addScaledVector(_up, -0.14 * s).addScaledVector(_right, -0.06 * s);
+  }
+  // aim: forward, pitched about the body's right axis (heavy guns hang a touch nose-up)
+  const pitch = o.pitch + (st === 'heavy' ? -0.05 : 0);
+  _q.setFromAxisAngle(_right, -pitch);
+  _aim.copy(_fwd).applyQuaternion(_q).normalize();
+  _grip.addScaledVector(_aim, -o.recoil * 0.06 * s);
+  // gun basis: +Z aim, +Y up-ish, +X = aim × up (right side of the gun)
+  _gf.copy(_aim);
+  // up perpendicular to the barrel
+  _gu.copy(_up).addScaledVector(_gf, -_up.dot(_gf)).normalize();
+  // three.js basis must be right-handed: x = y × z
+  _cur.crossVectors(_gu, _gf);
+  _m.makeBasis(_cur, _gu, _gf);
+  _wq.setFromRotationMatrix(_m);
+  root.getWorldQuaternion(_pq);
+  gun.quaternion.copy(_pq.clone().invert().multiply(_wq));
+  _tgt.copy(_grip);
+  root.worldToLocal(_tgt);
+  gun.position.copy(_tgt);
+  gun.updateWorldMatrix(true, true);
+
+  // ---- firing hand on the pistol grip
+  const gx = _cur.clone().normalize(); // gun +X in world
+  const unit = s;
+  _tgt.copy(_grip).addScaledVector(_gu, -0.045 * unit).addScaledVector(_gf, -0.01 * unit);
+  // on the grip's right side: wrist→knuckles forward-up, knuckle line up the grip
+  const rFinger = new THREE.Vector3().copy(_gf).multiplyScalar(0.75).addScaledVector(_gu, 0.25).addScaledVector(gx, gx.dot(_right) > 0 ? -0.35 : 0.35);
+  const rAcross = new THREE.Vector3().copy(_gu).multiplyScalar(0.85).addScaledVector(_gf, 0.3);
+  // palm sits on the right flank of the grip
+  _tgt.addScaledVector(_right, 0.035 * unit);
+  placeHand(rig, 'right', _tgt, rFinger, rAcross, o.rightW);
+  // fingers round the grip, index finger along / on the trigger
+  curlHand(rig, 'right', 1.05, 0.55, o.rightW);
+
+  // ---- support hand
+  const sp = supportPoint(gun);
+  const reload = o.reload ?? -1;
+  if (reload >= 0) {
+    // support hand goes to the magazine well: out, down, back in
+    const out = Math.sin(Math.min(1, reload) * Math.PI);
+    _tgt.copy(_grip).addScaledVector(_gf, (st === 'pistol' ? 0.0 : 0.09) * unit).addScaledVector(_gu, (-0.08 - out * 0.12) * unit).addScaledVector(_right, -0.03 * unit);
+    const lFinger = new THREE.Vector3().copy(_right).multiplyScalar(0.6).addScaledVector(_gu, 0.5).addScaledVector(_gf, 0.3);
+    placeHand(rig, 'left', _tgt, lFinger, _gf.clone(), o.leftW);
+    curlHand(rig, 'left', 0.8, 0.8, o.leftW);
+  } else if (st === 'pistol' || !sp) {
+    // cup the firing hand from the left side
+    _tgt.copy(_grip).addScaledVector(_gu, -0.07 * unit).addScaledVector(_right, -0.04 * unit).addScaledVector(_gf, 0.01 * unit);
+    const lFinger = new THREE.Vector3().copy(_right).multiplyScalar(0.7).addScaledVector(_gf, 0.55).addScaledVector(_gu, -0.1);
+    const lAcross = new THREE.Vector3().copy(_gu).multiplyScalar(0.7).addScaledVector(_gf, 0.4);
+    placeHand(rig, 'left', _tgt, lFinger, lAcross, o.leftW);
+    curlHand(rig, 'left', 1.0, 1.0, o.leftW);
+  } else {
+    sp.getWorldPosition(_tgt);
+    _tgt.addScaledVector(_gu, -0.02 * unit);
+    // under the handguard, palm up, fingers wrapping round the right side
+    const lFinger = new THREE.Vector3().copy(_right).multiplyScalar(0.7).addScaledVector(_gu, 0.35).addScaledVector(_gf, 0.35);
+    const lAcross = new THREE.Vector3().copy(_gf);
+    placeHand(rig, 'left', _tgt, lFinger, lAcross, o.leftW);
+    curlHand(rig, 'left', 0.95, 0.85, o.leftW);
+  }
+}
+
+/**
+ * Melee: the weapon stays in the fist. Handle through the palm along the knuckle
+ * line, blade out of the thumb/index side — so it follows every swing clip.
+ */
+export function seatMeleeInHand(rig: BoneSource, gun: THREE.Object3D, hand: THREE.Object3D): void {
+  if (gun.userData.meleeSeated === hand.uuid) return;
+  const idx = rig.bone('rightIndexProximal');
+  const lit = rig.bone('rightLittleProximal') ?? rig.bone('rightRingProximal');
+  const mid = rig.bone('rightMiddleProximal');
+  if (!idx || !lit || !mid) return;
+  hand.updateWorldMatrix(true, true);
+  const inv = new THREE.Matrix4().copy(hand.matrixWorld).invert();
+  const pI = idx.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+  const pL = lit.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+  const pM = mid.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+  const finger = pM.clone().normalize();
+  const blade = pI.clone().sub(pL);
+  blade.addScaledVector(finger, -blade.dot(finger)).normalize();
+  // tilt the blade a little toward the fingertips (natural wrist angle)
+  blade.addScaledVector(finger, 0.25).normalize();
+  // the edge faces away from the palm: gun +Y ≈ finger direction
+  const yAxis = finger.clone().addScaledVector(blade, -finger.dot(blade)).normalize();
+  const xAxis = new THREE.Vector3().crossVectors(yAxis, blade).normalize();
+  gun.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, blade));
+  // palm centre: between wrist and knuckles, slightly toward the palm side
+  const palm = pM.clone().multiplyScalar(0.55);
+  gun.position.copy(palm);
+  gun.userData.meleeSeated = hand.uuid;
+}
+
+/** Two-handed melee weapons (bat, axe). */
+export const TWO_HANDED_MELEE = new Set(['bat', 'axe']);
+
+/**
+ * Left fist on the handle just below the right one (two-handed melee). The weapon is
+ * already seated in the right hand, so this follows every swing.
+ */
+export function supportMelee(rig: BoneSource, gun: THREE.Object3D, w: number): void {
+  if (w <= 0.001) return;
+  const rh = rig.bone('rightHand');
+  const rk = rig.bone('rightMiddleProximal');
+  if (!rh || !rk) return;
+  gun.updateWorldMatrix(true, false);
+  // handle runs along the weapon's +Z; the left fist sits ~11 cm further down it
+  const target = new THREE.Vector3(0, 0, -0.11).applyMatrix4(gun.matrixWorld);
+  const handleUp = new THREE.Vector3(0, 0, 1).transformDirection(gun.matrixWorld);
+  const finger = rk.getWorldPosition(new THREE.Vector3()).sub(rh.getWorldPosition(new THREE.Vector3())).normalize();
+  placeHand(rig, 'left', target, finger, handleUp, w);
+  curlHand(rig, 'left', 1.3, 1.3, w);
 }

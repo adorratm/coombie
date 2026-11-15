@@ -90,7 +90,7 @@ export interface CoopPanel {
   inRoom: () => boolean;
 }
 
-export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel {
+export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: () => void): CoopPanel {
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -324,16 +324,22 @@ export function createCoopPanel(onStart: (start: CoopStart) => void): CoopPanel 
           return `<li><b>${esc(p.displayName)}${p.playerId === me ? ' (sen)' : ''}</b><small>${esc(def?.name ?? p.operativeId)}</small>${p.playerId === st.hostPlayerId ? '<span class="tag host">ODA SAHİBİ</span>' : ''}<span class="tag ${p.isReady ? 'ok' : 'wait'}">${p.isReady ? 'HAZIR' : 'BEKLİYOR'}</span></li>`;
         })
         .join('')}</ul>
+      <p class="solo">Arkadaş beklemek zorunda değilsin: <b>TEK BAŞINA OYNA</b> ile hemen başla, istediğinde buradan birlikte oynarsınız.</p>
       <p>${st.players.length}/8 oyuncu${host ? ` · Görev: ${esc(m.map)} · ${esc(m.mode)} · ${esc(m.difficulty)}` : ''}</p>
       <div class="err" role="alert">${esc(starting ? '' : error)}</div>
       <div class="foot">
         ${dracord ? '' : '<button id="coopLeave">ODADAN ÇIK</button>'}
         <button id="coopHide">LOBİYE DÖN</button>
+        ${onSolo ? `<button id="coopSolo" ${starting ? 'disabled' : ''} title="Odadan çıkmadan kendi başına oyna">TEK BAŞINA OYNA</button>` : ''}
         <button id="coopReady" ${starting ? 'disabled' : ''}>${mine?.isReady ? 'HAZIR DEĞİLİM' : 'HAZIRIM'}</button>
         ${host ? `<button id="coopStart" class="go" ${allReady && !starting ? '' : 'disabled'}>${starting ? 'BAŞLIYOR…' : 'BAŞLAT'}</button>` : ''}
       </div>`;
     box.querySelector('#coopLeave')?.addEventListener('click', leaveRoom);
     box.querySelector('#coopHide')!.addEventListener('click', () => back.classList.remove('on'));
+    box.querySelector('#coopSolo')?.addEventListener('click', () => {
+      back.classList.remove('on');
+      onSolo?.();
+    });
     box.querySelector('#coopReady')!.addEventListener('click', () => {
       error = '';
       void syncOperative()

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ensureWeaponEnvironment } from './weaponAssets';
-import { holdGun, orientGun, type BoneSource } from './gunHold';
+import { curlHand, holdGunRig, holdStyleOf, orientGun, seatMeleeInHand, supportMelee, TWO_HANDED_MELEE, type BoneSource } from './gunHold';
 import { MAPS, MAP_ORDER } from './mapDefs';
 import { DEFAULT_RUN_MINUTES, DIFFICULTIES, DIFFICULTY_ORDER, HORDE_WAVES, MODES, RUN_MINUTES, TIMED_MODES } from './gameModes';
 import { HERO_LEVEL_MAX, TREE_NODES, TREE_TOTAL_RANKS, availablePoints, heroXpForLevel, loadHeroProgress, resetTree, spentPoints, unlockBlock, unlockTreeNode, type TreeBranch } from './heroProgress';
@@ -597,8 +597,20 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
       });
       if (gun?.parent) {
         const melee = !!previewDef?.melee;
-        if (melee || !(avatar.vrm as unknown as { isHumanoidRig?: boolean }).isHumanoidRig) orientGun(avatar.root, gun, melee ? -0.15 : 0.06);
-        else holdGun(avatar.vrm as unknown as BoneSource, avatar.root, gun, 0.06, 1);
+        const rig = avatar.vrm as unknown as BoneSource & { isHumanoidRig?: boolean; update: (dt: number) => void };
+        if (!rig.isHumanoidRig) orientGun(avatar.root, gun, melee ? -0.15 : 0.06);
+        else {
+          // same hold as in the arena: weapon at its carry spot, both hands on it
+          rig.update(0);
+          if (melee) {
+            if (avatar.rightHand && gun.parent !== avatar.rightHand) avatar.rightHand.attach(gun);
+            if (avatar.rightHand) seatMeleeInHand(rig, gun, avatar.rightHand);
+            curlHand(rig, 'right', 1.3, 1.25, 1);
+            if (previewDef && TWO_HANDED_MELEE.has(previewDef.variant ?? previewDef.id)) supportMelee(rig, gun, 1);
+          } else if (previewDef) {
+            holdGunRig(rig, avatar.root, gun, { style: holdStyleOf(previewDef), pitch: 0.04, recoil: 0, rightW: 1, leftW: 1, scale: previewDef.grip === 'pistol' || previewDef.grip === 'smg' ? 0.95 : 0.92 });
+          }
+        }
       }
     }
     renderer.render(scene, camera);

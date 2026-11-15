@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { WeaponLook } from './weapons';
-import { addSupportPoint, weaponMaterial } from './weaponAssets';
+import { addSupportPoint, addSupportPointAt, weaponMaterial } from './weaponAssets';
 
 /**
  * Procedural weapon models from a small `WeaponLook` recipe so 30 guns read as
@@ -251,6 +251,10 @@ export function buildWeaponModel(look: WeaponLook, s: number): { group: THREE.Gr
   tip.position.set(0, 0.045 * s, muzzleZ * s);
   g.add(tip);
   const melee = look.body === 'blade' || look.body === 'machete' || look.body === 'club' || look.body === 'axe';
-  if (!melee) addSupportPoint(g, tip.position, look.body === 'pistol' || look.body === 'revolver' ? 0 : look.body === 'minigun' ? 0.3 : 0.5, s);
+  if (melee) {
+    // nothing: melee weapons sit in the fist (weaponHold.ts)
+  } else if (look.body === 'minigun') addSupportPointAt(g, new THREE.Vector3(0, (0.045 + 0.118) * s, 0.2 * s), 'topHandle');
+  else if (look.body === 'launcher') addSupportPointAt(g, new THREE.Vector3(0, (0.045 - 0.1) * s, 0.35 * s), 'foregrip');
+  else addSupportPoint(g, tip.position, look.body === 'pistol' || look.body === 'revolver' ? 0 : 0.5, s);
   return { group: g, tip };
 }

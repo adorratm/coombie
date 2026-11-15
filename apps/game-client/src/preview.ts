@@ -805,7 +805,10 @@ const toMenu = () => {
   lobby.show();
 };
 const lobbyHost = document.getElementById('lobby')!;
-const coopPanel = createCoopPanel((start) => restartRun(start));
+const coopPanel = createCoopPanel(
+  (start) => restartRun(start),
+  () => restartRun(),
+);
 if (wantsTouchControls()) document.body.classList.add('touch-device');
 const lobby = createLobby(lobbyHost, () => {
   // phones: go fullscreen + landscape on the tap that starts the run (needs a user gesture)
