@@ -362,7 +362,7 @@ export function gunButt(gun: THREE.Object3D): { z: number; y: number } {
 }
 
 /** How far each carry turns the upper body (right shoulder back, left forward), radians. */
-const BLADE: Record<HoldStyle, number> = { rifle: 0.34, smg: 0.26, heavy: 0.4, pistol: 0.08 };
+const BLADE: Record<HoldStyle, number> = { rifle: 0.34, smg: 0.26, heavy: 0.4, pistol: 0.16 };
 
 /** Turn the torso about the vertical by `angle` (split over the spine), the head turned back to the front. */
 function bladeTorso(rig: BoneSource, angle: number): void {
@@ -433,7 +433,8 @@ export function holdGunRig(rig: BoneSource, root: THREE.Object3D, gun: THREE.Obj
   const stocked = !!butt && butt.z * ws < -0.07 * s;
   // grip position in the world
   if (st === 'pistol') {
-    _grip.lerpVectors(_R, _L, 0.5).addScaledVector(_fwd, 0.44 * s).addScaledVector(_up, -0.1 * s).addScaledVector(_right, 0.02 * s);
+    // two-handed, a touch right of centre and below the eyes (the arms don't cross the chest)
+    _grip.lerpVectors(_R, _L, 0.5).addScaledVector(_fwd, 0.42 * s).addScaledVector(_up, -0.14 * s).addScaledVector(_right, 0.09 * s);
   } else if (st === 'heavy') {
     // hip carry: the butt clear of the hip / belly, gun along the right side
     // (elbow bent ~90°: the hand must stay well inside arm's reach)
@@ -533,7 +534,8 @@ export function seatMeleeInHand(rig: BoneSource, gun: THREE.Object3D, hand: THRE
   // tilt toward the fingertips: short blades point forward (not up past the face),
   // long two-handers stay upright like a bat at the ready
   const variant = String(gun.userData.weaponVariant ?? '');
-  const tilt = variant === 'knife' ? 1.1 : variant === 'machete' ? 1.0 : 0.25;
+  // bat / axe lean back over the shoulder (a ready swing), not straight up past the face
+  const tilt = variant === 'knife' ? 1.1 : variant === 'machete' ? 1.0 : TWO_HANDED_MELEE.has(variant) ? -1.05 : 0.25;
   blade.addScaledVector(finger, tilt).normalize();
   // the edge faces away from the palm: gun +Y ≈ finger direction
   const yAxis = finger.clone().addScaledVector(blade, -finger.dot(blade)).normalize();
