@@ -405,6 +405,57 @@ function mountUral(truck: THREE.Group, a: TruckAsset): void {
   truck.add(body);
   truck.userData.wheels = wheels;
   truck.userData.wheelR = URAL_WHEEL_R;
+  void seatDriver(body);
+}
+
+/** where the driver sits in the URAL cab (left-hand drive: the driver's left is +X) and how */
+export const DRIVER_SEAT = {
+  x: 0.47,
+  y: 0.98,
+  z: 1.42,
+  height: 1.78,
+  thigh: -1.45,
+  knee: 1.5,
+  armDown: 1.05,
+  armFwd: 0.95,
+  elbow: 0.75,
+  spine: 0.08,
+};
+
+/** A soldier at the wheel, hands on it (a fixed seated pose: he is not going anywhere). */
+async function seatDriver(body: THREE.Group): Promise<void> {
+  try {
+    const { createVrmAvatar } = await import('./avatars');
+    const av = await createVrmAvatar({ url: '/avatars/rb/op_breaker.glb', accentColor: 0x556b2f, style: 'operative', targetHeight: DRIVER_SEAT.height, showRing: false });
+    const hum = av.vrm.humanoid;
+    const set = (n: string, x: number, y: number, z: number) => {
+      const b = hum?.getNormalizedBoneNode(n as never);
+      if (b) b.rotation.set(x, y, z, 'XYZ');
+    };
+    const S = DRIVER_SEAT;
+    set('leftUpperLeg', S.thigh, 0, 0.06);
+    set('rightUpperLeg', S.thigh, 0, -0.06);
+    set('leftLowerLeg', S.knee, 0, 0);
+    set('rightLowerLeg', S.knee, 0, 0);
+    set('leftFoot', -0.25, 0, 0);
+    set('rightFoot', -0.25, 0, 0);
+    set('spine', S.spine, 0, 0);
+    set('leftUpperArm', 0, -S.armFwd, -S.armDown);
+    set('rightUpperArm', 0, S.armFwd, S.armDown);
+    set('leftLowerArm', 0, -S.elbow, 0);
+    set('rightLowerArm', 0, S.elbow, 0);
+    hum?.update();
+    av.root.position.set(S.x, S.y, S.z);
+    av.root.traverse((o) => {
+      o.castShadow = false;
+      // posed once: no need to recompute its matrices every frame beyond the truck's own
+      o.frustumCulled = false;
+    });
+    av.root.name = 'driver';
+    body.add(av.root);
+  } catch {
+    /* a truck without a visible driver still drives */
+  }
 }
 
 /**

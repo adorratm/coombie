@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { makeAabb, type Aabb } from './collision';
 import { describe, expect, it, vi } from 'vitest';
 
 // the truck model needs textures (browser only)
@@ -17,7 +18,7 @@ const hero = (): OperativeVisual => {
   return { root, alive: true, isPlayer: true, hp: 100, maxHp: 100, healthBar: { setRatio: () => undefined } } as unknown as OperativeVisual;
 };
 
-function runtime(mode: (typeof EXTRA_MODE_IDS)[number]) {
+function runtime(mode: (typeof EXTRA_MODE_IDS)[number], colliders: Aabb[] = []) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x000000, 0.02);
   const me = hero();
@@ -28,6 +29,7 @@ function runtime(mode: (typeof EXTRA_MODE_IDS)[number]) {
     core: new THREE.Object3D(),
     evacMarker: new THREE.Object3D(),
     bound: 100,
+    colliders,
   };
   let hurt = 0;
   const rt = new ModeRuntime(
@@ -89,6 +91,23 @@ describe('the ten newer modes', () => {
       me.root.position.copy(truck.pos);
       zombies.length = 0; // the squad clears every ambush
       rt.update(0.5, 0);
+    }
+    expect(rt.outcome?.won).toBe(true);
+  });
+
+  it('convoy drives round buildings instead of through them', () => {
+    // a row of houses across the whole way from the start to the first checkpoints, one gap at the east end
+    const walls = [makeAabb(-30, 22, 66, 3), makeAabb(-20, -24, 6, 6), makeAabb(20, 20, 4, 4)];
+    const { rt, me, zombies } = runtime('convoy', walls);
+    const inside = (x: number, z: number) => walls.some((b) => x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ);
+    let maxX = -Infinity;
+    for (let i = 0; i < 40000 && !rt.outcome; i++) {
+      const truck = rt.indicators().find((x) => x.icon === '🚚')!;
+      expect(inside(truck.pos.x, truck.pos.z)).toBe(false);
+      maxX = Math.max(maxX, truck.pos.x);
+      me.root.position.copy(truck.pos);
+      zombies.length = 0;
+      rt.update(0.1, 0);
     }
     expect(rt.outcome?.won).toBe(true);
   });

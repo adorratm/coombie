@@ -100,6 +100,8 @@ export interface NetSnapshot {
   v?: number;
   /** what the squad is doing right now; guests draw it instead of running their own objectives */
   obj?: NetObjective;
+  /** a vehicle the squad escorts (convoy truck): x, z, yaw */
+  veh?: number[];
 }
 
 /** One objective marker: x, z, colour, ground-ring radius (0 = arrow only), icon, label. */

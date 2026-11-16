@@ -41,6 +41,8 @@ export interface WorldFrame {
   kills: number;
   zombies: NetZombie[];
   heroes: NetHero[];
+  /** escorted vehicle pose [x, z, yaw] (convoy) */
+  veh?: number[] | null;
 }
 
 interface Stored extends WorldFrame {
@@ -68,7 +70,8 @@ export class SnapshotBuffer {
   private interval = 1 / 15;
   private renderT: number | null = null;
   private lastNow = 0;
-  private readonly out: WorldFrame = { t: 0, wave: 1, kills: 0, zombies: [], heroes: [] };
+  private readonly out: WorldFrame = { t: 0, wave: 1, kills: 0, zombies: [], heroes: [], veh: null };
+  private readonly vehOut = [0, 0, 0];
   private readonly zPool: NetZombie[] = [];
   private readonly hPool: NetHero[] = [];
   private readonly byId = new Map<number, NetZombie>();
@@ -175,6 +178,21 @@ export class SnapshotBuffer {
       }
       zs[i] = o;
     }
+    // the vehicle glides like everything else
+    const vb = B.veh;
+    const va = A?.veh;
+    if (vb && vb.length >= 3) {
+      if (va && va.length >= 3 && k !== 1 && Math.abs(vb[0]! - va[0]!) + Math.abs(vb[1]! - va[1]!) < TELEPORT) {
+        this.vehOut[0] = lerp(va[0]!, vb[0]!, k);
+        this.vehOut[1] = lerp(va[1]!, vb[1]!, k);
+        this.vehOut[2] = lerpAngle(va[2]!, vb[2]!, Math.min(k, 1));
+      } else {
+        this.vehOut[0] = vb[0]!;
+        this.vehOut[1] = vb[1]!;
+        this.vehOut[2] = vb[2]!;
+      }
+      out.veh = this.vehOut;
+    } else out.veh = null;
     const hs = out.heroes;
     hs.length = B.heroes.length;
     for (let i = 0; i < B.heroes.length; i++) {

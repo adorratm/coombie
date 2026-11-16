@@ -5,6 +5,8 @@ import type { ModeId } from './mapDefs';
 import type { ZombieKind } from './zombieKinds';
 import { buildMilitaryTruck, rollTruckWheels } from './vehicleModels';
 import { propGroup } from './mapBuilder';
+import type { Aabb } from './collision';
+import { TRUCK_HALF_WIDTH, TruckDriver, TruckPlanner, pushOutOfTruck, type DrivePt, type P2 } from './truckNav';
 import {
   CONVOY_AMBUSH_SECONDS,
   CONVOY_CHECKPOINT_SECONDS,
@@ -56,7 +58,7 @@ export const isExtraMode = (m: ModeId): m is ExtraModeId => (EXTRA_MODE_IDS as r
 export interface ModeHost {
   readonly ctx: {
     scene: THREE.Scene;
-    map: { anchors: { core: THREE.Vector3; evac: THREE.Vector3; boss: THREE.Vector3; spawn: THREE.Vector3; pickups: THREE.Vector3[]; rescues: THREE.Vector3[] }; core: THREE.Object3D; bound: number };
+    map: { anchors: { core: THREE.Vector3; evac: THREE.Vector3; boss: THREE.Vector3; spawn: THREE.Vector3; pickups: THREE.Vector3[]; rescues: THREE.Vector3[] }; core: THREE.Object3D; bound: number; colliders?: readonly Aabb[] };
     player: OperativeVisual;
     squad: OperativeVisual[];
     zombies: ZombieVisual[];
@@ -105,6 +107,14 @@ export class ExtraMode {
   private ambushT = 0;
   private from = new THREE.Vector3();
   private to = new THREE.Vector3();
+  /** the road map (rebuilt while the map's props are still streaming in) and the driver */
+  private planner: TruckPlanner | null = null;
+  private plannerAge = 0;
+  private driver: TruckDriver | null = null;
+  /** leg the driver currently has a route for (-1 = none) */
+  private plannedLeg = -1;
+  /** metres of route still ahead after the current leg (straight-line estimate) */
+  private laterLegs = 0;
   // supply / delivery / king / nests markers
   private marker: THREE.Group | null = null;
   private marker2: THREE.Group | null = null;
@@ -116,6 +126,7 @@ export class ExtraMode {
   private lastSample = 0;
   private baseFog = -1;
   private readonly tmp = new THREE.Vector3();
+  private readonly tmp2 = new THREE.Vector3();
 
   constructor(
     readonly id: ExtraModeId,
@@ -141,6 +152,7 @@ export class ExtraMode {
         host.ctx.scene.add(this.truck);
         this.truck.position.copy(this.from);
         this.truck.lookAt(this.route[1]!);
+        this.driver = new TruckDriver(this.from.x, this.from.z, this.truck.rotation.y);
         this.truckHp = CONVOY_HP * (1 + 0.15 * Math.max(0, 1 - host.diff.dmg));
         break;
       }
@@ -321,8 +333,7 @@ export class ExtraMode {
         // zombies at the truck chew on it; a crowd in front of the plough blocks it
         let hits = 0;
         let blocking = 0;
-        const target = this.route[this.leg] ?? this.to;
-        const heading = target.clone().sub(p).setY(0).normalize();
+        const heading = this.tmp2.set(Math.sin(truck.rotation.y), 0, Math.cos(truck.rotation.y));
         for (const z of c.zombies) {
           if (z.hp <= 0) continue;
           this.tmp.subVectors(z.root.position, p).setY(0);
@@ -337,37 +348,36 @@ export class ExtraMode {
         // crew patch the truck up when it is quiet around it
         if (hits === 0 && h.humanWithin(p, 4.5)) this.truckHp = Math.min(CONVOY_HP, this.truckHp + CONVOY_REPAIR * dt);
         const stopped = this.holdUntil > this.t;
-        if (!stopped && escorted && blocking < 4) {
-          const left = target.clone().sub(p).setY(0);
-          const dist = left.length();
-          const step = Math.min(dist, CONVOY_SPEED * dt * (blocking > 0 ? 0.45 : 1));
-          p.addScaledVector(left.normalize(), step);
-          this.travelled += step;
-          rollTruckWheels(truck, step);
-          // turn smoothly toward the next leg
-          const want = Math.atan2(left.x, left.z);
-          let dy = want - truck.rotation.y;
-          dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-          truck.rotation.y += dy * Math.min(1, dt * 2.5);
-          // the plough shoves zombies aside
-          for (const z of c.zombies) {
-            if (z.hp <= 0) continue;
-            this.tmp.subVectors(z.root.position, p).setY(0);
-            if (this.tmp.lengthSq() < 2.8 * 2.8) z.root.position.addScaledVector(this.tmp.normalize(), 0.5);
-          }
-          if (dist - step <= 0.4) {
-            if (this.leg < this.route.length - 1) {
-              // checkpoint: the truck has to stop and the squad holds it
-              this.leg += 1;
-              this.holdUntil = this.t + CONVOY_CHECKPOINT_SECONDS;
-              h.banner(`Kontrol noktası ${this.leg - 1}/${this.route.length - 2}: yol temizlenene kadar konvoyu koru!`);
-              c.sfx('alarm');
-              this.ambush(14, p, 22);
-              if (this.leg - 1 === Math.ceil((this.route.length - 2) / 2)) h.spawnBoss();
-            } else {
-              h.win(`Konvoy %${Math.round((this.truckHp / CONVOY_HP) * 100)} sağlamla vardı.`);
-              break;
-            }
+        const drv = this.driver!;
+        this.ensureRoute(dt);
+        const go = !stopped && escorted && blocking < 4;
+        const res = drv.step(dt, go ? CONVOY_SPEED * (blocking > 0 ? 0.45 : 1) : 0, this.planner);
+        p.set(drv.x, 0, drv.z);
+        truck.rotation.y = drv.yaw;
+        if (res.moved !== 0) {
+          rollTruckWheels(truck, res.moved);
+          if (res.moved > 0) this.travelled += res.moved;
+        }
+        if (res.replan) this.plannedLeg = -1;
+        // the body is solid: zombies (and the heroes simulated here) are shoved out of it
+        for (const z of c.zombies) {
+          if (z.hp <= 0) continue;
+          const q = pushOutOfTruck(z.root.position.x, z.root.position.z, 0.5, p.x, p.z, drv.yaw);
+          if (q) z.root.position.set(q.x, z.root.position.y, q.z);
+        }
+        if (res.arrived && !stopped) {
+          if (this.leg < this.route.length - 1) {
+            // checkpoint: the truck has to stop and the squad holds it
+            this.leg += 1;
+            this.plannedLeg = -1;
+            this.holdUntil = this.t + CONVOY_CHECKPOINT_SECONDS;
+            h.banner(`Kontrol noktası ${this.leg - 1}/${this.route.length - 2}: yol temizlenene kadar konvoyu koru!`);
+            c.sfx('alarm');
+            this.ambush(14, p, 22);
+            if (this.leg - 1 === Math.ceil((this.route.length - 2) / 2)) h.spawnBoss();
+          } else {
+            h.win(`Konvoy %${Math.round((this.truckHp / CONVOY_HP) * 100)} sağlamla vardı.`);
+            break;
           }
         }
         // ambushes along the road, ahead of the truck
@@ -618,6 +628,48 @@ export class ExtraMode {
     void z;
   }
 
+  /**
+   * Keep the driver supplied with a route for the current leg. The road map is rebuilt when
+   * the level's props have finished streaming in (they add walls), at most every 2 s.
+   */
+  private ensureRoute(dt: number): void {
+    const c = this.host.ctx;
+    const walls = c.map.colliders ?? [];
+    this.plannerAge += dt;
+    if (!this.planner || (this.planner.builtFrom !== walls.length && this.plannerAge > 2)) {
+      this.planner = new TruckPlanner(c.map.bound, walls);
+      this.plannerAge = 0;
+      this.plannedLeg = -1;
+    }
+    if (this.plannedLeg === this.leg) return;
+    const drv = this.driver!;
+    const target = this.route[this.leg] ?? this.to;
+    const from: P2 = { x: drv.x, z: drv.z };
+    const to: P2 = { x: target.x, z: target.z };
+    // a roomy route if there is one, a tight one if not, and straight there as the last resort
+    // a route it can really drive (arcs, reversing where it must); failing that the grid route,
+    // and straight there as the very last resort
+    const path: Array<P2 | DrivePt> = this.planner.planDrive({ x: drv.x, z: drv.z, yaw: drv.yaw }, to) ?? this.planner.plan(from, to) ?? this.planner.plan(from, to, TRUCK_HALF_WIDTH + 0.05) ?? [from, to];
+    // the checkpoint marker sits where the truck will actually stop
+    const end = path[path.length - 1]!;
+    target.set(end.x, 0, end.z);
+    drv.setPath(path);
+    this.plannedLeg = this.leg;
+    // dev probes read this (cheap: a reference)
+    if (this.truck) this.truck.userData.nav = { planner: this.planner, driver: drv };
+    // progress bar: what is driven + this leg's route + the rest as the crow flies (roads wind)
+    let later = 0;
+    for (let i = this.leg + 1; i < this.route.length; i++) later += this.route[i]!.distanceTo(this.route[i - 1]!) * 1.2;
+    this.laterLegs = later;
+    this.routeLen = Math.max(this.travelled + drv.remaining() + later, 1);
+  }
+
+  /** where the convoy truck is (co-op: sent to guests so they can draw it) */
+  vehiclePose(): [x: number, z: number, yaw: number] | null {
+    const t = this.truck;
+    return t ? [t.position.x, t.position.z, t.rotation.y] : null;
+  }
+
   indicators(): IndicatorSrc[] {
     const out: IndicatorSrc[] = [];
     if (this.truck) out.push({ pos: this.truck.position, color: 0x84cc16, icon: '🚚', label: `Konvoy %${Math.round((this.truckHp / CONVOY_HP) * 100)}`, urgent: true, radius: 10 });
@@ -639,7 +691,7 @@ export class ExtraMode {
   hud(): { label: string; prog: number; target: number } {
     switch (this.id) {
       case 'convoy': {
-        const left = Math.max(0, this.routeLen - this.travelled);
+        const left = this.driver ? this.driver.remaining() + this.laterLegs : Math.max(0, this.routeLen - this.travelled);
         const hold = this.holdUntil - this.t;
         const state = hold > 0 ? ` · kontrol noktası ${Math.ceil(hold)} sn` : this.truck && !this.host.humanWithin(this.truck.position, 10) ? ' · YANINDA KAL' : '';
         return { label: `Konvoy %${Math.max(0, Math.round((this.truckHp / CONVOY_HP) * 100))} · kalan ${Math.round(left)} m${state}`, prog: this.travelled, target: this.routeLen };

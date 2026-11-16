@@ -1,4 +1,6 @@
 import { mountTouchControls, wantsTouchControls } from './touchControls';
+import { buildMilitaryTruck, rollTruckWheels } from './vehicleModels';
+import { pushOutOfTruck } from './truckNav';
 import * as THREE from 'three';
 import { ensureWeaponEnvironment } from './weaponAssets';
 import { castAbility, createAbilityRuntime } from './abilities';
@@ -1878,6 +1880,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const netAllies = new Map<string, OperativeVisual>();
   const netReplicas = new Map<number, ZombieVisual>();
   const netSeen = new Set<number>();
+  /** guest: the convoy truck as the host drives it */
+  let netTruck: THREE.Group | null = null;
   const netTarget = new Map<string, NetHero>();
 
   /** co-op: every player gets a colour (roster order, the same on every screen) */
@@ -2060,6 +2064,22 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     const frame = net!.sampleWorld();
     if (!frame) return;
     drawNetObjective();
+    // the convoy truck the host drives
+    if (frame.veh) {
+      if (!netTruck) {
+        netTruck = buildMilitaryTruck();
+        scene.add(netTruck);
+        netTruck.position.set(frame.veh[0]!, 0, frame.veh[1]!);
+      }
+      const moved = Math.hypot(frame.veh[0]! - netTruck.position.x, frame.veh[1]! - netTruck.position.z);
+      const fwd = (frame.veh[0]! - netTruck.position.x) * Math.sin(netTruck.rotation.y) + (frame.veh[1]! - netTruck.position.z) * Math.cos(netTruck.rotation.y);
+      if (moved < 3) rollTruckWheels(netTruck, fwd >= 0 ? moved : -moved);
+      netTruck.position.set(frame.veh[0]!, 0, frame.veh[1]!);
+      netTruck.rotation.y = frame.veh[2]!;
+    } else if (netTruck) {
+      netTruck.removeFromParent();
+      netTruck = null;
+    }
     wave = Math.max(1, frame.wave);
     kills = frame.kills;
     syncNetAllies(frame.heroes);
@@ -2247,6 +2267,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
             ((zombieTypeIndex(z.root.userData.ztype as string | undefined) + 1) << 6),
         })),
       obj: netObjectiveOut(),
+      veh: modeRt.vehiclePose(),
     }));
     netFlushT += dt;
     if (netFlushT >= 0.1) {
@@ -3415,6 +3436,15 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       const playerTarget = findNearestZombie(player.root.position, player.weapon.range);
       if (playerTarget) faceToward(player.root, playerTarget.root.position.x, playerTarget.root.position.z);
       else faceToward(player.root, mouseAim.x, mouseAim.z);
+    }
+    // an escorted vehicle is solid: step out of its way
+    const veh = isGuest ? (netTruck ? [netTruck.position.x, netTruck.position.z, netTruck.rotation.y] : null) : modeRt.vehiclePose();
+    if (veh) {
+      for (const op of squad) {
+        if (op !== player && op.root.userData.netPlayer) continue; // other players' heroes are placed by their owners
+        const q = pushOutOfTruck(op.root.position.x, op.root.position.z, PLAYER_RADIUS, veh[0]!, veh[1]!, veh[2]!);
+        if (q) applyMoveWithCollision(op.root, q.x - op.root.position.x, q.z - op.root.position.z, PLAYER_RADIUS);
+      }
     }
     sanitizeObject3D(player.root);
     animateOperative(player, t, dt, moving, true);

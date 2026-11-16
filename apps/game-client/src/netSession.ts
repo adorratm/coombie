@@ -92,6 +92,7 @@ export class NetSession {
         kills: s.kills | 0,
         zombies: unpackZombies(s.z),
         heroes: (Array.isArray(s.h) ? unpackHeroes(s.h) : Array.isArray(s.heroes) ? s.heroes : []).filter(validHero),
+        veh: Array.isArray(s.veh) && s.veh.length >= 3 && s.veh.slice(0, 3).every((v) => Number.isFinite(v) && Math.abs(v) < 2000) ? s.veh.slice(0, 3) : null,
       };
       this.hostProtocol = typeof s.v === 'number' && s.v >= 1 ? Math.floor(s.v) : 1;
       this.buffer.push(frame, this.clock());
@@ -169,7 +170,7 @@ export class NetSession {
   }
 
   /** host: broadcast the world (throttled). `build` is only called when a packet is due. */
-  hostPublish(build: () => { t: number; wave: number; kills: number; heroes: NetHero[]; zombies: NetZombie[]; obj?: NetObjective }): boolean {
+  hostPublish(build: () => { t: number; wave: number; kills: number; heroes: NetHero[]; zombies: NetZombie[]; obj?: NetObjective; veh?: number[] | null }): boolean {
     if (this.role !== 'host' || this.ended || !this.due(NET_LIMITS.snapshotHz)) return false;
     const w = build();
     // binary records once every guest understands them; an old client in the room keeps everyone on the JSON list
@@ -177,6 +178,7 @@ export class NetSession {
     const z = compact ? packZombiesBin(w.zombies) : packZombies(w.zombies);
     const snap: NetSnapshot = { seq: ++this.seq, t: Math.round(w.t * 1000) / 1000, wave: w.wave, kills: w.kills, heroes: compact ? [] : w.heroes.map(roundHero), z, v: NET_PROTOCOL };
     if (compact) snap.h = packHeroes(w.heroes);
+    if (w.veh) snap.veh = [Math.round(w.veh[0]! * 100) / 100, Math.round(w.veh[1]! * 100) / 100, Math.round(w.veh[2]! * 1000) / 1000];
     if (w.obj) {
       const now = this.clock();
       const sig = JSON.stringify(w.obj);

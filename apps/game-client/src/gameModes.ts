@@ -287,6 +287,11 @@ export class ModeRuntime {
   }
 
   /** Objective markers for the off-screen arrow HUD. */
+  /** escorted vehicle pose (convoy), for the co-op snapshot and solid-body pushing */
+  vehiclePose(): [x: number, z: number, yaw: number] | null {
+    return this.extra?.vehiclePose() ?? null;
+  }
+
   indicators(): IndicatorSrc[] {
     const out: IndicatorSrc[] = [];
     for (const p of this.pickups) if (!p.taken) out.push({ pos: p.pos, color: 0xffb020, icon: '⛽', label: 'Yakıt bidonu', radius: 1.4 });
