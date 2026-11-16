@@ -64,7 +64,7 @@ import {
 } from './characters';
 import { SpatialHash2D } from './spatialHash';
 import { advanceReactionClock, applyStatus, freezeZombie, rollStatusOnHit, setReactionHandler, statusTint, tickZombieStatuses, type ReactionId } from './statusEffects';
-import { beginZombieLodFrame, zombieVrmLod } from './vrmLod';
+import { beginZombieLodFrame, setZombieLodScale, zombieVrmLod } from './vrmLod';
 import {
   deathBurstScale,
   deathDecalScale,
@@ -155,6 +155,7 @@ import {
   tickOperativeSlow,
   tickZombieAttack,
   ZombieHazards,
+  ZOMBIE_SKILL_IDS,
   type AcidSpit,
   type ZombieCombatCtx,
 } from './zombieCombat';
@@ -179,6 +180,8 @@ export interface ArenaHudState {
   support?: { icon: string; name: string; cd: number; max: number } | null;
   /** radio chatter subtitles */
   subtitle?: { text: string; who: 'me' | 'radio' } | null;
+  /** co-op guest: how far behind the host the world is drawn / how unevenly packets arrive */
+  net?: { delayMs: number; jitterMs: number } | null;
   indicators?: Array<{ x: number; y: number; ang: number; on: boolean; color: string; icon: string; label: string; timer?: number; urgent?: boolean; dist: number; named?: boolean; progress?: number }>;
   /** active timed power-ups */
   buffs?: Array<{ icon: string; name: string; left: number; color: string }>;
@@ -277,6 +280,7 @@ export interface ArenaHandle {
   devHurtPlayer: (amount: number) => void;
   /** dev: the player's root (camera rigs in tests) */
   devPlayerRoot: () => THREE.Object3D;
+  devSpawn: (n: number) => number;
   devGainXp: (amount: number) => void;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
@@ -298,6 +302,9 @@ export interface ArenaHandle {
   toggleInventory: () => void;
   setPaused: (paused: boolean) => void;
   togglePause: () => boolean;
+  /** true while this client simulates a co-op world other players are in (it must not stop with the tab) */
+  hostsLiveWorld: () => boolean;
+  devNetStats: () => { kills: number; reverts: number; delayMs: number; jitterMs: number; hostProtocol: number; pending: number };
   getAudioBusLevels: () => AudioBusLevels;
   setAudioBusLevel: (bus: AudioBusId, value: number) => void;
 }
@@ -319,6 +326,8 @@ const PLAYER_RADIUS = 0.55;
 const ZOMBIE_RADIUS = 0.5;
 /** Soft cap — raised with spatial hash + VRM LOD; still far below design aspirational counts. */
 /** alive cap: phones keep the old budget, desktops can show bigger late-game hordes */
+/** beyond this distance from my hero a team mate cannot be on screen (top-down camera) */
+const OFFSCREEN_ALLY_R2 = 30 * 30;
 const MAX_ZOMBIES_BASE = 48;
 const MAX_ZOMBIES_DESKTOP = 64;
 const ZOMBIE_HIT_QUERY_R = 1.5;
@@ -386,6 +395,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     return coarse ? 2 : 1;
   })();
   const QUALITY_DPR = [1.5, 1.15, 0.9, 0.75];
+  /** per tier: full skeleton updates a frame, and how far out zombies keep their skinned model */
+  const QUALITY_POSES = [14, 12, 9, 6];
+  const QUALITY_LOD = [1, 1, 0.85, 0.72];
+  setZombieLodScale(QUALITY_LOD[quality]!);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY_DPR[quality]!));
   renderer.shadowMap.enabled = true;
   // high: shadow map every frame · lower tiers refresh it on a cadence (see animate)
@@ -1219,31 +1232,83 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     rawDamage: number,
     hitPos: THREE.Vector3,
     knockDir: THREE.Vector3,
-    opts?: { weaponId?: WeaponId; fromPlayer?: boolean; /** guest: ability damage, reported to the host */ forward?: boolean; /** already final (from a guest) */ raw?: boolean },
+    opts?: {
+      weaponId?: WeaponId;
+      fromPlayer?: boolean;
+      /** guest: ability damage, reported to the host */ forward?: boolean;
+      /** the number is final: no stat multipliers, no crit roll */ raw?: boolean;
+      /** only draw the hit (a shot fired here on behalf of a player who decides their own hits) */ cosmetic?: boolean;
+      /** from a guest that already applied armour / shields it could see: only host-side protection is left */ mitigated?: boolean;
+    },
   ) => {
-    if (isGuest) {
-      // the host owns zombie health; show the hit, change nothing.
-      // Gun shots are re-simulated by the host; ability / skill damage is reported to it.
-      if (opts?.forward) {
-        const id = z.root.userData.netId as number | undefined;
-        const final = rawDamage * getCombatStats(opts.weaponId ?? player.weapon.id).damageMult * heroBuffs(player).damage;
-        if (id && final > 0) netHitOut.set(id, (netHitOut.get(id) ?? 0) + final);
-        fx.spawnDamageNumber(hitPos, final, { crit: false, style: 'enemy' });
+    if (isGuest || opts?.cosmetic) {
+      // The host owns zombie health. My own hits are decided here, shown at once and reported to
+      // the host (old hosts re-simulate gun shots themselves, so only ability damage is sent to those).
+      const mine = isGuest && (opts?.forward || (guestOwnsHits() && opts?.fromPlayer !== false));
+      if (!mine) {
+        flashZombieHurt(z);
+        fx.spawnBloodBurst(hitPos, 0.85);
+        fx.spawnHitRing(hitPos, 0xb91c1c, 0.12);
+        if (isGuest) audio.playHit('flesh');
+        return;
+      }
+      const weaponId = opts?.weaponId ?? player.weapon.id;
+      const stats = getCombatStats(weaponId);
+      const hb = heroBuffs(player);
+      const crit = !opts?.raw && Math.random() < stats.critChance + hb.crit;
+      let final = opts?.raw ? rawDamage : rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
+      if (guestOwnsHits()) {
+        // armour I can see from here; the host only adds what it alone knows (aegis, phasing)
+        if (z.kind === 'riot' && z.root.userData.shield && knockDir.lengthSq() > 0.01) {
+          const fy = z.root.rotation.y;
+          if (knockDir.x * Math.sin(fy) + knockDir.z * Math.cos(fy) < -0.3) {
+            final *= 0.2;
+            skillFx.sparks(hitPos, 4, 0xfff0c0, 3);
+          }
+        }
+        final *= traitDamageMul(z, zombieCtx.nowSec, knockDir, 'static');
+      }
+      const id = z.root.userData.netId as number | undefined;
+      if (id && final > 0) {
+        netHitOut.set(id, (netHitOut.get(id) ?? 0) + final);
+        predictHit(z, id, final);
       }
       flashZombieHurt(z);
-      fx.spawnBloodBurst(hitPos, 0.85);
-      fx.spawnHitRing(hitPos, 0xb91c1c, 0.12);
-      audio.playHit('flesh');
+      fx.spawnBloodBurst(hitPos, crit ? 1.6 : 0.85);
+      fx.spawnDamageNumber(hitPos, final, { crit, style: crit ? 'crit' : 'enemy' });
+      fx.spawnHitRing(hitPos, crit ? 0xffef5a : 0xb91c1c, 0.12);
+      audio.playHit(opts?.weaponId && ['knife', 'bat', 'axe'].includes(opts.weaponId) ? 'melee' : crit ? 'crit' : 'flesh');
+      if (crit) shake = Math.max(shake, 0.22);
+      if (guestOwnsHits()) {
+        const ls = stats.mods.lifesteal;
+        if (ls > 0 && player.alive) {
+          player.hp = Math.min(player.maxHp, player.hp + final * ls);
+          player.healthBar.setRatio(player.hp / player.maxHp);
+        }
+        const evo = progress.evolutions.get(weaponId);
+        const rolled = rollStatusOnHit(
+          {
+            burn: stats.mods.burnChance + (evo?.status === 'burn' ? evo.statusChance : 0),
+            toxin: stats.mods.toxinChance + (evo?.status === 'toxin' ? evo.statusChance : 0),
+            chill: stats.mods.chillChance + (evo?.status === 'chill' ? evo.statusChance : 0),
+          },
+          Math.max(0.8, final * 0.35) * stats.mods.statusPower,
+        );
+        if (rolled) {
+          weaponStatus(z, rolled.id, rolled.power, player);
+          fx.spawnHitRing(hitPos, statusTint(rolled.id), 0.2);
+        }
+      }
       return;
     }
     const weaponId = opts?.weaponId ?? player.weapon.id;
     const fromPlayer = opts?.fromPlayer ?? true;
     const stats = getCombatStats(weaponId);
     const hb = fromPlayer ? heroBuffs(player) : NO_BUFF;
-    const crit = Math.random() < stats.critChance + hb.crit;
+    const crit = !opts?.raw && Math.random() < stats.critChance + hb.crit;
     let dmg = opts?.raw ? rawDamage : rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
     // riot shield: hits from the front are mostly stopped
-    if (z.kind === 'riot' && z.root.userData.shield && knockDir.lengthSq() > 0.01) {
+    if (!opts?.mitigated && z.kind === 'riot' && z.root.userData.shield && knockDir.lengthSq() > 0.01) {
       const fy = z.root.rotation.y;
       const facing = knockDir.x * Math.sin(fy) + knockDir.z * Math.cos(fy);
       if (facing < -0.3) {
@@ -1252,7 +1317,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     }
     // type traits: armour plating, phasing
-    const tm = traitDamageMul(z, zombieCtx.nowSec, knockDir);
+    const tm = traitDamageMul(z, zombieCtx.nowSec, knockDir, opts?.mitigated ? 'dynamic' : 'all');
     if (tm < 1) {
       dmg *= tm;
       if (Math.random() < 0.3) skillFx.sparks(hitPos, 3, tm === 0 ? 0xe8e8ff : 0xfff0c0, 3);
@@ -1546,8 +1611,11 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const bulletImpact = (b: Bullet, at: THREE.Vector3, z: ZombieVisual | null, dir: THREE.Vector3) => {
     const f = b.fx;
     if (!f) return;
-    const opts = { weaponId: b.owner.weapon.id, fromPlayer: b.owner.isPlayer };
+    const cosmetic = ownsHits(b.owner);
+    const opts = { weaponId: b.owner.weapon.id, fromPlayer: b.owner.isPlayer, cosmetic };
     const chance = f.statusChance ?? 0.25;
+    // only zombies simulated here get pushed around (not replicas, not another player's hits)
+    const push = !isGuest && !cosmetic;
     switch (f.impact) {
       case 'explosive': {
         const r = (f.aoe ?? 2.5) * progress.mods.aoeRadiusMult;
@@ -1565,25 +1633,25 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           if (d > r) continue;
           const kd = o.root.position.clone().sub(at).setY(0).normalize();
           damageZombie(o, b.damage * 0.75 * (1 - (d / r) * 0.5), o.root.position.clone().setY(1.1), kd, opts);
-          o.root.position.addScaledVector(kd, 0.6);
+          if (push) o.root.position.addScaledVector(kd, 0.6);
         }
         break;
       }
       case 'incendiary':
-        if (z && Math.random() < chance) applyStatus(z, 'burn', 1.6 * progress.mods.statusPower);
+        if (z && Math.random() < chance) weaponStatus(z, 'burn', 1.6 * progress.mods.statusPower, b.owner);
         if (f.aoe) {
           fx.spawnHitRing(at, 0xff5a1f, 0.15);
           zombieHash.query(at.x, at.z, f.aoe, zombieQuery);
-          for (let i = 0; i < zombieQuery.length; i++) if (zombieQuery[i]!.hp > 0) applyStatus(zombieQuery[i]!, 'burn', 1.4);
+          for (let i = 0; i < zombieQuery.length; i++) if (zombieQuery[i]!.hp > 0) weaponStatus(zombieQuery[i]!, 'burn', 1.4, b.owner);
         }
         fx.spawnBloodBurst(at, 0.5, 0xff7a2a);
         break;
       case 'cryo':
-        if (z && Math.random() < chance) applyStatus(z, 'chill', 1.8 * progress.mods.statusPower);
+        if (z && Math.random() < chance) weaponStatus(z, 'chill', 1.8 * progress.mods.statusPower, b.owner);
         fx.spawnBloodBurst(at, 0.45, 0x9be7ff);
         break;
       case 'toxic':
-        if (z && Math.random() < chance) applyStatus(z, 'toxin', 1.6 * progress.mods.statusPower);
+        if (z && Math.random() < chance) weaponStatus(z, 'toxin', 1.6 * progress.mods.statusPower, b.owner);
         fx.spawnBloodBurst(at, 0.45, 0x9cff2e);
         break;
       case 'shock': {
@@ -1609,7 +1677,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           const c = best.root.position.clone().setY(1.2);
           spawnBeam(a, c, 0x8fdcff);
           damageZombie(best, b.damage * 0.6, c, c.clone().sub(a).setY(0).normalize(), opts);
-          applyStatus(best, 'chill', 0.8);
+          weaponStatus(best, 'chill', 0.8, b.owner);
           cur = best;
         }
         fx.spawnHitRing(at, 0x8fdcff, 0.2);
@@ -1617,7 +1685,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
       case 'heavy':
         if (z) {
-          z.root.position.addScaledVector(dir.clone().setY(0), 0.25);
+          if (push) z.root.position.addScaledVector(dir.clone().setY(0), 0.25);
           fx.spawnBloodBurst(at, 1.25);
         }
         break;
@@ -1674,6 +1742,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         damageZombie(z, dmg, meleeHit, forward, {
           weaponId: weapon.id,
           fromPlayer: op.isPlayer,
+          cosmetic: ownsHits(op),
         });
       }
       return;
@@ -1744,8 +1813,59 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   /** host → guests: kills since the last flush, flat [x, z, xp, kind, …] */
   const netLootOut: (number | string)[] = [];
   const netDmgOut = new Map<string, { amount: number; fx: number; fz: number }>();
-  /** guest → host: ability damage per zombie id */
+  /** guest → host: damage per zombie id (abilities, and with a protocol-2 host my weapon hits too) */
   const netHitOut = new Map<number, number>();
+  /** guest → host: statuses my weapon hits applied, flat [zombieId, statusIndex, power, …] */
+  const netStatusOut: number[] = [];
+  const NET_STATUS_IDS = ['burn', 'toxin', 'chill'] as const;
+  /** guest: my hits are decided on my machine and reported (the host speaks protocol 2) */
+  const guestOwnsHits = (): boolean => isGuest && (net?.hostProtocol ?? 1) >= 2;
+  /** host: this hero belongs to a player who decides their own hits — what is fired for it here is for show */
+  const ownsHits = (op: OperativeVisual): boolean => {
+    const id = op.root.userData.netPlayer as string | undefined;
+    return !!id && isHost && !!net && net.guestProtocol(id) >= 2;
+  };
+  /** a status applied by a weapon hit of `owner` */
+  const weaponStatus = (z: ZombieVisual, id: (typeof NET_STATUS_IDS)[number], power: number, owner: OperativeVisual): void => {
+    if (isGuest) {
+      if (!owner.isPlayer || !guestOwnsHits()) return;
+      const nid = z.root.userData.netId as number | undefined;
+      if (nid && netStatusOut.length < 240) netStatusOut.push(nid, NET_STATUS_IDS.indexOf(id), Math.round(power * 100) / 100);
+      applyStatus(z, id, power); // local copy: tint and elemental reaction visuals
+      return;
+    }
+    if (!ownsHits(owner)) applyStatus(z, id, power);
+  };
+  /**
+   * guest: my hits show at once. The damage is held against the zombie until the host's
+   * snapshots catch up (its hp drops) or a second passes; a zombie it would kill falls now.
+   */
+  const netPending = new Map<number, { amount: number; until: number }>();
+  /** guest: zombies I already dropped, id → local time until which the host may still list them */
+  const netPredDead = new Map<number, number>();
+  const netPredStats = { kills: 0, reverts: 0 };
+  const PREDICT_HOLD = 1.1;
+  const PREDICT_DEAD_HOLD = 2.5;
+  const predictHit = (z: ZombieVisual, id: number, amount: number): void => {
+    if (!guestOwnsHits() || !(z.root.userData.netMaxHp > 0)) return;
+    const now = performance.now() / 1000;
+    const p = netPending.get(id);
+    if (p) {
+      p.amount += amount;
+      p.until = now + PREDICT_HOLD;
+    } else netPending.set(id, { amount, until: now + PREDICT_HOLD });
+    const hp = (z.root.userData.netHp as number) - netPending.get(id)!.amount;
+    z.healthBar.setRatio(Math.max(0, hp) / z.maxHp);
+    z.healthBar.setVisible(true);
+    if (hp <= 0 && z.kind !== 'boss' && z.maxHp <= 2500) {
+      netPending.delete(id);
+      netPredStats.kills++;
+      netPredDead.set(id, now + PREDICT_DEAD_HOLD);
+      netReplicas.delete(id);
+      z.hp = 0; // anything else that reaches it this frame (a second pellet, a blast) skips it
+      killZombie(z, true);
+    }
+  };
   let netFlushGuestT = 0;
   /** co-op: progress of a team mate picking this player up, and how long the whole team has been down */
   let pickupT = 0;
@@ -1866,8 +1986,19 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
     if (h.weapon && weaponVariantId(ally.weapon) !== h.weapon) setOperativeWeapon(ally, weaponIndexOfVariant(h.weapon));
     sanitizeObject3D(ally.root);
-    animateOperative(ally, t, dt, h.moving && h.alive, true);
-    // host: real shots (damage). guest: the same shots, cosmetic only.
+    // a mate far outside the view is posed every third frame (the skeleton + weapon grip of a
+    // hero costs about as much as thirty zombies); the banked time keeps the walk cycle in step
+    const aud = ally.root.userData as { animBank?: number; animSlot?: number };
+    const dxp = p.x - player.root.position.x;
+    const dzp = p.z - player.root.position.z;
+    const offscreen = dxp * dxp + dzp * dzp > OFFSCREEN_ALLY_R2;
+    if (offscreen && (frameNo + (aud.animSlot ??= netAllies.size)) % 3 !== 0) aud.animBank = Math.min(0.2, (aud.animBank ?? 0) + dt);
+    else {
+      animateOperative(ally, t, dt + (aud.animBank ?? 0), h.moving && h.alive, true);
+      aud.animBank = 0;
+    }
+    // Shots are drawn for every mate. They only do damage here for a mate on an old client
+    // (protocol 1); a current client decides its own hits and reports them.
     if (h.alive) tryAutoFire(ally, null);
   };
 
@@ -1933,8 +2064,16 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     kills = frame.kills;
     syncNetAllies(frame.heroes);
     netSeen.clear();
+    const nowLocal = performance.now() / 1000;
     for (const nz of frame.zombies) {
       netSeen.add(nz.id);
+      // I already dropped this one: the host needs a moment to agree (or, past the hold, it disagreed)
+      const deadUntil = netPredDead.get(nz.id);
+      if (deadUntil !== undefined) {
+        if (nowLocal < deadUntil) continue;
+        netPredStats.reverts++; // the host kept it alive (armour I could not see, a heal): it comes back
+        netPredDead.delete(nz.id);
+      }
       let z = netReplicas.get(nz.id);
       if (!z) {
         z = createZombie(NET_ZOMBIE_KINDS[nz.kind] ?? 'grunt');
@@ -1944,19 +2083,66 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         if (variant) applyBossLook(z, BOSS_VARIANTS[variant]);
         const ztype = ZOMBIE_TYPES[((nz.flags >> 6) & 63) - 1];
         if (ztype) applyTypeLook(z, ztype);
+        if (z.kind === 'riot') addRiotShield(z);
         z.root.position.set(nz.x, 0, nz.z);
         scene.add(z.root);
         zombies.push(z);
         healthBars.push(z.healthBar);
         netReplicas.set(nz.id, z);
+        if (nz.flags & 2) {
+          // clawing its way out of the ground on the host: play it here too
+          queueZombieAnim(z, { kind: 'spawn', dur: 2.1 });
+          fx.spawnBloodBurst(z.root.position, 0.8, 0x3b2a1a);
+        }
       }
       const moved = Math.hypot(nz.x - z.root.position.x, nz.z - z.root.position.z);
       z.root.position.set(nz.x, 0, nz.z);
       z.root.rotation.y = nz.yaw;
-      z.hp = Math.max(1, nz.hp * z.maxHp);
-      z.healthBar.setRatio(nz.hp);
-      if (nz.hp < 0.995) z.healthBar.setVisible(true);
+      // real numbers when the host sends them (protocol 2): my own hits can be shown before it confirms
+      const ud = z.root.userData as { netMaxHp?: number; netHp?: number; netRatio?: number; netAttacking?: boolean };
+      let ratio = nz.hp;
+      if (nz.maxHp && nz.maxHp > 0) {
+        z.maxHp = nz.maxHp;
+        const abs = nz.hp * nz.maxHp;
+        const pend = netPending.get(nz.id);
+        if (pend) {
+          // the host's number went down: that is (at least partly) my damage arriving
+          if (ud.netRatio !== undefined && nz.hp < ud.netRatio) pend.amount -= (ud.netRatio - nz.hp) * nz.maxHp;
+          if (pend.amount <= 0 || nowLocal > pend.until) netPending.delete(nz.id);
+          else ratio = Math.max(0.004, (abs - pend.amount) / nz.maxHp);
+        }
+        ud.netMaxHp = nz.maxHp;
+        ud.netHp = abs;
+      }
+      ud.netRatio = nz.hp;
+      // the host started an attack: same swing, same ground warning, so it can be dodged here
+      if (nz.flags & 1 && !ud.netAttacking) {
+        const skill = ZOMBIE_SKILL_IDS[(nz.flags >> 12) & 15] ?? 'claw';
+        let aim: THREE.Vector3 | undefined;
+        let bestD = Infinity;
+        for (const op of squad) {
+          if (!op.alive) continue;
+          const d = op.root.position.distanceToSquared(z.root.position);
+          if (d < bestD) {
+            bestD = d;
+            aim = op.root.position;
+          }
+        }
+        const seg = beginZombieAttack(z, skill === 'none' ? 'claw' : skill, aim);
+        queueZombieAnim(z, { kind: 'act', seg, dur: z.attackDuration, priority: 2 });
+        telegraphZombieSkill(z, fx);
+        if (bestD < 30 * 30) audio.playZombie(z.kind, 'attack', Math.max(-1, Math.min(1, (nz.x - player.root.position.x) / 24)));
+      } else if (!(nz.flags & 1) && ud.netAttacking && z.attackAnim > 0) {
+        z.attackAnim = 0;
+        z.activeSkill = 'none';
+      }
+      ud.netAttacking = (nz.flags & 1) === 1;
+      z.hp = Math.max(1, ratio * z.maxHp);
+      z.healthBar.setRatio(ratio);
+      if (ratio < 0.995) z.healthBar.setVisible(true);
       updateZombieHurtFlash(z, dt);
+      // statuses I put on it are only for show here, but they still have to run out
+      if (z.statuses.length > 0) tickZombieStatuses(z, dt);
       const lod = zombieVrmLod(z, player.root.position.x, player.root.position.z, lodFrame);
       if (lod === 'full' || lod === 'reduced') requestZombieVrm(z);
       animateZombieWalk(z, t, dt, dt > 0 && moved / dt > 0.25, lod);
@@ -1964,8 +2150,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     for (const [id, z] of netReplicas) {
       if (netSeen.has(id)) continue;
       netReplicas.delete(id);
+      netPending.delete(id);
       killZombie(z, true);
     }
+    if (netPredDead.size > 0) for (const id of netPredDead.keys()) if (!netSeen.has(id)) netPredDead.delete(id);
   };
 
   /** guest: keep a copy of my progress so a drop-out / reload can pick it back up */
@@ -2018,7 +2206,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (isGuest) {
       net.guestPublish(ownNetHero());
       netFlushGuestT += dt;
-      if (netFlushGuestT >= 0.1 && netHitOut.size > 0) {
+      // hits go out quickly (they decide when a zombie dies for everyone), a few packets a second at most
+      // While the line is down they keep adding up here (one number per zombie) instead of piling up in the socket.
+      if (netFlushGuestT >= 0.066 && net.link && (netHitOut.size > 0 || netStatusOut.length > 0)) {
         netFlushGuestT = 0;
         const h: number[] = [];
         for (const [id, amount] of netHitOut) {
@@ -2026,7 +2216,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           h.push(id, Math.round(amount * 10) / 10);
         }
         netHitOut.clear();
-        net.send({ k: 'hit', h });
+        if (netStatusOut.length > 0) {
+          net.send({ k: 'hit', h, s: netStatusOut.slice(0, 240) });
+          netStatusOut.length = 0;
+        } else net.send({ k: 'hit', h });
       }
       return;
     }
@@ -2045,8 +2238,11 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           z: z.root.position.z,
           yaw: z.root.rotation.y,
           hp: z.hp / Math.max(1, z.maxHp),
+          maxHp: z.maxHp,
           flags:
             (z.attackAnim > 0 ? 1 : 0) |
+            (((z.root.userData.spawnUntil as number | undefined) ?? 0) > simTime ? 2 : 0) |
+            ((z.attackAnim > 0 ? Math.max(0, ZOMBIE_SKILL_IDS.indexOf(z.activeSkill ?? 'none')) & 15 : 0) << 12) |
             ((BOSS_VARIANT_IDS.indexOf(z.root.userData.bossVariant as BossVariant) + 1) << 3) |
             ((zombieTypeIndex(z.root.userData.ztype as string | undefined) + 1) << 6),
         })),
@@ -2103,11 +2299,22 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           if (ev.k !== 'hit' || !Array.isArray(ev.h)) return;
           const byId = new Map<number, ZombieVisual>();
           for (const z of zombies) byId.set(z.root.userData.netId as number, z);
+          // a protocol-2 guest already took off the armour it could see
+          const mitigated = net.guestProtocol(from) >= 2;
           for (let i = 0; i + 1 < ev.h.length && i < 240; i += 2) {
             const z = byId.get(ev.h[i]!);
             const amount = Number(ev.h[i + 1]);
             if (!z || z.hp <= 0 || !(amount > 0)) continue;
-            damageZombie(z, Math.min(amount, 20000), z.root.position.clone().setY(1.1), new THREE.Vector3(), { fromPlayer: false, raw: true });
+            damageZombie(z, Math.min(amount, 20000), z.root.position.clone().setY(1.1), new THREE.Vector3(), { fromPlayer: false, raw: true, mitigated });
+          }
+          // statuses the guest's weapon hits applied
+          if (Array.isArray(ev.s)) {
+            for (let i = 0; i + 2 < ev.s.length && i < 240; i += 3) {
+              const z = byId.get(ev.s[i]!);
+              const sid = NET_STATUS_IDS[ev.s[i + 1]! | 0];
+              const power = Number(ev.s[i + 2]);
+              if (z && z.hp > 0 && sid && power > 0) applyStatus(z, sid, Math.min(power, 12));
+            }
           }
           return;
         }
@@ -2623,6 +2830,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       subtitle: subtitle && subtitle.until > nowMs ? { text: subtitle.text, who: subtitle.who } : null,
       indicators,
       buffs,
+      net: isGuest && net ? net.linkStats() : null,
       pickups: pickupLog.filter((p) => nowMs - p.at < 3500).map((p) => ({ name: p.name, desc: p.desc, age: (nowMs - p.at) / 1000 })),
       heroId: hero.id,
       runSkills: runSkills.hud(),
@@ -2749,6 +2957,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       /* ignore */
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY_DPR[q]!));
+    setZombieLodScale(QUALITY_LOD[q]!);
     setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
     renderer.shadowMap.autoUpdate = q < 1;
     // keep shadows enabled (toggling recompiles every material); just make them cheap
@@ -3096,7 +3305,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
 
     lodFrame += 1;
-    beginZombieLodFrame(12);
+    beginZombieLodFrame(QUALITY_POSES[quality]!);
     beginZombieVrmAttachBudget(1);
     rebuildZombieHash();
 
@@ -3447,6 +3656,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           damageZombie(hitZ, b.damage, hitPos, tmp, {
             weaponId: b.owner.weapon.id,
             fromPlayer: b.owner.isPlayer,
+            cosmetic: ownsHits(b.owner),
           });
           bulletImpact(b, hitPos, hitZ, tmp);
           if (b.pierce > 0) {
@@ -3611,7 +3821,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
 
     updateSeeThrough();
-    renderer.render(scene, camera);
+    // a hidden tab that still hosts a co-op world keeps simulating (see preview.ts) but has nothing to draw
+    if (!document.hidden) renderer.render(scene, camera);
   };
 
   const onClick = () => {
@@ -3632,7 +3843,15 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     devGainXp: (amount: number): void => {
       if (DEV_GOD) gainXp(amount);
     },
+    hostsLiveWorld: () => isHost && !runOver && !!net && !net.ended,
+    /** dev: co-op link numbers (guest) */
+    devNetStats: () => ({ ...netPredStats, ...(net?.linkStats() ?? { delayMs: 0, jitterMs: 0 }), hostProtocol: net?.hostProtocol ?? 0, pending: netPending.size }),
     devPlayerRoot: () => player.root,
+    /** dev (?god=1): spawn `n` ordinary zombies around the player (perf / net tests) */
+    devSpawn: (n: number): number => {
+      if (DEV_GOD) for (let i = 0; i < n; i++) spawnZombie(i % 5 === 0 ? 'runner' : 'grunt', true, undefined, null);
+      return zombies.length;
+    },
     devHurtPlayer: (amount: number): void => {
       if (DEV_GOD) damageOperative(player, amount, player.root.position.clone());
     },

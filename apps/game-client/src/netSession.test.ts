@@ -74,8 +74,8 @@ describe('net session', () => {
       tick(1 / 60);
       host.hostPublish(world);
     }
-    expect(built).toBeGreaterThanOrEqual(11);
-    expect(built).toBeLessThanOrEqual(13);
+    expect(built).toBeGreaterThanOrEqual(14);
+    expect(built).toBeLessThanOrEqual(16);
   });
 
   it('delivers events and the end of the match', async () => {
@@ -89,15 +89,83 @@ describe('net session', () => {
   });
 });
 
+describe('wire protocol', () => {
+  it('speaks JSON records until every guest has announced protocol 2, then binary', async () => {
+    const { host, guest, hio, gio, roster, tick } = pair();
+    await host.join('h');
+    await guest.join('g');
+    hio.fire(NetEvents.Roster, roster('h'));
+    gio.fire(NetEvents.Roster, roster('g'));
+    const world = () => ({ t: 1, wave: 1, kills: 0, heroes: [{ ...hero(4), id: 'h', firing: true }], zombies: [{ id: 7, kind: 1, x: 3.25, z: -4.5, yaw: 1, hp: 0.5, flags: 9, maxHp: 420 }] });
+    tick(1);
+    host.hostPublish(world);
+    const first = hio.sent.filter((m) => m.event === NetEvents.Snapshot).pop()!.payload as { z: unknown; v: number };
+    expect(Array.isArray(first.z)).toBe(true);
+    expect((first as { heroes?: unknown[] }).heroes!.length).toBe(1);
+    expect(first.v).toBe(2);
+    // the guest reports in (protocol 2 rides on its input) …
+    tick(1);
+    guest.guestPublish(hero(1));
+    hio.fire(NetEvents.Input, { from: 'g', d: gio.sent.filter((m) => m.event === NetEvents.Input).pop()!.payload });
+    expect(host.guestProtocol('g')).toBe(2);
+    tick(1);
+    host.hostPublish(world);
+    const second = hio.sent.filter((m) => m.event === NetEvents.Snapshot).pop()!.payload as { z: unknown };
+    expect(second.z instanceof ArrayBuffer).toBe(true);
+    // … and reads the binary form back, max hp included
+    expect(guest.hostProtocol).toBe(1);
+    gio.fire(NetEvents.Snapshot, second);
+    expect(guest.hostProtocol).toBe(2);
+    tick(1);
+    const w = guest.sampleWorld()!;
+    expect(w.zombies[0]).toMatchObject({ id: 7, kind: 1, x: 3.25, z: -4.5, flags: 9, maxHp: 420 });
+    // heroes travel as flat tuples and come back whole
+    expect((second as { h?: unknown[]; heroes?: unknown[] }).heroes).toEqual([]);
+    expect(w.heroes[0]).toMatchObject({ id: 'h', x: 4, hp: 100, maxHp: 100, alive: true, firing: true, moving: true, weapon: 'rifle' });
+  });
+
+  it('treats a guest that never announced a protocol as an old client', async () => {
+    const { host, hio, roster, tick } = pair();
+    await host.join('h');
+    hio.fire(NetEvents.Roster, roster('h'));
+    hio.fire(NetEvents.Input, { from: 'g', d: { ...hero(1), id: 'g', seq: 1 } });
+    expect(host.guestProtocol('g')).toBe(1);
+    tick(1);
+    host.hostPublish(() => ({ t: 1, wave: 1, kills: 0, heroes: [], zombies: [] }));
+    expect(Array.isArray((hio.sent.filter((m) => m.event === NetEvents.Snapshot).pop()!.payload as { z: unknown }).z)).toBe(true);
+  });
+});
+
 describe('snapshot interpolation', () => {
   const z = (x: number, yaw = 0) => ({ id: 1, kind: 0, x, z: 0, yaw, hp: 1, flags: 0 });
   const frame = (t: number, x: number, extra: Array<ReturnType<typeof z>> = []) => ({ t, wave: 1, kills: 0, heroes: [], zombies: [z(x), ...extra] });
+  /** a zombie walking at 2 m/s, snapshots at 15 Hz; `late(i)` = extra travel time of packet i */
+  const run = (late: (i: number) => number, seconds = 6) => {
+    const b = new SnapshotBuffer();
+    const packets: Array<{ at: number; f: ReturnType<typeof frame> }> = [];
+    for (let i = 0; i * (1 / 15) < seconds; i++) {
+      const t = i / 15;
+      packets.push({ at: 100 + t + 0.04 + late(i), f: frame(t, t * 2) });
+    }
+    // TCP: packets never overtake each other
+    for (let i = 1; i < packets.length; i++) packets[i]!.at = Math.max(packets[i]!.at, packets[i - 1]!.at);
+    const xs: number[] = [];
+    let p = 0;
+    for (let now = 100; now < 100 + seconds; now += 1 / 60) {
+      while (p < packets.length && packets[p]!.at <= now) b.push(packets[p]!.f, packets[p++]!.at);
+      const w = b.sample(now);
+      if (w) xs.push(w.zombies[0]!.x);
+    }
+    return { xs, b };
+  };
+  /** per-frame steps of the second half (after the buffer has settled) */
+  const steps = (xs: number[]) => xs.slice(Math.floor(xs.length / 2)).map((x, i, a) => (i ? x - a[i - 1]! : 0)).slice(1);
 
   it('renders slightly in the past, between two snapshots', () => {
     const b = new SnapshotBuffer();
     b.push(frame(10, 0), 100);
     b.push(frame(10.1, 1), 100.1);
-    const w = b.sample(100.1 + INTERP_DELAY - 0.05)!; // host time 10.05
+    const w = b.sample(100.1 + b.delay - 0.05)!; // host time 10.05
     expect(w.zombies[0]!.x).toBeGreaterThan(0.3);
     expect(w.zombies[0]!.x).toBeLessThan(0.7);
   });
@@ -112,11 +180,41 @@ describe('snapshot interpolation', () => {
     expect(w.wave).toBe(2);
   });
 
-  it('holds the last pose when the host goes quiet', () => {
+  it('holds the last pose when the host goes quiet (after a short coast)', () => {
     const b = new SnapshotBuffer();
     b.push(frame(1, 0), 0);
     b.push(frame(1.1, 1), 0.1);
-    expect(b.sample(30)!.zombies[0]!.x).toBe(1);
+    const x = b.sample(30)!.zombies[0]!.x;
+    expect(x).toBeGreaterThanOrEqual(1);
+    expect(x).toBeLessThan(3); // never runs away
+    expect(b.sample(60)!.zombies[0]!.x).toBe(x);
+  });
+
+  it('on a clean link the world moves at an even pace and stays close behind the host', () => {
+    const { xs, b } = run(() => 0);
+    const st = steps(xs);
+    const want = 2 / 60;
+    for (const d of st) expect(Math.abs(d - want)).toBeLessThan(want * 0.2);
+    expect(b.delay).toBeLessThan(0.11);
+  });
+
+  it('on a jittery link it backs off instead of stuttering: no freezes, no jumps, never backwards', () => {
+    // every packet up to 70 ms late, and a 180 ms stall every second
+    const { xs, b } = run((i) => ((i * 7919) % 71) / 1000 + (i % 15 === 0 ? 0.18 : 0));
+    const st = steps(xs);
+    const want = 2 / 60;
+    expect(Math.min(...st)).toBeGreaterThan(0); // never stops or runs backwards
+    expect(Math.max(...st)).toBeLessThan(want * 1.6); // never leaps
+    expect(b.delay).toBeGreaterThan(0.15); // it bought itself a bigger cushion
+    expect(b.delay).toBeLessThanOrEqual(0.4);
+  });
+
+  it('a teleporting zombie snaps instead of sliding across the map', () => {
+    const b = new SnapshotBuffer();
+    b.push(frame(1, 0), 0);
+    b.push(frame(1.1, 40), 0.1);
+    const x = b.sample(0.1 + b.delay - 0.05)!.zombies[0]!.x;
+    expect(x === 0 || x === 40).toBe(true);
   });
 
   it('turns the short way round', () => {

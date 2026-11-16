@@ -20,15 +20,23 @@ export const NetEvents = {
   Ended: 'match:ended',
 } as const;
 
+/**
+ * Wire protocol revision a client speaks. Guests put it in every input, the host in every snapshot.
+ *   2 — binary zombie records (with absolute max hp), a guest's own weapon hits are decided on
+ *       the guest and reported to the host (`hit` events), statuses ride along in `hit.s`
+ * A peer that does not announce a revision is treated as 1 and gets the old behaviour.
+ */
+export const NET_PROTOCOL = 2;
+
 export const NET_LIMITS = {
-  snapshotHz: 12,
+  snapshotHz: 15,
   inputHz: 20,
   /** relay drops anything above these */
   maxSnapshotBytes: 96_000,
   maxInputBytes: 1_024,
   maxEventBytes: 4_096,
   /** token-bucket capacity per second, per connection */
-  snapshotsPerSec: 20,
+  snapshotsPerSec: 30,
   inputsPerSec: 40,
   eventsPerSec: 40,
   /** unused tickets expire */
@@ -73,6 +81,8 @@ export interface NetHero {
 
 export interface NetInput extends NetHero {
   seq: number;
+  /** NET_PROTOCOL of the guest (absent = 1) */
+  v?: number;
 }
 
 export interface NetSnapshot {
@@ -82,8 +92,12 @@ export interface NetSnapshot {
   wave: number;
   kills: number;
   heroes: NetHero[];
-  /** flat quantised zombie records, see packZombies */
-  z: number[];
+  /** protocol 2: the heroes as flat tuples instead (`heroes` is then empty), see packHeroes */
+  h?: unknown[];
+  /** zombie records: a flat quantised number list (protocol 1) or the binary form (protocol 2), see packZombies / packZombiesBin */
+  z: number[] | ArrayBuffer | Uint8Array;
+  /** NET_PROTOCOL of the host (absent = 1) */
+  v?: number;
   /** what the squad is doing right now; guests draw it instead of running their own objectives */
   obj?: NetObjective;
 }
@@ -135,10 +149,48 @@ export type NetEvent =
   | { k: 'sup'; x: number; z: number; by?: string }
   /** a hero's run skills, so team mates can draw the passive ones: flat [skillId, level, evolution branch or '', …] */
   | { k: 'kit'; s: (string | number)[]; pw?: number; by?: string }
-  /** guest → host: ability / skill damage the guest dealt — flat [zombieId, amount, …] */
-  | { k: 'hit'; h: number[] }
+  /**
+   * guest → host: damage the guest dealt — flat [zombieId, amount, …]. Protocol 2 guests report their
+   * weapon hits here too; `s` = statuses those hits applied, flat [zombieId, statusIndex, power, …]
+   */
+  | { k: 'hit'; h: number[]; s?: number[] }
   /** guest → host: melee / point-blank hit request is NOT trusted; the host fires for every hero */
   | { k: 'end'; won: boolean; title: string; subtitle: string };
+
+/* ───────────── hero tuple codec (protocol 2 snapshots) ───────────── */
+
+const H_FIELDS = 8;
+
+/** [id, x, z, yaw, hp, maxHp, bits (1 alive · 2 firing · 4 moving), weapon] per hero — a third of the keyed JSON */
+export function packHeroes(list: readonly NetHero[]): unknown[] {
+  const out: unknown[] = [];
+  for (const h of list) {
+    out.push(h.id, Math.round(h.x * 100) / 100, Math.round(h.z * 100) / 100, Math.round(h.yaw * 100) / 100, Math.round(h.hp), Math.round(h.maxHp), (h.alive ? 1 : 0) | (h.firing ? 2 : 0) | (h.moving ? 4 : 0), h.weapon);
+  }
+  return out;
+}
+
+export function unpackHeroes(flat: unknown): NetHero[] {
+  const out: NetHero[] = [];
+  if (!Array.isArray(flat)) return out;
+  for (let o = 0; o + H_FIELDS <= flat.length && out.length < 16; o += H_FIELDS) {
+    const bits = Number(flat[o + 6]) | 0;
+    out.push({
+      id: String(flat[o]),
+      x: Number(flat[o + 1]),
+      z: Number(flat[o + 2]),
+      yaw: Number(flat[o + 3]),
+      hp: Number(flat[o + 4]),
+      maxHp: Number(flat[o + 5]),
+      alive: (bits & 1) !== 0,
+      firing: (bits & 2) !== 0,
+      moving: (bits & 4) !== 0,
+      weapon: String(flat[o + 7]),
+      dmg: 1,
+    });
+  }
+  return out;
+}
 
 /* ───────────── zombie record codec ───────────── */
 
@@ -153,6 +205,8 @@ export interface NetZombie {
   hp: number;
   /** bit 0 attacking · bit 1 emerging · bit 2 stunned · bits 3-5 boss variant (0 = none, else index + 1) */
   flags: number;
+  /** absolute max hp (binary records only) — lets a guest predict its own hits */
+  maxHp?: number;
 }
 
 const Z_FIELDS = 7;
@@ -174,8 +228,67 @@ export function packZombies(list: readonly NetZombie[]): number[] {
   return out;
 }
 
-export function unpackZombies(flat: readonly number[]): NetZombie[] {
+/* binary record, little endian: id u32 · x i16 · z i16 · yaw u8 · hp u8 · kind u8 · flags u16 · maxHp u16 (5-bit exponent, 11-bit mantissa) */
+export const Z_BIN_BYTES = 15;
+const TAU = Math.PI * 2;
+const clampI16 = (v: number): number => (v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+
+/** max hp in 16 bits: exact up to 2047, within 0.05 % above (bosses run into the hundreds of thousands) */
+function packHp16(v: number): number {
+  let n = Math.max(0, Math.round(v));
+  let e = 0;
+  while (n > 2047 && e < 31) {
+    n = Math.round(n / 2);
+    e++;
+  }
+  return (e << 11) | Math.min(2047, n);
+}
+const unpackHp16 = (u: number): number => (u & 2047) * 2 ** (u >> 11);
+
+/** The same records as packZombies in 15 bytes each (a bit over half the JSON list, with max hp added and no parse cost). */
+export function packZombiesBin(list: readonly NetZombie[]): ArrayBuffer {
+  const buf = new ArrayBuffer(list.length * Z_BIN_BYTES);
+  const dv = new DataView(buf);
+  let o = 0;
+  for (const z of list) {
+    dv.setUint32(o, z.id >>> 0, true);
+    dv.setInt16(o + 4, clampI16(Math.round(z.x * POS_Q)), true);
+    dv.setInt16(o + 6, clampI16(Math.round(z.z * POS_Q)), true);
+    dv.setUint8(o + 8, Math.round((((z.yaw % TAU) + TAU) % TAU) * (256 / TAU)) & 255);
+    dv.setUint8(o + 9, Math.max(0, Math.min(255, Math.round(z.hp * 255))));
+    dv.setUint8(o + 10, z.kind & 255);
+    dv.setUint16(o + 11, z.flags & 0xffff, true);
+    dv.setUint16(o + 13, packHp16(z.maxHp ?? 0), true);
+    o += Z_BIN_BYTES;
+  }
+  return buf;
+}
+
+function binView(raw: unknown): DataView | null {
+  if (raw instanceof ArrayBuffer) return new DataView(raw);
+  if (ArrayBuffer.isView(raw)) return new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+  return null;
+}
+
+export function unpackZombies(flat: readonly number[] | ArrayBuffer | ArrayBufferView): NetZombie[] {
   const out: NetZombie[] = [];
+  const dv = binView(flat);
+  if (dv) {
+    for (let o = 0; o + Z_BIN_BYTES <= dv.byteLength; o += Z_BIN_BYTES) {
+      const maxHp = unpackHp16(dv.getUint16(o + 13, true));
+      out.push({
+        id: dv.getUint32(o, true),
+        x: dv.getInt16(o + 4, true) / POS_Q,
+        z: dv.getInt16(o + 6, true) / POS_Q,
+        yaw: dv.getUint8(o + 8) * (TAU / 256),
+        hp: dv.getUint8(o + 9) / 255,
+        kind: dv.getUint8(o + 10),
+        flags: dv.getUint16(o + 11, true),
+        ...(maxHp > 0 ? { maxHp } : {}),
+      });
+    }
+    return out;
+  }
   if (!Array.isArray(flat)) return out;
   for (let o = 0; o + Z_FIELDS <= flat.length; o += Z_FIELDS) {
     const id = flat[o]!;

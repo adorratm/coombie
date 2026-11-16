@@ -70,13 +70,20 @@ const nearestOp = (squad: OperativeVisual[], at: THREE.Vector3, range: number): 
 };
 
 /** Incoming-damage multiplier from armor, phasing, burrowing, front shields and aegis. */
-export function traitDamageMul(z: ZombieVisual, now: number, hitDir?: THREE.Vector3): number {
+/**
+ * `part` splits the multiplier for co-op, where a guest decides its own hits:
+ *   'static'  — what the guest can know from the zombie's type alone (armour, front shield)
+ *   'dynamic' — what only the host knows (aegis aura, phasing, burrowing)
+ * 'all' (default) is the product of both, as used for hits resolved on this machine.
+ */
+export function traitDamageMul(z: ZombieVisual, now: number, hitDir?: THREE.Vector3, part: 'all' | 'static' | 'dynamic' = 'all'): number {
   // shielded by an aegis-bearer nearby (set on plain zombies too)
-  const aegis = ((z.root.userData.aegisUntil as number | undefined) ?? 0) > now ? ((z.root.userData.aegisArmor as number | undefined) ?? 0) : 0;
+  const aegis = part !== 'static' && ((z.root.userData.aegisUntil as number | undefined) ?? 0) > now ? ((z.root.userData.aegisArmor as number | undefined) ?? 0) : 0;
   const t = typeOf(z)?.traits;
   if (!t) return 1 - aegis;
   const st = (z.root.userData as { trs?: TraitState }).trs;
-  if (st && (st.phaseUntil > now || (st.burrowUntil ?? 0) > now)) return 0;
+  if (part !== 'static' && st && (st.phaseUntil > now || (st.burrowUntil ?? 0) > now)) return 0;
+  if (part === 'dynamic') return 1 - Math.min(0.85, aegis);
   let m = 1 - Math.min(0.85, (t.armor ?? 0) + aegis);
   if (t.frontShield && hitDir && hitDir.lengthSq() > 0.01) {
     const fy = z.root.rotation.y;

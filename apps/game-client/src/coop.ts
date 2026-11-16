@@ -1,6 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 import {
   ClientEvents,
+  NetEvents,
   SOCKET_NS,
   ServerEvents,
   type LobbyStatePayload,
@@ -8,6 +9,7 @@ import {
   type MatchStartPayload,
 } from '@protocol-z/shared';
 import { NetSession, type NetTransport } from './netSession';
+import { parseLag, withLag } from './netLag';
 import { currentMission, loadProfile } from './loadout';
 import { rosterById } from './roster';
 import { DracordEmbed } from './dracord-embed';
@@ -277,11 +279,17 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
     error = '';
     render();
     const sock = io(`${coopServerUrl()}${SOCKET_NS.match}`, { transports: ['websocket'], reconnectionAttempts: Infinity, reconnectionDelayMax: 4000 });
-    const transport: NetTransport = {
-      emit: (event, payload, ack) => void (ack ? sock.emit(event, payload, ack) : sock.emit(event, payload)),
-      on: (event, handler) => void sock.on(event, handler as (...args: unknown[]) => void),
-      off: (event, handler) => void sock.off(event, handler as (...args: unknown[]) => void),
-    };
+    // state that is replaced a moment later (my position, the world snapshot) is not worth queueing:
+    // while the socket is down or its buffer is busy it is dropped instead of flooding out late
+    const perishable = new Set<string>([NetEvents.Input, NetEvents.Snapshot]);
+    const transport: NetTransport = withLag(
+      {
+        emit: (event, payload, ack) => void (ack ? sock.emit(event, payload, ack) : perishable.has(event) ? sock.volatile.emit(event, payload) : sock.emit(event, payload)),
+        on: (event, handler) => void sock.on(event, handler as (...args: unknown[]) => void),
+        off: (event, handler) => void sock.off(event, handler as (...args: unknown[]) => void),
+      },
+      parseLag(location.search),
+    );
     const session = new NetSession(transport);
     try {
       await new Promise<void>((resolve, reject) => {

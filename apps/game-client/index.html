@@ -940,6 +940,49 @@
       body.touch #pickFeed { bottom: auto; top: 30%; left: max(8px, env(safe-area-inset-left)); }
       body.touch #subtitle { bottom: 84px; max-width: 56vw; }
       body.touch #objChip { top: 52px; right: calc(max(8px, env(safe-area-inset-right)) + 2px); max-width: 190px; }
+      /* ——— phones: the HUD stays out of the fight ———
+         Everything that pops up during play (pickups, banners, achievements, radio lines)
+         is one short line near an edge; the bottom block is a slim strip. */
+      body.touch #bottomHud { bottom: max(5px, env(safe-area-inset-bottom)); gap: 2px; width: min(240px, calc(100vw - 2 * (max(10px, env(safe-area-inset-right)) + 136px))); }
+      body.touch #weaponBox { background: none; border: 0; padding: 0 2px; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+      body.touch #weaponName { font-size: 12px; }
+      body.touch #weaponName::before { content: 'SV ' attr(data-lv) ' · '; color: var(--gold); }
+      body.touch #ammoText { font-size: 13px; }
+      body.touch #xpBox { position: relative; padding: 0; background: none; border: 0; }
+      body.touch #hpMeta { position: absolute; right: 4px; top: 0; margin: 0; z-index: 1; pointer-events: none; }
+      body.touch #hpMeta .label { display: none; }
+      body.touch #hpText { font-size: 9px; line-height: 12px; text-shadow: 0 1px 1px #000; }
+      body.touch #hpTrack { height: 12px; }
+      body.touch #xpMeta { display: none; }
+      body.touch #xpTrack { height: 4px; margin-top: 2px; border-top: 0; }
+      body.touch #objChip { top: 50px; max-width: 170px; padding: 4px 8px; background: rgba(10,12,14,0.6); }
+      body.touch #objChip #objTitle, body.touch #objChip #sector { display: none; }
+      body.touch #objChip .t { font-size: 11px; margin: 0 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      body.touch #objChip .mini-track { height: 4px; }
+      body.touch #pickFeed { top: 92px; bottom: auto; left: max(8px, env(safe-area-inset-left)); gap: 2px; }
+      body.touch #pickFeed div { padding: 2px 8px; max-width: 42vw; border-left-width: 2px; background: rgba(14,14,10,0.7); }
+      body.touch #pickFeed div:nth-last-child(n+3) { display: none !important; }
+      body.touch #pickFeed b { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      body.touch #pickFeed small { display: none; }
+      body.touch #banner { top: 62px; transform: translateX(-50%); font-size: 13px !important; padding: 3px 10px; max-width: 44vw; text-align: center; letter-spacing: .03em; background: rgba(12,14,18,0.75); }
+      body.touch #banner.on { animation: bannerIn .25s ease; }
+      @keyframes bannerIn { from { opacity: 0; } to { opacity: 1; } }
+      body.touch #achToast { top: 84px; left: auto; right: calc(max(8px, env(safe-area-inset-right)) + 2px); transform: translateY(-8px); min-width: 0; max-width: 170px; padding: 3px 8px; gap: 6px; box-shadow: none; }
+      body.touch #achToast.on { transform: none; }
+      body.touch #achToast .i { font-size: 15px; }
+      body.touch #achToast b { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      body.touch #achToast small { display: none; }
+      body.touch #subtitle { bottom: 50px; max-width: 46vw; padding: 3px 9px; font-size: 11px; border-left-width: 2px; background: rgba(6,8,8,0.7); }
+      body.touch #subtitle span { font-size: 8px; margin-right: 6px; }
+      body.touch #buffBar { top: 40px; gap: 3px; transform: translateX(-50%); }
+      body.touch #buffBar div { padding: 1px 5px; font-size: 10px; gap: 3px; background: rgba(8,10,12,0.7); }
+      body.touch #buffBar b { display: none; }
+      body.touch #indic .ind .tx { font-size: 9px; }
+      body.touch #indic .ind .ic { transform: scale(0.82); }
+      #netChip { display: none; position: absolute; left: 50%; top: 40px; transform: translateX(-50%); padding: 2px 9px; font: 700 10px var(--display); letter-spacing: .06em; color: #ffd27a; background: rgba(30,20,4,0.78); border: 1px solid rgba(255,190,80,0.55); white-space: nowrap; pointer-events: none; z-index: 17; }
+      #netChip.on { display: block; }
+      #netChip.bad { color: #ff9a8a; border-color: rgba(255,110,90,0.6); background: rgba(34,8,6,0.8); }
+      body.touch #netChip { top: 10px; left: calc(50% + 56px); transform: none; font-size: 9px; padding: 1px 6px; }
       /* short landscape screens (iPhone 5s: 568x320) */
       @media (max-height: 560px) {
         #topHud { top: 6px; gap: 6px; }
@@ -1094,6 +1137,7 @@
     <div id="pickFeed"></div>
     <div id="indic"></div>
     <div id="buffBar"></div>
+    <div id="netChip"></div>
     <div id="subtitle"></div>
     <div id="hint">WASD · Q/E/R yetenek · 1-8 / teker silah · Shift/Ctrl+teker zoom · H telsiz desteği · F11 tam ekran · [G] şarjör · [Esc] duraklat</div>
     <div id="lowHp"></div>

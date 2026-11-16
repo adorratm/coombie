@@ -46,6 +46,9 @@ export type ZombieSkillId =
   | 'bash'
   | 'brood';
 
+/** wire order of the skills (4 bits in a co-op zombie record) — append only */
+export const ZOMBIE_SKILL_IDS: readonly ZombieSkillId[] = ['none', 'claw', 'lunge', 'spit', 'slam', 'roar', 'shriek', 'grab', 'pounce', 'charge', 'leap', 'burst', 'hook', 'shock', 'bash', 'brood'];
+
 export interface AcidSpit {
   mesh: THREE.Mesh;
   vel: THREE.Vector3;

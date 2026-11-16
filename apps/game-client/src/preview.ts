@@ -475,6 +475,7 @@ const renderHud = (hud: ArenaHudState) => {
   el.sector.textContent = `${m.sectorCode}  ${m.sectorName}`;
 
   el.weaponName.textContent = hud.weapon;
+  el.weaponName.dataset.lv = String(hud.level);
   if (hud.reloading) {
     el.ammoText.textContent = `ŞARJÖR… ${Math.round(hud.reloadProgress * 100)}%`;
     el.ammoText.className = 'reload';
@@ -613,6 +614,14 @@ const renderHud = (hud: ArenaHudState) => {
       bf.innerHTML = html;
     }
   }
+  // co-op guest: say so when the line is poor, instead of the game just feeling wrong
+  const nc = document.getElementById('netChip');
+  if (nc) {
+    const link = hud.net;
+    const cls = link && link.delayMs >= 230 ? (link.delayMs >= 330 ? 'on bad' : 'on') : '';
+    if (nc.className !== cls) nc.className = cls;
+    if (cls) nc.textContent = document.body.classList.contains('touch') ? `📶 ${link!.delayMs} ms` : `📶 BAĞLANTI DALGALI · ${link!.delayMs} ms`;
+  }
   const feed = document.getElementById('pickFeed');
   if (feed) {
     const list = hud.pickups ?? [];
@@ -621,9 +630,14 @@ const renderHud = (hud: ArenaHudState) => {
       feed.dataset.key = key;
       feed.innerHTML = list.map((p) => `<div><b>+ ${p.name}</b><small>${p.desc}</small></div>`).join('');
     }
+    // phones: a line stays just long enough to read, then gives its place back
+    const life = document.body.classList.contains('touch') ? 2.2 : 3.5;
     list.forEach((p, i) => {
       const d = feed.children[i] as HTMLElement | undefined;
-      if (d) d.style.opacity = String(Math.max(0, Math.min(1, (3.5 - p.age) / 0.6)));
+      if (!d) return;
+      const o = Math.max(0, Math.min(1, (life - p.age) / 0.6));
+      d.style.opacity = String(o);
+      d.style.display = o <= 0 ? 'none' : '';
     });
   }
   if (m.banner) {
@@ -913,6 +927,36 @@ const loop = (t: number) => {
   }
   requestAnimationFrame(loop);
 };
+
+/**
+ * A co-op host runs the world for everyone. Browsers stop requestAnimationFrame (and slow
+ * timers to a crawl) in a background tab, which would freeze the match for the whole team
+ * the moment the host alt-tabs. A worker's timer keeps ticking, so while the tab is hidden
+ * the hosted world is stepped from there (20 Hz, no rendering).
+ */
+let bgTicker: Worker | null = null;
+const syncBgTicker = () => {
+  const want = document.hidden && running && arena.hostsLiveWorld();
+  if (want && !bgTicker) {
+    try {
+      bgTicker = new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),50)'], { type: 'text/javascript' })));
+      bgTicker.onmessage = () => {
+        if (!document.hidden || !running || !arena.hostsLiveWorld()) return syncBgTicker();
+        try {
+          arena.animate(performance.now());
+        } catch (err) {
+          console.error('[preview] background frame error', err);
+        }
+      };
+    } catch {
+      bgTicker = null; // no workers here: the match simply waits for the tab, as before
+    }
+  } else if (!want && bgTicker) {
+    bgTicker.terminate();
+    bgTicker = null;
+  }
+};
+document.addEventListener('visibilitychange', syncBgTicker);
 
 loadProfile();
 toMenu();

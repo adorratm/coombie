@@ -1,7 +1,11 @@
 import {
   NET_LIMITS,
+  NET_PROTOCOL,
   NetEvents,
+  packHeroes,
   packZombies,
+  packZombiesBin,
+  unpackHeroes,
   unpackZombies,
   sanitizeObjective,
   type NetObjective,
@@ -45,12 +49,16 @@ export class NetSession {
   /** false while the socket is down and we are trying to get back in */
   link = true;
   /** host: latest reported state of every guest hero */
-  readonly remoteHeroes = new Map<string, NetHero & { at: number; seq: number }>();
+  readonly remoteHeroes = new Map<string, NetHero & { at: number; seq: number; v: number }>();
+  /** guest: wire protocol the host speaks (1 until its first snapshot says otherwise) */
+  hostProtocol = 1;
   /** guest: the host's current objective (latest snapshot, not interpolated) */
   objective: NetObjective | null = null;
   private readonly buffer = new SnapshotBuffer();
   private seq = 0;
   private lastSent = -1;
+  private objSig = '';
+  private objAt = -10;
   private readonly offs: Array<() => void> = [];
 
   constructor(
@@ -73,7 +81,8 @@ export class NetSession {
       const prev = this.remoteHeroes.get(m.from);
       const seq = typeof m.d.seq === 'number' ? m.d.seq : 0;
       if (prev && seq <= prev.seq) return; // out of order
-      this.remoteHeroes.set(m.from, { ...m.d, id: m.from, seq, at: this.clock() });
+      const v = typeof m.d.v === 'number' && m.d.v >= 1 ? Math.floor(m.d.v) : 1;
+      this.remoteHeroes.set(m.from, { ...m.d, id: m.from, seq, v, at: this.clock() });
     });
     this.listen(NetEvents.Snapshot, (s: NetSnapshot) => {
       if (this.role !== 'guest' || !s || !Number.isFinite(s.t)) return;
@@ -82,10 +91,12 @@ export class NetSession {
         wave: s.wave | 0,
         kills: s.kills | 0,
         zombies: unpackZombies(s.z),
-        heroes: Array.isArray(s.heroes) ? s.heroes.filter(validHero) : [],
+        heroes: (Array.isArray(s.h) ? unpackHeroes(s.h) : Array.isArray(s.heroes) ? s.heroes : []).filter(validHero),
       };
+      this.hostProtocol = typeof s.v === 'number' && s.v >= 1 ? Math.floor(s.v) : 1;
       this.buffer.push(frame, this.clock());
-      this.objective = sanitizeObjective(s.obj);
+      // a protocol-2 host only repeats the objective when it changed (or once a second)
+      if (s.obj !== undefined || this.hostProtocol < 2) this.objective = sanitizeObjective(s.obj);
     });
     this.listen(NetEvents.Event, (m: { from: string; d: NetEvent }) => {
       if (m && m.d && typeof m.d.k === 'string') this.handlers.onEvent?.(m.d, String(m.from));
@@ -120,15 +131,39 @@ export class NetSession {
 
   private due(hz: number): boolean {
     const now = this.clock();
-    if (now - this.lastSent < 1 / hz) return false;
-    this.lastSent = now;
+    const period = 1 / hz;
+    // half a millisecond of slack: a frame that lands a hair early still counts
+    if (now - this.lastSent < period - 0.0005) return false;
+    // keep the average rate at `hz` even though we only get to send on frame boundaries
+    this.lastSent = now - this.lastSent > period * 2 ? now : this.lastSent + period;
     return true;
+  }
+
+  /** host: protocol a guest speaks (1 = has not said / old client) */
+  guestProtocol(playerId: string): number {
+    return this.remoteHeroes.get(playerId)?.v ?? 1;
+  }
+
+  /** host: every guest in the room understands protocol `v` (false while someone has not reported yet) */
+  private allGuestsSpeak(v: number): boolean {
+    const r = this.roster;
+    if (!r) return false;
+    for (const p of r.players) {
+      if (p.playerId === this.playerId || !p.connected) continue;
+      if (this.guestProtocol(p.playerId) < v) return false;
+    }
+    return true;
+  }
+
+  /** guest: how far behind the host the world is drawn, and how uneven packets arrive (ms) */
+  linkStats(): { delayMs: number; jitterMs: number } {
+    return { delayMs: Math.round(this.buffer.delay * 1000), jitterMs: Math.round(this.buffer.jitterSec * 1000) };
   }
 
   /** guest: report own hero (throttled). Returns true when a packet went out. */
   guestPublish(hero: Omit<NetHero, 'id'>): boolean {
     if (this.role !== 'guest' || this.ended || !this.due(NET_LIMITS.inputHz)) return false;
-    const msg: NetInput = { ...roundHero({ ...hero, id: this.playerId }), seq: ++this.seq };
+    const msg: NetInput = { ...roundHero({ ...hero, id: this.playerId }), seq: ++this.seq, v: NET_PROTOCOL };
     this.io.emit(NetEvents.Input, msg);
     return true;
   }
@@ -137,8 +172,23 @@ export class NetSession {
   hostPublish(build: () => { t: number; wave: number; kills: number; heroes: NetHero[]; zombies: NetZombie[]; obj?: NetObjective }): boolean {
     if (this.role !== 'host' || this.ended || !this.due(NET_LIMITS.snapshotHz)) return false;
     const w = build();
-    const snap: NetSnapshot = { seq: ++this.seq, t: Math.round(w.t * 1000) / 1000, wave: w.wave, kills: w.kills, heroes: w.heroes.map(roundHero), z: packZombies(w.zombies) };
-    if (w.obj) snap.obj = w.obj;
+    // binary records once every guest understands them; an old client in the room keeps everyone on the JSON list
+    const compact = this.allGuestsSpeak(2);
+    const z = compact ? packZombiesBin(w.zombies) : packZombies(w.zombies);
+    const snap: NetSnapshot = { seq: ++this.seq, t: Math.round(w.t * 1000) / 1000, wave: w.wave, kills: w.kills, heroes: compact ? [] : w.heroes.map(roundHero), z, v: NET_PROTOCOL };
+    if (compact) snap.h = packHeroes(w.heroes);
+    if (w.obj) {
+      const now = this.clock();
+      const sig = JSON.stringify(w.obj);
+      // the objective barely changes: send it when it does, and once a second for late joiners / lost packets
+      if (!Array.isArray(z) && sig === this.objSig && now - this.objAt < 1) {
+        /* unchanged: leave it out */
+      } else {
+        snap.obj = w.obj;
+        this.objSig = sig;
+        this.objAt = now;
+      }
+    }
     this.io.emit(NetEvents.Snapshot, snap);
     return true;
   }

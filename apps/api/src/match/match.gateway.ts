@@ -13,9 +13,30 @@ import { NetEvents, type NetRoster } from '@protocol-z/shared';
 import { corsOrigins } from '../cors';
 import { MatchService } from './match.service';
 
-const sizeOf = (body: unknown): number => {
+/** Wire size of a message: JSON text plus any binary attachment (counted in bytes, never stringified). */
+export const sizeOf = (body: unknown): number => {
   try {
-    return JSON.stringify(body)?.length ?? 0;
+    // snapshots carry their zombie records as one binary attachment: count it without touching it
+    const z = (body as { z?: unknown } | null)?.z;
+    if (z instanceof ArrayBuffer || ArrayBuffer.isView(z)) return (JSON.stringify({ ...(body as object), z: 0 })?.length ?? 0) + z.byteLength;
+    let bin = 0;
+    const text = JSON.stringify(body, (_k, v: unknown) => {
+      if (v instanceof ArrayBuffer) {
+        bin += v.byteLength;
+        return 0;
+      }
+      if (ArrayBuffer.isView(v)) {
+        bin += v.byteLength;
+        return 0;
+      }
+      // a Buffer reaches the replacer already turned into { type: 'Buffer', data: [...] } by its toJSON
+      if (v && typeof v === 'object' && (v as { type?: unknown }).type === 'Buffer' && Array.isArray((v as { data?: unknown }).data)) {
+        bin += (v as { data: unknown[] }).data.length;
+        return 0;
+      }
+      return v;
+    });
+    return (text?.length ?? 0) + bin;
   } catch {
     return Number.POSITIVE_INFINITY;
   }

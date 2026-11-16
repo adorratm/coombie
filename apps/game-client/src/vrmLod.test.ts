@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beginZombieLodFrame, zombieVrmLod } from './vrmLod';
+import { beginZombieLodFrame, setZombieLodScale, zombieVrmLod } from './vrmLod';
 import type { ZombieVisual } from './characters';
 
 function fakeZombie(opts: {
@@ -45,5 +45,18 @@ describe('zombieVrmLod', () => {
       const lod = zombieVrmLod(z, 0, 0, frame);
       expect(lod === 'reduced' || lod === 'skip').toBe(true);
     }
+  });
+
+  it('weak devices pull the bands in: the same zombie becomes a stand-in sooner', () => {
+    const z = fakeZombie({ x: 30, z: 0 });
+    beginZombieLodFrame(12);
+    setZombieLodScale(1);
+    expect(zombieVrmLod(z, 0, 0, 0)).not.toBe('proxy');
+    setZombieLodScale(0.72);
+    expect(zombieVrmLod(z, 0, 0, 0)).toBe('proxy');
+    // an attacker is still shown properly, however far the bands were pulled in
+    const attacker = fakeZombie({ x: 30, z: 0, attackAnim: 0.3 });
+    expect(zombieVrmLod(attacker, 0, 0, 0)).not.toBe('proxy');
+    setZombieLodScale(1);
   });
 });

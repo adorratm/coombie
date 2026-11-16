@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MatchRelay, NET_LIMITS, packZombies, unpackZombies } from '@protocol-z/shared';
+import { MatchRelay, NET_LIMITS, Z_BIN_BYTES, packZombies, packZombiesBin, unpackZombies } from '@protocol-z/shared';
 
 const players = [
   { playerId: 'host', displayName: 'Host', operativeId: 'ironclad' },
@@ -128,5 +128,44 @@ describe('zombie codec', () => {
   it('a full 64-zombie snapshot stays far below the relay limit', () => {
     const many = Array.from({ length: 64 }, (_, i) => ({ id: 1000 + i, kind: i % 14, x: -100 + i * 3.1, z: 99.95 - i, yaw: 3.14, hp: 0.73, flags: 1 }));
     expect(JSON.stringify(packZombies(many)).length).toBeLessThan(NET_LIMITS.maxSnapshotBytes / 20);
+  });
+});
+
+describe('binary zombie records (protocol 2)', () => {
+  const src = [
+    { id: 70000, kind: 3, x: 12.35, z: -48.6, yaw: 7.5, hp: 0.5, flags: (5 << 12) | (9 << 6) | (2 << 3) | 1, maxHp: 123456 },
+    { id: 2, kind: 0, x: -200, z: 199.95, yaw: -3.1, hp: 1, flags: 0, maxHp: 80 },
+  ];
+
+  it('round-trips ids above 16 bit, positions to 5 cm, flags, hp and max hp', () => {
+    const buf = packZombiesBin(src);
+    expect(buf.byteLength).toBe(src.length * Z_BIN_BYTES);
+    const back = unpackZombies(buf);
+    expect(back.length).toBe(2);
+    expect(back[0]).toMatchObject({ id: 70000, kind: 3, flags: src[0]!.flags });
+    expect(Math.abs(back[0]!.maxHp! - 123456) / 123456).toBeLessThan(0.001);
+    expect(back[1]!.maxHp).toBe(80);
+    expect(back[0]!.x).toBeCloseTo(12.35, 1);
+    expect(back[0]!.z).toBeCloseTo(-48.6, 1);
+    expect(back[0]!.hp).toBeCloseTo(0.5, 2);
+    // yaw comes back wrapped into ±π, pointing the same way
+    expect(Math.cos(back[0]!.yaw)).toBeCloseTo(Math.cos(7.5), 1);
+    expect(Math.sin(back[0]!.yaw)).toBeCloseTo(Math.sin(7.5), 1);
+    expect(back[1]!.x).toBeCloseTo(-200, 1);
+  });
+
+  it('reads the same bytes from a typed-array view (what a socket hands over) and ignores a torn tail', () => {
+    const bytes = new Uint8Array(packZombiesBin(src));
+    const padded = new Uint8Array(bytes.length + 7 + 4);
+    padded.set(bytes, 4);
+    const view = new Uint8Array(padded.buffer, 4, bytes.length + 7);
+    const back = unpackZombies(view);
+    expect(back.map((z) => z.id)).toEqual([70000, 2]);
+    expect(back[1]!.maxHp).toBe(80);
+  });
+
+  it('is much smaller than the JSON list', () => {
+    const many = Array.from({ length: 86 }, (_, i) => ({ id: 1000 + i, kind: i % 9, x: i * 1.37 - 60, z: 55 - i * 0.91, yaw: i * 0.3, hp: 0.73, flags: 65, maxHp: 900 }));
+    expect(packZombiesBin(many).byteLength).toBeLessThan(JSON.stringify(packZombies(many)).length * 0.6);
   });
 });

@@ -8,6 +8,18 @@ const FAR_R2 = 34 * 34;
 
 /** Soft cap of full bone-pose updates per frame (attackers reserved first). */
 let fullBudget = 0;
+/** squared multiplier on every distance band (1 = as designed, < 1 on weak devices) */
+let rangeScale2 = 1;
+
+/**
+ * Pull the detail bands in (or push them back out). The adaptive quality tiers call this:
+ * a phone that cannot hold its frame rate animates fewer skinned zombies and swaps the far
+ * ones for their cheap stand-ins sooner — the largest single cost in a crowded frame.
+ */
+export function setZombieLodScale(scale: number): void {
+  const s = Math.max(0.5, Math.min(1.25, scale));
+  rangeScale2 = s * s;
+}
 
 export function beginZombieLodFrame(maxFullPoses = 12): void {
   fullBudget = maxFullPoses;
@@ -43,14 +55,14 @@ export function zombieVrmLod(
     return takeFull() ? 'full' : 'reduced';
   }
 
-  if (d2 > FAR_R2) return 'proxy';
+  if (d2 > FAR_R2 * rangeScale2) return 'proxy';
 
-  if (d2 <= NEAR_R2) {
+  if (d2 <= NEAR_R2 * rangeScale2) {
     if (takeFull()) return 'full';
     return (frame + phase) % 2 === 0 ? 'reduced' : 'skip';
   }
 
-  if (d2 <= MID_R2) {
+  if (d2 <= MID_R2 * rangeScale2) {
     if ((frame + phase) % 2 !== 0) return 'skip';
     if (takeFull()) return 'full';
     return 'reduced';
