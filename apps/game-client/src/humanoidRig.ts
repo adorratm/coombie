@@ -107,6 +107,7 @@ interface RigBone {
 }
 
 const _q = new THREE.Quaternion();
+const noop = (): void => undefined;
 const _m = new THREE.Matrix4();
 const _v = new THREE.Vector3();
 
@@ -171,6 +172,11 @@ export class HumanoidRig {
       };
       this.byName.set(name, rb);
       rawToRig.set(raw, rb);
+      // Raw bones are only ever driven through their quaternion (apply() below, clip bindings).
+      // three keeps .rotation (Euler) in sync on every quaternion write — a matrix decomposition
+      // per write, three per bone per frame here, the largest single cost of a crowded frame.
+      // Nothing reads a raw bone's Euler, so skip that sync. (Proxies keep it: poses use Euler.)
+      (raw.quaternion as THREE.Quaternion & { _onChange(cb: () => void): THREE.Quaternion })._onChange(noop);
     }
     for (const rb of this.byName.values()) {
       let hp = HUMAN_PARENT[rb.name] ?? null;
