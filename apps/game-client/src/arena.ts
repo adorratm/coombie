@@ -373,11 +373,15 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
    * little bite, so a squad still has to work for it (and one strong build can't carry).
    */
   const coopScaleCache = { n: -1, v: { hp: 1, count: 1, dmg: 1 } };
+  let coopCapMul = 1;
   /** humans in the match (kept in step with the co-op allies) */
   let coopPlayers = 1;
   const coopScale = () => {
     const n = coopPlayers;
-    if (coopScaleCache.n !== n) coopScaleCache.v = coopDifficulty(n);
+    if (coopScaleCache.n !== n) {
+      coopScaleCache.v = coopDifficulty(n);
+      coopCapMul = Math.min(1.55, 1 + 0.05 * Math.max(0, n - 1));
+    }
     coopScaleCache.n = n;
     return coopScaleCache.v;
   };
@@ -606,7 +610,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     justRescued: false,
   });
 
-  const MAX_ZOMBIES = Math.round((coarse ? MAX_ZOMBIES_BASE : MAX_ZOMBIES_DESKTOP) * Math.min(1.35, diff.count));
+  const MAX_ZOMBIES_SOLO = Math.round((coarse ? MAX_ZOMBIES_BASE : MAX_ZOMBIES_DESKTOP) * Math.min(1.35, diff.count));
+  /** büyük takımda (12'ye kadar) daha kalabalık sürü: kişi başı +%5, en fazla +%55 */
+  const maxZombies = () => Math.round(MAX_ZOMBIES_SOLO * coopCapMul);
   // walkable area connected to the player: spawns never land outside the map or in sealed pockets
   const MIN_FIELD_CELLS = 60;
   let spawnField = buildSpawnField(ARENA_BOUND, colliders, player.root.position.x, player.root.position.z, ZOMBIE_RADIUS, 1.5);
@@ -772,7 +778,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     let def = typeDef ?? null;
     if (typeDef === undefined && !at && kind !== 'boss' && kind !== 'hooker') def = rollSpawnType(runMin);
     if (def) kind = def.base;
-    if (zombies.length >= MAX_ZOMBIES && kind !== 'boss' && def?.tier !== 'boss') return null;
+    if (zombies.length >= maxZombies() && kind !== 'boss' && def?.tier !== 'boss') return null;
     const z = createZombie(kind);
     z.root.userData.netId = ++netZombieSeq;
     z.proxy.visible = true;
@@ -931,7 +937,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
   const recruitAt = (pos: THREE.Vector3) => {
     runStats.rescued += 1;
-    if (squad.length >= 8) return;
+    if (squad.length >= MAX_SQUAD_SIZE) return;
     const used = new Set(squad.map((o) => o.root.userData.rosterId));
     const t = ALLY_TEMPLATES.find((a) => !used.has(a.id)) ?? ALLY_TEMPLATES[0]!;
     const ally = createOperative({
@@ -1967,7 +1973,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const ensureNetAlly = (id: string): OperativeVisual | null => {
     const have = netAllies.get(id);
     if (have) return have;
-    if (squad.length >= 8) return null;
+    if (squad.length >= MAX_SQUAD_SIZE) return null;
     const info = net?.roster?.players.find((p) => p.playerId === id);
     const def = rosterById((info?.operativeId ?? 'valkyrie') as Parameters<typeof rosterById>[0]);
     const ally = createOperative({
@@ -3329,7 +3335,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     // Spawn director: alive target ramps from ~6 to full pressure over 2.5 min, and the
     // wave budget trickles in (it used to dump one zombie per frame = a wall at once).
     if (hordeActive && spawnBudget <= 0) hordeActive = false;
-    const aliveTarget = Math.min(MAX_ZOMBIES, directorAliveTarget(simTime, wave, diff.count * coopScale().count, modeRt.spawnMul));
+    const aliveTarget = Math.min(maxZombies(), directorAliveTarget(simTime, wave, diff.count * coopScale().count, modeRt.spawnMul));
     spawnAcc = Math.min(3, spawnAcc + dt * spawnRate(simTime, wave, hordeActive));
     if (!isGuest && dt > 0) {
       const runMin = simTime / 60;
@@ -3346,7 +3352,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         } else giantT -= 20;
       }
     }
-    if (!modeRt.ownsSpawning && spawnBudget > 0 && spawnAcc >= 1 && zombies.length < Math.min(MAX_ZOMBIES, aliveTarget + aliveSlack(wave, hordeActive))) {
+    if (!modeRt.ownsSpawning && spawnBudget > 0 && spawnAcc >= 1 && zombies.length < Math.min(maxZombies(), aliveTarget + aliveSlack(wave, hordeActive))) {
       spawnAcc -= 1;
       spawnBudget -= 1;
       const kind = pickWaveSpawnKind(wave, spawnBudget, hordeActive);

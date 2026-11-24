@@ -127,5 +127,5 @@ export function rollPowerUpChoices(
 /** Solo: picks = number of active squad characters (1..4). Co-op: always 1 per player. */
 export function powerUpPickCount(mode: 'solo' | 'coop', squadSize: number): number {
   if (mode === 'coop') return 1;
-  return Math.min(8, Math.max(1, squadSize));
+  return Math.min(12, Math.max(1, squadSize));
 }

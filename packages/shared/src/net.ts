@@ -45,7 +45,7 @@ export const NET_LIMITS = {
   rejoinMs: 15 * 60_000,
   /** the host's connection may drop this long before the match is called off */
   hostGraceMs: 45_000,
-  maxPlayers: 8,
+  maxPlayers: 12,
 } as const;
 
 export interface NetRosterPlayer {

@@ -48,7 +48,14 @@ export function tickDowned(prev: DownState, dt: number, x: number, z: number, ma
 
 /** Zombie scaling for `players` humans in the match (1 = solo, unchanged). */
 export function coopDifficulty(players: number): { hp: number; count: number; dmg: number } {
-  const extra = Math.max(0, Math.min(7, Math.floor(players) - 1));
+  const extra = Math.max(0, Math.min(11, Math.floor(players) - 1));
   if (extra === 0) return { hp: 1, count: 1, dmg: 1 };
-  return { hp: 1.25 + 0.3 * extra, count: 1.15 + 0.22 * extra, dmg: 1.12 + 0.06 * extra };
+  // 2–8 kişi: eski eğri aynen; 9–12: azalan artış (kalabalık takım kolay geçmesin ama sünger olmasın)
+  const a = Math.min(7, extra);
+  const b = Math.max(0, extra - 7);
+  return {
+    hp: 1.25 + 0.3 * a + 0.2 * b,
+    count: 1.15 + 0.22 * a + 0.14 * b,
+    dmg: 1.12 + 0.06 * a + 0.04 * b,
+  };
 }

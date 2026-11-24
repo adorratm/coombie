@@ -16,7 +16,7 @@ import { DracordEmbed } from './dracord-embed';
 import { setVoicePriority } from './audio';
 
 /**
- * Co-op lobby panel (1–8 players): create a room or join by code, ready up, host starts.
+ * Co-op lobby panel (1–12 players): create a room or join by code, ready up, host starts.
  * On start every player gets a ticket, opens the /match socket and the run begins with a
  * NetSession — the host's client runs the world, the server only relays.
  */
@@ -77,7 +77,7 @@ export function coopServerUrl(): string {
 
 const ERR: Record<string, string> = {
   ROOM_NOT_FOUND: 'Oda bulunamadı. Kodu kontrol et.',
-  ROOM_FULL: 'Oda dolu (8 kişi).',
+  ROOM_FULL: 'Oda dolu (12 kişi).',
   SOLO_ROOM: 'Bu oda tek kişilik.',
   OPERATIVE_TAKEN: 'Bu operatörü başkası seçmiş — lobiden başka bir operatör seç.',
   NOT_READY: 'Herkes hazır olmalı (en az 2 oyuncu).',
@@ -400,7 +400,7 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
     if (!inRoom) {
       box.innerHTML = `
         <h2 id="coopTitle">CO-OP</h2>
-        <p>Arkadaşlarınla aynı görevde oyna (en fazla 8 kişi). Bir oda kur ve kodu paylaş ya da sana verilen kodla katıl. Operatörünü ve görevi lobiden seçersin; görevi oda sahibi belirler.</p>
+        <p>Arkadaşlarınla aynı görevde oyna (en fazla 12 kişi). Bir oda kur ve kodu paylaş ya da sana verilen kodla katıl. Operatörünü ve görevi lobiden seçersin; görevi oda sahibi belirler.</p>
         <label for="coopName">ADIN</label>
         <input id="coopName" maxlength="24" value="${esc(myName())}" autocomplete="nickname" />
         <label for="coopCode">ODA KODU</label>

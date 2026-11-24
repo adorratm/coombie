@@ -10,7 +10,7 @@ export const RESCUE_SLOT_INTERVAL_SEC = 90;
 export const RESCUE_WINDOW_SEC = 35;
 export const RESCUE_RETRY_SEC = 90;
 export const RESCUE_RADIUS = 2.4;
-export const MAX_SQUAD_SIZE = 8;
+export const MAX_SQUAD_SIZE = 12;
 
 export type RescueStatus = 'locked' | 'active' | 'cooldown' | 'recruited';
 

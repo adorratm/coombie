@@ -3,7 +3,7 @@ export const GAME_TAGLINE = 'OUTBREAK DEFENSE // TAC-OS';
 
 export const MAX_SQUAD_SIZE = 8;
 export const MIN_COOP_PLAYERS = 2;
-export const MAX_COOP_PLAYERS = 8;
+export const MAX_COOP_PLAYERS = 12;
 
 export const TICK_RATE = 20;
 export const SNAPSHOT_RATE = 10;
