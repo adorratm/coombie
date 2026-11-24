@@ -170,6 +170,8 @@ import { CoopMirror, packKit } from './coopMirror';
 import { applyGear, equippedAttachments } from './attachments';
 import { SeeThrough, type SeeTarget } from './seeThrough';
 import { NavField } from './navField';
+import { applyTypeDeco, updateTypeDeco } from './zombieDeco';
+import { createPostFx } from './postFx';
 import type { OperativeId } from './roster';
 import { queueZombieAnim, setOperativeDead, spawnZombieCorpse, tickZombieCorpses, type ZombieCorpse } from './avatars';
 
@@ -461,6 +463,14 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   scene.add(rimLight);
   renderer.shadowMap.needsUpdate = true;
 
+  const postFx = createPostFx(renderer, scene, camera, coarse);
+  {
+    // night maps glow more; bright day maps keep a high threshold so sunlit ground doesn't bloom
+    const bgL = new THREE.Color(LT.bg).getHSL({ h: 0, s: 0, l: 0 }).l;
+    const night = bgL < 0.045;
+    postFx.setLook({ bloom: night ? 0.72 : 0.48, threshold: night ? 0.8 : 1.05, vignette: night ? 0.42 : 0.32 });
+  }
+  postFx.setTier(quality);
   const map = buildGameMap(scene, mission.map, renderer);
   const ARENA_BOUND = map.bound;
   const colliders = map.colliders;
@@ -750,6 +760,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     ring.scale.setScalar(def.tier === 'boss' ? 2 : def.tier === 'elite' ? 1.25 : 0.75);
     ring.name = 'bossAura';
     z.root.add(ring);
+    applyTypeDeco(z, def);
   };
   /** Size and ground aura of a boss variant (also used for co-op replicas). */
   const applyBossLook = (z: ZombieVisual, def: BossVariantDef): void => {
@@ -2822,6 +2833,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     camera.aspect = w / Math.max(h, 1);
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
+    postFx.setSize(w, h);
   };
   setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
 
@@ -3042,6 +3054,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY_DPR[q]!));
     setZombieLodScale(QUALITY_LOD[q]!);
     setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
+    postFx.setTier(q);
     renderer.shadowMap.autoUpdate = q < 1;
     // keep shadows enabled (toggling recompiles every material); just make them cheap
     const size = q === 0 ? 2048 : q >= 3 ? 512 : 1024;
@@ -3258,7 +3271,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
 
     if (frozen) {
       billboardHealthBars(healthBars, camera);
-      renderer.render(scene, camera);
+      postFx.render(dt);
       // keep talking to the team while the result screen is up (the end of the run must reach them)
       if (net) netPublish(rawDt);
       return;
@@ -3928,8 +3941,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
 
     updateSeeThrough();
+    // named zombie types: gear follows the bones, wisps / halos turn (host and guests alike)
+    for (const z of zombies) if (z.root.userData.typeDeco && z.hp > 0) updateTypeDeco(z, simTime);
     // a hidden tab that still hosts a co-op world keeps simulating (see preview.ts) but has nothing to draw
-    if (!document.hidden) renderer.render(scene, camera);
+    if (!document.hidden) postFx.render(dt);
   };
 
   const onClick = () => {
@@ -4049,6 +4064,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       for (const m of flashMatPool) m.dispose();
       flashMatPool.length = 0;
       disposeMaterialTextures();
+      postFx.dispose();
       renderer.dispose();
       if (renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);

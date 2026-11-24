@@ -3,12 +3,12 @@ import { NET_ZOMBIE_KINDS } from './zombieKinds';
 import { eliteChance, giantBossInterval, pickGiantBoss, rollSpawnType, specialChance, unlockedTypes, ZOMBIE_TYPES, zombieTypeIndex } from './zombieTypes';
 
 describe('zombie types', () => {
-  it('has 12 bosses, 12 elites and 16 specials with unique ids', () => {
-    expect(ZOMBIE_TYPES).toHaveLength(40);
-    expect(ZOMBIE_TYPES.filter((t) => t.tier === 'boss')).toHaveLength(12);
-    expect(ZOMBIE_TYPES.filter((t) => t.tier === 'elite')).toHaveLength(12);
-    expect(ZOMBIE_TYPES.filter((t) => t.tier === 'special')).toHaveLength(16);
-    expect(new Set(ZOMBIE_TYPES.map((t) => t.id)).size).toBe(40);
+  it('has 13 bosses, 14 elites and 20 specials with unique ids', () => {
+    expect(ZOMBIE_TYPES).toHaveLength(47);
+    expect(ZOMBIE_TYPES.filter((t) => t.tier === 'boss')).toHaveLength(13);
+    expect(ZOMBIE_TYPES.filter((t) => t.tier === 'elite')).toHaveLength(14);
+    expect(ZOMBIE_TYPES.filter((t) => t.tier === 'special')).toHaveLength(20);
+    expect(new Set(ZOMBIE_TYPES.map((t) => t.id)).size).toBe(47);
   });
 
   it('builds on known base kinds and fits the co-op flag bits', () => {
@@ -29,12 +29,13 @@ describe('zombie types', () => {
     for (const t of ZOMBIE_TYPES.filter((d) => d.tier === 'special')) expect(t.scaleMul).toBeLessThanOrEqual(1.1);
   });
 
-  it('keeps the opening untouched and unlocks over time', () => {
-    expect(specialChance(2)).toBe(0);
-    expect(eliteChance(4)).toBe(0);
+  it('keeps the first minute plain and unlocks over time', () => {
+    expect(specialChance(1)).toBe(0);
+    expect(specialChance(2)).toBeGreaterThan(0);
+    expect(eliteChance(3)).toBe(0);
     expect(rollSpawnType(1, () => 0)).toBeNull();
     expect(unlockedTypes('boss', 5)).toHaveLength(0);
-    expect(unlockedTypes('boss', 60)).toHaveLength(12);
+    expect(unlockedTypes('boss', 60)).toHaveLength(13);
     expect(rollSpawnType(30, () => 0)?.tier).toBe('elite');
   });
 

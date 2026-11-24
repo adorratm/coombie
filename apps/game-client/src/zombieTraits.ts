@@ -23,6 +23,9 @@ interface TraitState {
   burrowUntil?: number;
   split?: boolean;
   growth?: number;
+  /** shield bubble hp left (0 = popped) */
+  bubble?: number;
+  bubbleMesh?: THREE.Mesh;
 }
 
 interface Pending {
@@ -116,6 +119,26 @@ export function tickZombieTraits(z: ZombieVisual, dt: number, ctx: ZombieCombatC
   const now = ctx.nowSec;
   const st = stateOf(z, now);
   const p = z.root.position;
+  // shield bubble soaks damage before the body takes it
+  if (t.bubble) {
+    if (st.bubble === undefined) st.bubble = z.maxHp * t.bubble.pct;
+    const lost = st.lastHp - z.hp;
+    if (lost > 1e-3 && st.bubble > 0 && z.hp > 0) {
+      const soak = Math.min(st.bubble, lost);
+      st.bubble -= soak;
+      z.hp += soak;
+      z.healthBar.setRatio(z.hp / z.maxHp);
+      if (st.bubble <= 0) {
+        st.next.bubble = now + t.bubble.every;
+        ctx.vfx?.sparks(p.clone().setY(1.2), 22, def.color, 7);
+        ctx.fx.spawnHitRing(p.clone(), def.color, 0.12);
+      }
+    } else if (st.bubble <= 0 && (st.next.bubble ?? 0) <= now) {
+      st.bubble = z.maxHp * t.bubble.pct;
+      ctx.vfx?.emit('smoke', p.x, 1.2, p.z, { vy: 0.4, life: 0.6, s0: 0.6, s1: 1.6, color: def.color, a: 0.3 });
+    }
+    syncBubble(z, st, def.color, t.bubble.pct);
+  }
   if (z.hp < st.lastHp - 1e-3) st.hurtAt = now;
   st.lastHp = z.hp;
   const target = nearestOp(ctx.squad, p, 40);
@@ -285,6 +308,7 @@ export function tickZombieTraits(z: ZombieVisual, dt: number, ctx: ZombieCombatC
   }
 
   tickNewTraits(z, def, st, target, dist, dt, ctx);
+  tickRoundThree(z, def, st, target, dist, ctx);
 
   if (t.meteor && target && dist < 24 && due(st, 'meteor', t.meteor.every, now)) {
     const alive = ctx.squad.filter((o) => o.alive && o.root.position.distanceTo(p) < 24);
@@ -461,6 +485,143 @@ function tickNewTraits(z: ZombieVisual, def: ZombieTypeDef, st: TraitState, targ
     }
   }
   void dt;
+}
+
+const bubbleGeo = new THREE.SphereGeometry(1, 20, 14);
+const bubbleMats = new Map<number, THREE.MeshBasicMaterial>();
+/** Show / hide / fade the bubble with how much shield is left. */
+function syncBubble(z: ZombieVisual, st: TraitState, color: number, pct: number): void {
+  const up = (st.bubble ?? 0) > 0;
+  if (!up) {
+    if (st.bubbleMesh) st.bubbleMesh.visible = false;
+    return;
+  }
+  if (!st.bubbleMesh) {
+    let mat = bubbleMats.get(color);
+    if (!mat) {
+      mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending });
+      bubbleMats.set(color, mat);
+    }
+    st.bubbleMesh = new THREE.Mesh(bubbleGeo, mat);
+    st.bubbleMesh.name = 'shieldBubble';
+    st.bubbleMesh.position.y = 1.05;
+    st.bubbleMesh.scale.set(0.95, 1.2, 0.95);
+    z.root.add(st.bubbleMesh);
+  }
+  st.bubbleMesh.visible = true;
+  const k = Math.max(0.35, (st.bubble ?? 0) / Math.max(1, z.maxHp * pct));
+  st.bubbleMesh.scale.set(0.9 + 0.1 * k, 1.1 + 0.12 * k, 0.9 + 0.1 * k);
+}
+
+const rockGeo = new THREE.DodecahedronGeometry(0.35, 0);
+const rockMat = new THREE.MeshStandardMaterial({ color: 0x7a6a5a, roughness: 0.95 });
+const barrelMat = new THREE.MeshStandardMaterial({ color: 0x5a2a14, emissive: 0xff5a1a, emissiveIntensity: 0.9, roughness: 0.7 });
+const barrelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.8, 10);
+const mineGeo = new THREE.CylinderGeometry(0.32, 0.38, 0.14, 12);
+const mineMat = new THREE.MeshStandardMaterial({ color: 0x2a2c26, metalness: 0.6, roughness: 0.5 });
+const mineLedMat = new THREE.MeshBasicMaterial({ color: 0xff2020 });
+const mineLedGeo = new THREE.SphereGeometry(0.07, 6, 4);
+
+/** Thrower, mines. */
+function tickRoundThree(z: ZombieVisual, def: ZombieTypeDef, st: TraitState, target: OperativeVisual | null, dist: number, ctx: ZombieCombatCtx): void {
+  const t = def.traits;
+  const now = ctx.nowSec;
+  const p = z.root.position;
+
+  if (t.thrower && target && dist > 4 && dist < t.thrower.range && z.attackAnim <= 0 && due(st, 'thrower', t.thrower.every, now)) {
+    const th = t.thrower;
+    // lead the target a little so standing still is punished, moving sideways is safe
+    const land = target.root.position.clone().setY(0).add(new THREE.Vector3((Math.random() - 0.5) * 1.5, 0, (Math.random() - 0.5) * 1.5));
+    const from = p.clone().setY(2.2 * z.root.scale.y);
+    const flight = 0.55 + dist * 0.035;
+    const r = th.r;
+    const dmg = z.attackDamage * th.mul;
+    ctx.fx.spawnWarnRing(land, r, th.fire ? 0xff5a1a : 0xc8b8a0, flight + 0.25);
+    queueZombieAnim(z, { kind: 'act', seg: SEG.headbutt, dur: 0.6, priority: 2 });
+    const rock = new THREE.Mesh(th.fire ? barrelGeo : rockGeo, th.fire ? barrelMat : rockMat);
+    rock.castShadow = true;
+    rock.position.copy(from);
+    rock.visible = false;
+    ctx.scene.add(rock);
+    const t0 = now + 0.25;
+    const steps = 12;
+    for (let i = 0; i <= steps; i++) {
+      const k = i / steps;
+      queue.push({
+        at: t0 + flight * k,
+        run: () => {
+          rock.visible = true;
+          rock.position.lerpVectors(from, land, k);
+          rock.position.y = from.y * (1 - k) + Math.sin(k * Math.PI) * (3 + dist * 0.18);
+          rock.rotation.set(k * 7, k * 5, 0);
+          if (i < steps) return;
+          ctx.scene.remove(rock);
+          ctx.vfx?.debris(land.clone(), th.fire ? 8 : 12, r * 0.6);
+          ctx.vfx?.dustRing(land, r, th.fire ? 0x6a2a10 : 0x6a5a4a);
+          if (th.fire) {
+            ctx.vfx?.explosion(land.clone(), r * 0.7, 0xff7a30);
+            ctx.hazards.fire(land.x, land.z, r * 0.8, 5, 3);
+          }
+          ctx.shake(th.fire ? 0.25 : 0.12);
+          for (const op of ctx.squad) {
+            if (!op.alive || op.root.position.distanceTo(land) > r) continue;
+            ctx.damageOperative(op, dmg, land);
+            knock(op, land, 1.1, ctx);
+          }
+        },
+      });
+    }
+  }
+
+  if (t.mines && target && dist < 26 && due(st, 'mines', t.mines.every, now)) {
+    for (let n = 0; n < t.mines.n; n++) {
+      const a = Math.random() * Math.PI * 2;
+      const off = n === 0 ? 0.8 : 2 + Math.random() * 3;
+      const at = p.clone().add(new THREE.Vector3(Math.cos(a) * off, 0, Math.sin(a) * off)).setY(0);
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(mineGeo, mineMat);
+      body.position.y = 0.07;
+      const led = new THREE.Mesh(mineLedGeo, mineLedMat);
+      led.position.y = 0.17;
+      g.add(body, led);
+      g.position.copy(at);
+      ctx.scene.add(g);
+      const arm = now + 1.2;
+      const life = arm + 7;
+      const r = 2.6;
+      const dmg = z.attackDamage * t.mines.mul;
+      // poll: blink the LED, explode when a hero steps close (or when the fuse runs out)
+      const poll = (tick: number) => {
+        queue.push({
+          at: tick,
+          run: () => {
+            led.visible = !led.visible || tick < arm;
+            const near = tick >= arm && ctx.squad.some((op) => op.alive && op.root.position.distanceTo(at) < 1.6);
+            if (!near && tick < life) {
+              poll(tick + 0.2);
+              return;
+            }
+            ctx.fx.spawnWarnRing(at, r, 0xff2020, 0.45);
+            queue.push({
+              at: tick + 0.45,
+              run: () => {
+                ctx.scene.remove(g);
+                ctx.vfx?.explosion(at.clone(), r * 0.65, 0xff6a2a);
+                ctx.shake(0.2);
+                for (const op of ctx.squad) {
+                  if (!op.alive || op.root.position.distanceTo(at) > r) continue;
+                  ctx.damageOperative(op, dmg, at);
+                  knock(op, at, 1.3, ctx);
+                }
+                for (const o of ctx.zombies) if (o.hp > 0 && o.root.position.distanceTo(at) < r) ctx.damageZombie(o, 5, at);
+              },
+            });
+          },
+        });
+      };
+      poll(now + 0.2);
+    }
+  }
 }
 
 /** Death traits: blast, split. Called before the corpse is removed. */

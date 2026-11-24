@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { buildGameMap } from '../gameMap';
 import { MAPS, type MapId } from '../mapDefs';
+import { createPostFx } from '../postFx';
 
 const q = new URLSearchParams(location.search);
 const id = (q.get('map') ?? 'lunapark') as MapId;
@@ -36,11 +37,15 @@ const map = buildGameMap(scene, id, renderer);
 const cam = new THREE.PerspectiveCamera(num('fov', 45), innerWidth / innerHeight, 0.5, 800);
 cam.position.set(num('x', 0), num('h', 70), num('z', 70));
 cam.lookAt(num('tx', 0), 0, num('tz', 0));
+const fx = createPostFx(renderer, scene, cam, false);
+const night = new THREE.Color(LT.bg).getHSL({ h: 0, s: 0, l: 0 }).l < 0.045;
+fx.setLook({ bloom: night ? 0.72 : 0.48, threshold: night ? 0.8 : 1.05, vignette: night ? 0.42 : 0.32 });
+fx.setTier(q.get('fx') === '0' ? 3 : 0);
 let t = 0;
 await map.ready;
 renderer.setAnimationLoop(() => {
   t += 1 / 60;
   map.update(1 / 60, t, cam.position);
-  renderer.render(scene, cam);
+  fx.render(1 / 60);
 });
 (window as unknown as { __mapReady: boolean }).__mapReady = true;

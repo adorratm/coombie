@@ -1,7 +1,7 @@
 import type { ZombieKind } from './zombieKinds';
 
 /**
- * Thirty named zombie types layered on the base kinds: 10 giant bosses, 10 elites
+ * Named zombie types layered on the base kinds: 10 giant bosses, 10 elites
  * (mid-size) and 10 specials (normal size, one trick each). A type picks a base kind
  * (mesh, attack set, AI), scales its stats and size, and adds traits that run in
  * zombieTraits.ts. Plain data so the arena, co-op replicas and tests share one table.
@@ -69,6 +69,12 @@ export interface ZombieTraits {
   mitosis?: boolean;
   /** shriek: short stun on heroes in the radius */
   screech?: { every: number; r: number };
+  /** lobs a rock / burning barrel at the hero (telegraphed landing) */
+  thrower?: { every: number; range: number; mul: number; r: number; fire?: boolean };
+  /** shield bubble that soaks this fraction of max hp, then pops; regrows after `every` s */
+  bubble?: { every: number; pct: number };
+  /** drops proximity mines that blow after a short fuse */
+  mines?: { every: number; n: number; mul: number };
 }
 
 /** Procedural layer on top of the walk / run clips, so the horde doesn't move as one. */
@@ -121,7 +127,7 @@ export const ZOMBIE_TYPES: readonly ZombieTypeDef[] = [
   T({ id: 'avci', name: 'Gölge Avcı', tier: 'elite', base: 'stalker', fromMin: 16, hpMul: 2.4, speedMul: 1.15, dmgMul: 1.4, scaleMul: 1.25, color: 0xc4b5fd, intro: 'ışınlanıp arkandan vuruyor', traits: { blink: 4, enrage: 0.5 } }),
 
   // ───────── specials (normal size, one trick) ─────────
-  T({ id: 'canli_bomba', name: 'Canlı Bomba', tier: 'special', base: 'runner', fromMin: 3, hpMul: 1, speedMul: 1.1, dmgMul: 1, scaleMul: 1, color: 0xff6a2a, intro: 'ölünce patlıyor — uzaktan vur', traits: { blast: { r: 3.2, mul: 2.2 } } }),
+  T({ id: 'canli_bomba', name: 'Canlı Bomba', tier: 'special', base: 'runner', fromMin: 2, hpMul: 1, speedMul: 1.1, dmgMul: 1, scaleMul: 1, color: 0xff6a2a, intro: 'ölünce patlıyor — uzaktan vur', traits: { blast: { r: 3.2, mul: 2.2 } } }),
   T({ id: 'bolunen', name: 'Bölünen', tier: 'special', base: 'grunt', fromMin: 4, hpMul: 1.6, speedMul: 1, dmgMul: 1, scaleMul: 1.05, color: 0xd04040, intro: 'ölünce ikiye bölünüyor', traits: { split: { kind: 'runner', n: 2 } } }),
   T({ id: 'yenilenen', name: 'Yenilenen', tier: 'special', base: 'grunt', fromMin: 4, hpMul: 1.4, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0x5ad46a, intro: 'yaraları kapanıyor — bitir onu', traits: { regen: 0.06 } }),
   T({ id: 'isinlanan', name: 'Işınlanan', tier: 'special', base: 'runner', fromMin: 5, hpMul: 1.2, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0xb070ff, intro: 'ışınlanıyor', traits: { blink: 3.5 } }),
@@ -143,6 +149,14 @@ export const ZOMBIE_TYPES: readonly ZombieTypeDef[] = [
   T({ id: 'buyuyen', name: 'Büyüyen', tier: 'elite', base: 'tank', fromMin: 10, hpMul: 1.6, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0x9a6aaa, intro: 'yaşadıkça büyüyor — erken indir', gait: 'broken', traits: { grow: { every: 4, max: 1.9 } } }),
   T({ id: 'yeralti_krali', name: 'Yeraltı Kralı', tier: 'boss', base: 'boss', fromMin: 14, hpMul: 2.7, speedMul: 1, dmgMul: 1.3, scaleMul: 1.45, color: 0x6a4a2a, intro: 'yerin altından vuruyor', traits: { burrow: { every: 9, dur: 2.8 }, leap: { every: 7, range: 16, mul: 1.8 }, summon: { every: 8, kind: 'crawler', n: 4 } } }),
   T({ id: 'firtina_bogasi', name: 'Fırtına Boğası', tier: 'boss', base: 'boss', fromMin: 19, hpMul: 3, speedMul: 1.05, dmgMul: 1.4, scaleMul: 1.55, color: 0x5a6a8a, intro: 'durmadan hücum ediyor — yanlara kaç', traits: { charge: { every: 5, dist: 18, mul: 2 }, quake: { every: 9, r: 6, mul: 1.4 }, enrage: 0.4 } }),
+  // ───────── round three (append-only) ─────────
+  T({ id: 'tasci', name: 'Taşçı', tier: 'special', base: 'grunt', fromMin: 2, hpMul: 1.3, speedMul: 0.9, dmgMul: 1, scaleMul: 1.05, color: 0xa89070, intro: 'uzaktan taş fırlatıyor — işaretli yerden çekil', gait: 'hunch', traits: { thrower: { every: 4.5, range: 18, mul: 1.2, r: 1.8 } } }),
+  T({ id: 'kivilcim', name: 'Kıvılcım', tier: 'special', base: 'runner', fromMin: 2, hpMul: 0.9, speedMul: 1.15, dmgMul: 0.9, scaleMul: 0.95, color: 0x7cd4ff, intro: 'yanına gelince çarpıyor', gait: 'twitch', traits: { nova: { every: 4, r: 2.6, mul: 0.6 } } }),
+  T({ id: 'kabarcik', name: 'Kabarcık', tier: 'special', base: 'grunt', fromMin: 3, hpMul: 1.2, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0x6ad8ff, intro: 'kalkan baloncuğu var — önce patlat', traits: { bubble: { every: 8, pct: 0.8 } } }),
+  T({ id: 'mayinci', name: 'Mayıncı', tier: 'special', base: 'crawler', fromMin: 4, hpMul: 1.3, speedMul: 1, dmgMul: 1, scaleMul: 1, color: 0xff4a4a, intro: 'arkasında mayın bırakıyor — kırmızı ışığa basma', traits: { mines: { every: 4, n: 1, mul: 1.6 } } }),
+  T({ id: 'mancinik', name: 'Mancınık', tier: 'elite', base: 'tank', fromMin: 8, hpMul: 2.2, speedMul: 0.85, dmgMul: 1.2, scaleMul: 1.3, color: 0xff7a2a, intro: 'yanan varil fırlatıyor', gait: 'broken', traits: { thrower: { every: 3.5, range: 24, mul: 1.6, r: 2.8, fire: true }, armor: 0.15 } }),
+  T({ id: 'kubbe', name: 'Kubbe Bekçisi', tier: 'elite', base: 'riot', fromMin: 11, hpMul: 2.2, speedMul: 0.9, dmgMul: 1.1, scaleMul: 1.3, color: 0x5ee0ff, intro: 'kendini ve yanındakileri kalkanlıyor', traits: { bubble: { every: 7, pct: 0.6 }, aegis: { r: 6, armor: 0.3 } } }),
+  T({ id: 'palyaco', name: 'Palyaço', tier: 'boss', base: 'boss', fromMin: 16, hpMul: 2.8, speedMul: 1.05, dmgMul: 1.2, scaleMul: 1.45, color: 0xff5a7a, intro: 'gülüyor... ve her yere mayın saçıyor', gait: 'twitch', traits: { mines: { every: 3, n: 3, mul: 1.5 }, blink: 6, summon: { every: 8, kind: 'runner', n: 4 }, bubble: { every: 14, pct: 0.25 } } }),
 ];
 
 export const ZOMBIE_TYPE_BY_ID: ReadonlyMap<string, ZombieTypeDef> = new Map(ZOMBIE_TYPES.map((t) => [t.id, t]));
@@ -155,10 +169,11 @@ export const TIER_XP: Record<ZombieTier, number> = { boss: 10, elite: 3.5, speci
 
 /** Chance a regular spawn becomes a special / elite at this run minute. */
 export function specialChance(min: number): number {
-  return Math.max(0, Math.min(0.3, (min - 2.5) * 0.025));
+  // starts in the second minute and climbs faster: the horde stops looking alike early
+  return Math.max(0, Math.min(0.38, (min - 1.5) * 0.035));
 }
 export function eliteChance(min: number): number {
-  return Math.max(0, Math.min(0.09, (min - 4.5) * 0.008));
+  return Math.max(0, Math.min(0.12, (min - 3.5) * 0.01));
 }
 
 /** Seconds between giant bosses at this minute (more often as the run goes on). */
