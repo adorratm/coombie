@@ -389,14 +389,18 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   let quality = (() => {
     try {
-      const q = Number(localStorage.getItem('protocol-z-quality'));
+      // v2: eski sürüm telefonları kalıcı olarak "düşük"e (0.9x) kilitlemişti — sıfırla
+      const raw = localStorage.getItem('protocol-z-quality-v2');
+      const q = raw === null ? NaN : Number(raw);
       if (Number.isFinite(q) && q >= 0 && q <= 3) return q;
     } catch {
       /* ignore */
     }
-    return coarse ? 2 : 1;
+    return 1;
   })();
-  const QUALITY_DPR = [1.5, 1.15, 0.9, 0.75];
+  // Çizim çözünürlüğü (cihaz piksel oranı üst sınırı). Telefonlar 3x yoğunlukta: önceki 0.9x
+  // sahneyi ekranın üçte biri çözünürlükte çizip büyütüyordu → uzaktaki her şey pikselli.
+  const QUALITY_DPR = coarse ? [2.5, 2, 1.6, 1.25] : [2, 1.5, 1.15, 0.9];
   /** per tier: full skeleton updates a frame, and how far out zombies keep their skinned model */
   const QUALITY_POSES = [14, 12, 9, 6];
   const QUALITY_LOD = [1, 1, 0.85, 0.72];
@@ -2973,7 +2977,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const applyQuality = (q: number) => {
     quality = q;
     try {
-      localStorage.setItem('protocol-z-quality', String(q));
+      localStorage.setItem('protocol-z-quality-v2', String(q));
     } catch {
       /* ignore */
     }
@@ -2989,20 +2993,27 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       sun.shadow.map = null;
     }
   };
+  // Yükleme/ilk sahne derlemesi takılmaları kaliteyi düşürmesin
+  const tuneFrom = performance.now() + 8000;
+  let lastDowngrade = 0;
   const tuneQuality = (frameMs: number) => {
     frameEma += (Math.min(100, frameMs) - frameEma) * 0.05;
-    if (frameEma > 24) {
+    if (performance.now() < tuneFrom) return;
+    if (frameEma > 26) {
       slowFor += frameMs / 1000;
       fastFor = 0;
-      if (slowFor > 2.5 && quality < 3) {
+      if (slowFor > 3 && quality < 3) {
         applyQuality(quality + 1);
+        lastDowngrade = performance.now();
         slowFor = 0;
         frameEma = 18;
       }
-    } else if (frameEma < 11) {
+    } else if (frameEma < 18) {
+      // 60 Hz ekranda kare ~16.7 ms: eski eşik (11 ms ≈ 90 fps) telefonda hiç sağlanmıyordu,
+      // düşen kalite bir daha geri gelmiyordu
       fastFor += frameMs / 1000;
       slowFor = 0;
-      if (fastFor > 10 && quality > 1) {
+      if (fastFor > 8 && quality > 1 && performance.now() - lastDowngrade > 30_000) {
         applyQuality(quality - 1);
         fastFor = 0;
       }

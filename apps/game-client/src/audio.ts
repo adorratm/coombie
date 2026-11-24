@@ -162,6 +162,86 @@ export function setVoicePriority(opts: { embedded: boolean; talking: boolean }):
   liveMasters.forEach((f) => f());
 }
 
+/**
+ * Mobil tarayıcıda sesin açılması (iOS Safari / Android Chrome):
+ * - AudioContext yalnız gerçek bir dokunma/tık/tuş olayının İÇİNDE resume edilebilir (oyun döngüsünden
+ *   ya da pointerdown'dan yapılan resume iOS'ta reddediliyordu → hiç ses yok)
+ * - iOS'ta Web Audio sessiz anahtarına uyar; audioSession 'playback' (iOS 16.4+) ve sessiz bir <audio>
+ *   oynatmak oyunu medya gibi çaldırır (zil kapalıyken de ses gelir)
+ */
+/** 0,1 sn sessiz 8 kHz mono WAV (data: URL) */
+function silentWavUrl(): string {
+  const n = 800;
+  const buf = new Uint8Array(44 + n * 2);
+  const v = new DataView(buf.buffer);
+  const w = (o: number, t: string) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  w(0, 'RIFF');
+  v.setUint32(4, 36 + n * 2, true);
+  w(8, 'WAVE');
+  w(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true);
+  v.setUint32(28, 16000, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  w(36, 'data');
+  v.setUint32(40, n * 2, true);
+  let bin = '';
+  buf.forEach((x) => (bin += String.fromCharCode(x)));
+  return `data:audio/wav;base64,${btoa(bin)}`;
+}
+
+function installAudioUnlock(getCtx: () => AudioContext | null): void {
+  if (typeof document === 'undefined') return;
+  const nav = navigator as Navigator & { audioSession?: { type: string } };
+  try {
+    if (nav.audioSession) nav.audioSession.type = 'playback';
+  } catch {
+    /* eski tarayıcı */
+  }
+  let htmlKick: HTMLAudioElement | null = null;
+  const unlock = () => {
+    const c = getCtx();
+    if (!c) return;
+    if (c.state !== 'running') void c.resume().catch(() => undefined);
+    try {
+      // 1 örneklik sessiz tampon: iOS'ta çıkışı gerçekten başlatır
+      const b = c.createBuffer(1, 1, 22050);
+      const src = c.createBufferSource();
+      src.buffer = b;
+      src.connect(c.destination);
+      src.start(0);
+    } catch {
+      /* ignore */
+    }
+    if (!nav.audioSession && !htmlKick) {
+      try {
+        // eski iOS: sessiz bir HTML ses öğesi oturumu "medya"ya çevirir (sessiz anahtarı atlar)
+        htmlKick = new Audio(silentWavUrl());
+        htmlKick.setAttribute('playsinline', '');
+        htmlKick.loop = true;
+        htmlKick.volume = 0.01;
+        void htmlKick.play().catch(() => undefined);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (c.state === 'running') {
+      for (const ev of EVENTS) document.removeEventListener(ev, unlock, true);
+    }
+  };
+  const EVENTS = ['touchend', 'click', 'keydown', 'pointerup'] as const;
+  for (const ev of EVENTS) document.addEventListener(ev, unlock, true);
+  // sekme geri gelince iOS bağlamı "interrupted" bırakabilir
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const c = getCtx();
+    if (c && c.state !== 'running') for (const ev of EVENTS) document.addEventListener(ev, unlock, true);
+  });
+}
+
 export function createGameAudio(): GameAudio {
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
@@ -179,7 +259,7 @@ export function createGameAudio(): GameAudio {
       const AC =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      ctx = new AC();
+      ctx = new AC({ latencyHint: 'interactive' });
       master = ctx.createGain();
       master.gain.value = clamp01(levels.master) * voiceMul;
       master.connect(ctx.destination);
@@ -197,6 +277,9 @@ export function createGameAudio(): GameAudio {
     }
     return ctx;
   };
+
+  // ilk dokunuşta bağlamı kur ve aç (oyun döngüsünden resume iOS'ta işe yaramıyor)
+  installAudioUnlock(() => ensure());
 
   const busNode = (bus: Exclude<AudioBusId, 'master'>): GainNode | null => {
     ensure();
