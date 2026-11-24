@@ -406,6 +406,13 @@ const syncPauseBuses = () => {
     if (document.activeElement !== input) input.value = String(v);
     pct.textContent = `${v}%`;
   }
+  const cam = el.pauseBuses.querySelector('input[data-cam]') as HTMLInputElement | null;
+  if (cam && document.activeElement !== cam) cam.value = String(Math.round(240 - arena.getCamZoom() * 100));
+  const gfx = el.pauseBuses.querySelector('select[data-gfx]') as HTMLSelectElement | null;
+  if (gfx && document.activeElement !== gfx) {
+    const g = arena.getGraphics();
+    gfx.value = g.auto ? 'auto' : String(g.tier);
+  }
 };
 
 const ensurePauseBuses = () => {
@@ -438,6 +445,65 @@ const ensurePauseBuses = () => {
       pct.textContent = `${input.value}%`;
     });
     row.append(name, input, pct);
+    el.pauseBuses.appendChild(row);
+  }
+  // Kamera yakınlığı (iki parmak / tekerlek ile de değişir)
+  {
+    const row = document.createElement('label');
+    row.className = 'busRow';
+    const name = document.createElement('span');
+    name.textContent = 'Kamera';
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = '55';
+    input.max = '185';
+    input.step = '1';
+    input.dataset.cam = '1';
+    // sağa çekince YAKINLAŞIR (kullanıcı için sezgisel): değer = 240 - zoom*100
+    const toUi = (z: number) => String(Math.round(240 - z * 100));
+    input.value = toUi(arena.getCamZoom());
+    const pct = document.createElement('span');
+    pct.className = 'pct';
+    const label = () => {
+      const z = arena.getCamZoom();
+      pct.textContent = z < 0.8 ? 'Yakın' : z > 1.25 ? 'Uzak' : 'Orta';
+    };
+    label();
+    input.addEventListener('input', () => {
+      arena.setCamZoom((240 - Number(input.value)) / 100);
+      label();
+    });
+    row.append(name, input, pct);
+    el.pauseBuses.appendChild(row);
+  }
+  // Grafik kalitesi
+  {
+    const row = document.createElement('label');
+    row.className = 'busRow';
+    const name = document.createElement('span');
+    name.textContent = 'Grafik';
+    const sel = document.createElement('select');
+    sel.dataset.gfx = '1';
+    sel.style.cssText = 'flex:1;min-width:0;background:#10141a;color:#f3f5f7;border:1px solid rgba(220,230,240,.25);border-radius:8px;padding:4px 6px;font:inherit';
+    for (const [v, t] of [
+      ['auto', 'Otomatik'],
+      ['0', 'Yüksek'],
+      ['1', 'Orta'],
+      ['2', 'Düşük'],
+      ['3', 'Çok düşük'],
+    ] as const) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = t;
+      sel.appendChild(o);
+    }
+    const g = arena.getGraphics();
+    sel.value = g.auto ? 'auto' : String(g.tier);
+    sel.addEventListener('change', () => {
+      if (sel.value === 'auto') arena.setGraphics({ auto: true });
+      else arena.setGraphics({ auto: false, tier: Number(sel.value) });
+    });
+    row.append(name, sel);
     el.pauseBuses.appendChild(row);
   }
 };

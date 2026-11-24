@@ -309,6 +309,12 @@ export interface ArenaHandle {
   devNetStats: () => { kills: number; reverts: number; delayMs: number; jitterMs: number; hostProtocol: number; pending: number };
   getAudioBusLevels: () => AudioBusLevels;
   setAudioBusLevel: (bus: AudioBusId, value: number) => void;
+  /** kamera uzaklığı (0.55 yakın … 1.85 uzak); cihazda saklanır */
+  getCamZoom: () => number;
+  setCamZoom: (z: number) => void;
+  /** grafik: 'auto' ya da sabit kademe 0 (yüksek) … 3 (çok düşük) */
+  getGraphics: () => { auto: boolean; tier: number };
+  setGraphics: (g: { auto: boolean; tier?: number }) => void;
 }
 
 type Decal = { mesh: THREE.Mesh; life: number };
@@ -400,6 +406,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   })();
   // Çizim çözünürlüğü (cihaz piksel oranı üst sınırı). Telefonlar 3x yoğunlukta: önceki 0.9x
   // sahneyi ekranın üçte biri çözünürlükte çizip büyütüyordu → uzaktaki her şey pikselli.
+  let autoQuality = (() => {
+    try {
+      return localStorage.getItem('protocol-z-quality-auto') !== '0';
+    } catch {
+      return true;
+    }
+  })();
   const QUALITY_DPR = coarse ? [2.5, 2, 1.6, 1.25] : [2, 1.5, 1.15, 0.9];
   /** per tier: full skeleton updates a frame, and how far out zombies keep their skinned model */
   const QUALITY_POSES = [14, 12, 9, 6];
@@ -829,7 +842,43 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     spawnZombie(i % 6 === 0 ? 'acid' : i % 4 === 0 ? 'runner' : 'grunt', true);
   }
 
-  let camZoom = 1;
+  // Kamera: telefonda varsayılan daha yakın (küçük ekranda karakter/zombiler küçük kalıyordu)
+  let camZoom = (() => {
+    try {
+      const v = Number(localStorage.getItem('protocol-z-cam-zoom'));
+      if (Number.isFinite(v) && v >= CAM_ZOOM_MIN && v <= CAM_ZOOM_MAX && v > 0) return v;
+    } catch {
+      /* ignore */
+    }
+    return coarse ? 0.7 : 1;
+  })();
+  let camZoomSaveAt = 0;
+  const saveCamZoom = () => {
+    try {
+      localStorage.setItem('protocol-z-cam-zoom', camZoom.toFixed(3));
+    } catch {
+      /* ignore */
+    }
+  };
+  // İki parmakla yakınlaştır/uzaklaştır (kontrol düğmelerinin dışında, sahnede)
+  let pinchD = 0;
+  const pinchDist = (t: TouchList) => Math.hypot(t[0]!.clientX - t[1]!.clientX, t[0]!.clientY - t[1]!.clientY);
+  const onPinchStart = (e: TouchEvent) => {
+    if (e.touches.length === 2) pinchD = pinchDist(e.touches);
+  };
+  const onPinchMove = (e: TouchEvent) => {
+    if (e.touches.length !== 2 || !pinchD) return;
+    const d = pinchDist(e.touches);
+    camZoom = THREE.MathUtils.clamp(camZoom * (pinchD / d), CAM_ZOOM_MIN, CAM_ZOOM_MAX);
+    pinchD = d;
+    camZoomSaveAt = performance.now() + 600;
+  };
+  const onPinchEnd = (e: TouchEvent) => {
+    if (e.touches.length < 2) pinchD = 0;
+  };
+  window.addEventListener('touchstart', onPinchStart, { passive: true, capture: true });
+  window.addEventListener('touchmove', onPinchMove, { passive: true, capture: true });
+  window.addEventListener('touchend', onPinchEnd, { passive: true, capture: true });
 
   const bloodDecals: Decal[] = [];
   const gems: Gem[] = [];
@@ -3169,7 +3218,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     lastT = now;
     frameNo++;
     xpLedger.tick(rawDt);
-    if (!document.hidden && frameMs > 0 && frameMs < 500) tuneQuality(frameMs);
+    if (autoQuality && !document.hidden && frameMs > 0 && frameMs < 500) tuneQuality(frameMs);
     // The shadow pass re-renders every skinned zombie. Medium/low refresh it every
     // other frame, very low every third (still smooth at the top-down camera).
     if (quality >= 1) renderer.shadowMap.needsUpdate = frameNo % (quality >= 3 ? 3 : 2) === 0;
@@ -3832,7 +3881,15 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     // forcing needsUpdate here would re-render the shadow pass every frame.
 
     // Zoom: mouse wheel / +/- 
-    camZoom = THREE.MathUtils.clamp(camZoom + input.consumeZoomDelta(), CAM_ZOOM_MIN, CAM_ZOOM_MAX);
+    const zd = input.consumeZoomDelta();
+    if (zd) {
+      camZoom = THREE.MathUtils.clamp(camZoom + zd, CAM_ZOOM_MIN, CAM_ZOOM_MAX);
+      camZoomSaveAt = performance.now() + 600;
+    }
+    if (camZoomSaveAt && performance.now() > camZoomSaveAt) {
+      camZoomSaveAt = 0;
+      saveCamZoom();
+    }
     const camH = 24 * camZoom;
     const camBack = 17 * camZoom;
 
@@ -3931,6 +3988,21 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     },
     setPaused,
     togglePause,
+    getCamZoom: () => camZoom,
+    setCamZoom: (z: number) => {
+      camZoom = THREE.MathUtils.clamp(z, CAM_ZOOM_MIN, CAM_ZOOM_MAX);
+      saveCamZoom();
+    },
+    getGraphics: () => ({ auto: autoQuality, tier: quality }),
+    setGraphics: (g: { auto: boolean; tier?: number }) => {
+      autoQuality = g.auto;
+      try {
+        localStorage.setItem('protocol-z-quality-auto', g.auto ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      if (g.tier !== undefined && g.tier >= 0 && g.tier <= 3) applyQuality(g.tier);
+    },
     getAudioBusLevels: () => audio.getBusLevels(),
     setAudioBusLevel: (bus, value) => {
       audio.setBusLevel(bus, value);
@@ -3961,6 +4033,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       hazards.dispose();
       for (const c of corpses) c.avatar.dispose();
       container.removeEventListener('pointerdown', onClick);
+      window.removeEventListener('touchstart', onPinchStart, true);
+      window.removeEventListener('touchmove', onPinchMove, true);
+      window.removeEventListener('touchend', onPinchEnd, true);
       bloodDecalGeo.dispose();
       for (const m of flashMatPool) m.dispose();
       flashMatPool.length = 0;
