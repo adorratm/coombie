@@ -1,3 +1,5 @@
+import { enterFullscreen, isFullscreen, isStandaloneApp } from './fullscreen';
+
 /**
  * On-screen controls for phones and tablets: a floating move stick on the left half,
  * ability buttons (the HUD's own Q/E/R/H cards, enlarged) and reload / weapon / pause
@@ -137,11 +139,8 @@ export function mountTouchControls(input: TouchInput, skills: HTMLElement): () =
 
 /** Phones: ask for landscape. Android can lock it once fullscreen; iOS shows the rotate overlay. */
 export async function preferLandscape(): Promise<void> {
-  try {
-    if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
-  } catch {
-    /* iOS Safari / in-app web views: no fullscreen API */
-  }
+  // Android/iPad: API ile; iPhone'da API yok (rotate katmanı + ana ekrana ekle ipucu düğmede)
+  if (!isFullscreen() && !isStandaloneApp()) await enterFullscreen();
   try {
     const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
     await o.lock?.('landscape');

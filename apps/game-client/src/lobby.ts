@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isStandaloneApp, toggleFullscreen } from './fullscreen';
 import { ensureWeaponEnvironment } from './weaponAssets';
 import { curlHand, holdGunRig, holdStyleOf, orientGun, seatMeleeInHand, supportMelee, TWO_HANDED_MELEE, type BoneSource } from './gunHold';
 import { MAPS, MAP_ORDER } from './mapDefs';
@@ -1387,10 +1388,9 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     renderAll();
   });
   $('lbStart').addEventListener('click', () => onStart());
-  $('lbFs').addEventListener('click', () => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-    else void document.documentElement.requestFullscreen?.().catch(() => undefined);
-  });
+  $('lbFs').addEventListener('click', () => void toggleFullscreen());
+  // ana ekrandan (tam ekran uygulama olarak) açıldıysa düğmeye gerek yok
+  if (isStandaloneApp()) $('lbFs').style.display = 'none';
 
   return {
     show: () => {
