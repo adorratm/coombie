@@ -65,6 +65,7 @@ export const MAPS: Array<{ id: string; name: string; mood: string }> = [
   { id: 'fortress', name: 'Kale Kuşatması', mood: 'Alacakaranlık · Kül' },
   { id: 'volcano', name: 'Kül Dağı', mood: 'Lav · Kül yağmuru' },
   { id: 'maze', name: 'Çit Labirenti', mood: 'Ay ışığı · Sis' },
+  { id: 'lunapark', name: 'Terk Edilmiş Lunapark', mood: 'Gece · Renkli ampuller' },
 ];
 
 export const BOSSES: Array<{ name: string; desc: string; wave: number; color: string }> = [

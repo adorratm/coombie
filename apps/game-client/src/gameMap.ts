@@ -3,6 +3,7 @@ import { MapBuilder, setMapAnisotropy, type MapAnchors } from './mapBuilder';
 import { MAPS, type MapDef, type MapId } from './mapDefs';
 import type { MapBuildResult } from './map';
 import { WeatherFx } from './weather';
+import { collectSpinners } from './mapLunapark';
 
 export interface GameMap extends MapBuildResult {
   def: MapDef;
@@ -101,6 +102,7 @@ export function buildGameMap(scene: THREE.Scene, id: MapId, renderer?: THREE.Web
   const weather = new WeatherFx(scene, def.weather, typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
   const ready = b.finishProps();
   const flick = b.lights.filter((l) => l.userData.flicker);
+  const spinners = collectSpinners(b.root);
 
   return {
     def,
@@ -118,6 +120,7 @@ export function buildGameMap(scene: THREE.Scene, id: MapId, renderer?: THREE.Web
     evacMarker,
     update: (dt, t, center) => {
       weather.update(dt, center);
+      for (const s of spinners) s.o.rotation[s.axis] += s.speed * dt;
       for (let i = 0; i < flick.length; i++) flick[i]!.intensity = 8 + Math.sin(t * 13 + i * 3) * 2 + Math.sin(t * 31 + i) * 1.4;
       if (evacMarker.visible) {
         evRing.scale.setScalar(1 + Math.sin(t * 3) * 0.04);

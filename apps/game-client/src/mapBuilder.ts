@@ -1111,6 +1111,32 @@ export class MapBuilder {
     await Promise.all(jobs);
   }
 
+  /**
+   * Hand-built set piece (ferris wheel, tent…): added to the map, its geometries and
+   * materials are freed with the map. Optional box colliders in world space.
+   */
+  custom(o: THREE.Object3D, colliders: ReadonlyArray<readonly [x: number, z: number, w: number, d: number, rot?: number]> = []): THREE.Object3D {
+    o.traverse((c) => {
+      const m = c as THREE.Mesh;
+      if (m.geometry) this.owned.push(m.geometry);
+      if (m.material) for (const mm of Array.isArray(m.material) ? m.material : [m.material]) this.ownedMats.push(mm);
+    });
+    this.add(o);
+    for (const [x, z, w, d, rot] of colliders) this.collideRect(x, z, w, d, rot ?? 0);
+    return o;
+  }
+
+  /** Real point light, respecting the per-map light budget. */
+  pointLight(x: number, y: number, z: number, color: number, intensity: number, range: number, flicker = false): THREE.PointLight | null {
+    if (this.lights.length >= 4) return null;
+    const l = new THREE.PointLight(color, intensity, range, 1.8);
+    l.position.set(x, y, z);
+    if (flicker) l.userData.flicker = true;
+    this.add(l);
+    this.lights.push(l);
+    return l;
+  }
+
   dispose(): void {
     this.root.removeFromParent();
     this.owned.forEach((g) => g.dispose());

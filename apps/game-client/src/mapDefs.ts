@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { booth, bulbString, bumperRink, carousel, circusTent, coaster, entranceArch, ferrisWheel, foodCourt, swingRide, trailer } from './mapLunapark';
 import { MapBuilder, type PropId } from './mapBuilder';
 
 /**
@@ -6,7 +7,7 @@ import { MapBuilder, type PropId } from './mapBuilder';
  * lighting, weather and objective anchors used by the game modes.
  */
 
-export type MapId = 'city' | 'hospital' | 'military' | 'harbor' | 'forest' | 'highway' | 'industrial' | 'snow' | 'desert' | 'lab' | 'village' | 'mall' | 'airport' | 'campus' | 'river' | 'canyon' | 'fortress' | 'volcano' | 'maze';
+export type MapId = 'city' | 'hospital' | 'military' | 'harbor' | 'forest' | 'highway' | 'industrial' | 'snow' | 'desert' | 'lab' | 'village' | 'mall' | 'airport' | 'campus' | 'river' | 'canyon' | 'fortress' | 'volcano' | 'maze' | 'lunapark';
 export type Weather = 'none' | 'rain' | 'snow' | 'dust' | 'ash';
 export type ModeId =
   | 'survival' | 'horde' | 'defense' | 'rescue' | 'evac' | 'boss' | 'endless' | 'zones' | 'hunt' | 'blitz'
@@ -1022,8 +1023,89 @@ export const MAPS: Record<MapId, MapDef> = {
       for (const [x, z] of [[-5, 5], [5, -5]] as const) b.lamp(x, z, 0xd8f0ff, true);
     },
   },
+  lunapark: {
+    id: 'lunapark',
+    name: 'Terk Edilmiş Lunapark',
+    tagline: 'Gece · Renkli ampuller',
+    desc: 'Yıllardır kapalı bir lunapark: hâlâ dönen dönme dolap, gıcırdayan atlıkarınca, hız treni rayları ve sirk çadırı. Ampuller yanıyor ama kimse bilet kesmiyor.',
+    half: 92,
+    seed: 3307,
+    weather: 'none',
+    accent: 0xff5a7a,
+    modes: ['survival', 'horde', 'defense', 'rescue', 'evac', 'boss', 'endless'],
+    lighting: L({ bg: 0x07040c, fog: 0x140a1c, fogDensity: 0.013, ambient: [0x3a2a48, 0.85], hemi: [0x9a7ab8, 0x1a1018, 0.95], sun: [0xb8c8ff, 1.25], sunDir: [24, 44, -18], rim: [0xff5a7a, 0.6], exposure: 1.45 }),
+    build: (b) => {
+      b.ground('cracked_concrete', 5, 'aerial_grass_rock', 7, 0.45, 0x9a8f88);
+      b.anchors.core.set(0, 0, 6);
+      b.anchors.spawn.set(0, 0, 14);
+      b.anchors.evac.set(0, 0, 80);
+      b.anchors.boss.set(52, 0, -40);
+      ringAnchors(b, 46);
+      b.clear(0, 6, 13);
+      // midway: wide paved promenade from the gate (south) to the ferris wheel (north) + a cross avenue
+      b.road(0, 96, 0, -96, 12, { tex: 'floor_tiles_06', curb: false, lanes: false, tint: 0xb8a898 });
+      b.road(-96, 6, 96, 6, 9, { tex: 'floor_tiles_06', curb: false, lanes: false, tint: 0xb8a898 });
+      for (let t = -94; t <= 94; t += 5) {
+        b.clear(0, t, 6.5);
+        b.clear(t, 6, 5);
+      }
+      entranceArch(b, 0, 86, 0);
+      ferrisWheel(b, 0, -62, 0);
+      carousel(b, -38, -22);
+      circusTent(b, 52, -58);
+      coaster(b, -52, 46, 26, 22);
+      bumperRink(b, 44, 36, 20, 14);
+      swingRide(b, 40, -14);
+      foodCourt(b, -36, 18);
+      // circus camp behind the big top
+      for (const [x, z, r, c] of [[70, -36, 0.3, 0x3a7ad9], [76, -48, 0.1, 0xd94040], [74, -72, -0.4, 0xe8c040], [34, -80, 1.4, 0x40a860], [64, -84, 1.1, 0xc084fc]] as const) trailer(b, x, z, r, c);
+      // haunted house (Korku Tüneli) with a dark facade
+      b.building(52, 66, 16, 10, 7.5, { wall: 'brick_wall_10', roof: 'grey_roof_01', wallTile: 3, tint: 0x5a4a5a, roofTint: 0x3a2a3a, rooftop: false });
+      b.pointLight(52, 3, 59, 0x9cff6a, 8, 12, true);
+      // kiddie corner: small rides and a dead tree cluster
+      for (const [x, z] of [[-70, -40], [-62, -52], [-76, -56]] as const) if (b.isClear(x, z, 2)) b.prop('picnic', x, z, { rot: b.r(0, 6.28) });
+      // park fence just inside the boundary, with gaps for the horde
+      for (const side of [-1, 1]) {
+        for (let t = -86; t < 86; t += 24) {
+          b.fence(side * 88, t, side * 88, t + 16);
+          if (Math.abs(t) > 12) b.fence(t, side * 88, t + 16, side * 88);
+        }
+      }
+      // stall rows along the midway (both sides), facing the path
+      const stallCols = [0x3a7ad9, 0xd94040, 0xe8c040, 0x40a860, 0xc084fc, 0xe87a30];
+      let k = 0;
+      for (let t = -48; t <= 72; t += 9) {
+        if (Math.abs(t - 6) < 8) continue;
+        for (const side of [-1, 1]) {
+          if (b.rng() < 0.18) continue;
+          const x = side * 10.5;
+          if (b.isClear(x, t, 2.5)) booth(b, x, t, side < 0 ? Math.PI / 2 : -Math.PI / 2, stallCols[k++ % stallCols.length]!);
+        }
+      }
+      // bulb strings across the midway
+      for (let t = -40; t <= 76; t += 14) bulbString(b, -7.5, t, 7.5, t + 3, 4.6);
+      for (let t = -80; t <= 80; t += 16) if (Math.abs(t) > 10) bulbString(b, t, 1.5, t + 9, 10.5, 4.2);
+      // a few real coloured lights: under the wheel, at the carousel, the gate and the rink
+      b.pointLight(0, 6, -56, 0xff5a7a, 16, 26);
+      b.pointLight(-38, 6, -22, 0xffd36a, 14, 22);
+      b.pointLight(0, 7, 82, 0xffd36a, 12, 20);
+      b.pointLight(44, 6, 36, 0x5ee0ff, 12, 20);
+      // overgrown edges, litter, broken rides
+      b.scatter(['trashbag', 'cardboard', 'plastic_crate', 'bench', 'trashcan', 'tyre'], 70, -88, -88, 88, 88, 1.4);
+      b.scatter(['shrub', 'shrub_low', 'deadtree', 'rock_small', 'branches'], 90, -90, -90, 90, 90, 1.2);
+      for (let i = 0; i < 28; i++) {
+        const a = b.r(0, Math.PI * 2);
+        const rr = b.r(70, 84);
+        const x = Math.cos(a) * rr;
+        const z = Math.sin(a) * rr;
+        if (b.isClear(x, z, 4)) b.tree(x, z, b.r(7, 11));
+      }
+      for (let i = 0; i < 6; i++) b.prop('car', b.r(-86, 86), b.r(70, 88), { rot: b.r(0, 6.28), tint: b.pick(CAR_TINTS) });
+      for (const [x, z] of [[-16, 30], [16, -30], [-60, -40], [64, 0]] as const) b.lamp(x, z, 0xffc98a, false);
+    },
+  },
 };
 
-export const MAP_ORDER: MapId[] = ['city', 'hospital', 'military', 'harbor', 'forest', 'highway', 'industrial', 'snow', 'desert', 'lab', 'village', 'mall', 'airport', 'campus', 'river', 'canyon', 'fortress', 'volcano', 'maze'];
+export const MAP_ORDER: MapId[] = ['city', 'hospital', 'military', 'harbor', 'forest', 'highway', 'industrial', 'snow', 'desert', 'lab', 'village', 'mall', 'airport', 'campus', 'river', 'canyon', 'fortress', 'volcano', 'maze', 'lunapark'];
 
 for (const id of MAP_ORDER) MAPS[id].modes.push(...UNIVERSAL_MODES);
