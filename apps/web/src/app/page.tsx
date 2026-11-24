@@ -24,7 +24,7 @@ export default function HomePage() {
           <div className={s.wrap}>
             <p className={s.kicker}>Protocol-Z · co-op hayatta kalma</p>
             <h1>COOM<span>BIE</span></h1>
-            <p className={s.lead}>Sürü her dakika büyüyor. Timini kur, operatörünü seç, 8 kişiye kadar aynı haritada ayakta kalmaya çalış.</p>
+            <p className={s.lead}>Sürü her dakika büyüyor. Timini kur, operatörünü seç, 12 kişiye kadar aynı haritada ayakta kalmaya çalış.</p>
             <div className={s.cta}>
               <a className={`${s.btn} ${s.go}`} href={GAME_URL}>Hemen oyna</a>
               <a className={s.btn} href="#coop">Arkadaşlarınla oyna</a>
@@ -38,14 +38,14 @@ export default function HomePage() {
             <li><b>{OPERATIVES.length}</b><span>Operatör</span></li>
             <li><b>{MAPS.length}</b><span>Harita</span></li>
             <li><b>{MODES.length}</b><span>Oyun modu</span></li>
-            <li><b>1–8</b><span>Oyuncu</span></li>
+            <li><b>1–12</b><span>Oyuncu</span></li>
           </ul>
         </div>
 
         <section id="operatorler" className={s.section}>
           <div className={s.wrap}>
             <p className={s.kicker}>Tim</p>
-            <h2>Sekiz operatör, sekiz ayrı oyun</h2>
+            <h2>On iki operatör, on iki ayrı oyun</h2>
             <p className={s.sub}>Her birinin kendi başlangıç silahı, üç yeteneği ve H tuşuyla telsizden çağırdığı bir desteği var.</p>
             <div className={s.ops}>
               {OPERATIVES.map((op) => (
@@ -114,7 +114,7 @@ export default function HomePage() {
           <div className={`${s.wrap} ${s.coop}`}>
             <div>
               <p className={s.kicker}>Co-op</p>
-              <h2>8 kişiye kadar, tek kodla</h2>
+              <h2>12 kişiye kadar, tek kodla</h2>
               <ol>
                 <li><div><b>Oda kur</b><span>Lobide CO-OP&apos;a bas, oda kodunu al.</span></div></li>
                 <li><div><b>Kodu paylaş</b><span>Arkadaşların aynı sayfadan kodu girip katılır.</span></div></li>

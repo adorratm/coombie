@@ -1,5 +1,5 @@
 {
-  "_doc": "Rocketbox avatar \u2192 game asset map. Run: node scripts/rocketbox/build-all.mjs <path-to-Microsoft-Rocketbox>",
+  "_doc": "Rocketbox avatar → game asset map. Run: node scripts/rocketbox/build-all.mjs <path-to-Microsoft-Rocketbox>",
   "operatives": {
     "ironclad": "Professions/Military_Male_01",
     "breaker": "Professions/Police_Male_02",
@@ -8,7 +8,11 @@
     "valkyrie": "Adults/Female_Adult_15",
     "ghost": "Adults/Female_Adult_04",
     "tox": "Adults/Female_Adult_03",
-    "spark": "Adults/Female_Party_01"
+    "spark": "Adults/Female_Party_01",
+    "reis": "Professions/Military_Male_02",
+    "sahin": "Professions/Pilot_Female_01",
+    "kasap": "Professions/Construction_Male_02",
+    "cadi": "Professions/Medical_Female_02"
   },
   "zombies": {
     "grunt_a": "Adults/Male_Adult_02",

@@ -7,7 +7,7 @@ import { DEFAULT_RUN_MINUTES, DIFFICULTIES, DIFFICULTY_ORDER, HORDE_WAVES, MODES
 import { HERO_LEVEL_MAX, TREE_NODES, TREE_TOTAL_RANKS, availablePoints, heroXpForLevel, loadHeroProgress, resetTree, spentPoints, unlockBlock, unlockTreeNode, type TreeBranch } from './heroProgress';
 import { ACHIEVEMENT_CATEGORY_LABEL, achievementCounts, listAchievements, type AchievementCategory } from './achievements';
 import { createVrmAvatar, type VrmAvatarHandle } from './avatars';
-import { HERO_ABILITIES, levelCd, levelPower } from './heroAbilities';
+import { HERO_ABILITIES, HERO_SHOUTS, levelCd, levelPower } from './heroAbilities';
 import {
   ABILITY_MAX_LEVEL,
   ABILITY_SLOTS,
@@ -556,7 +556,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     const hero = rosterById(loadProfile().hero);
     gun = new THREE.Group();
     const tip = attachWeaponMesh(gun, def, hero.accent, 1);
-    decorateGun(tip, equippedAttachments(weaponGear(variant), def));
+    decorateGun(tip, equippedAttachments(weaponGear(variant), def), def.id);
     const hand = avatar.rightHand;
     hand.add(gun);
     avatar.root.updateMatrixWorld(true);
@@ -1112,6 +1112,17 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
       d.lastElementChild!.append(btn);
       panel.append(d);
     }
+    {
+      const hd = HERO_SHOUTS[heroId as OperativeId];
+      const d = document.createElement('div');
+      d.className = 'lskill';
+      d.innerHTML = `<div class="ic" style="border-color:${hexc(hd.color)}"><span class="k">H</span>${hd.icon}</div>
+        <div><b>${hd.name}</b> <small style="color:var(--dim)">R seviyesiyle güçlenir</small>
+        <div style="font-size:12.5px;color:var(--dim);margin-top:2px">${hd.desc}</div>
+        <div style="font-size:11.5px;color:#ff8fa3;margin-top:3px;font-style:italic">“${hd.shouts[0]}”</div>
+        <div style="font-size:11.5px;color:var(--dim)">Bekleme ${hd.cooldown} sn · H tuşu</div></div>`;
+      panel.append(d);
+    }
     const sup = Object.values(RUN_SKILLS).filter((r) => r.heroes?.includes(heroId as OperativeId));
     if (sup.length) {
       panel.append(Object.assign(document.createElement('h3'), { textContent: 'Telsiz desteği · koşuda kartla açılır' }));
@@ -1278,7 +1289,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     d.innerHTML = `<div class="rmap" style="background-image:url(/ui/maps/${ms.map}.jpg)"><div><b>${MAPS[ms.map].name}</b><span>${MODES[ms.mode].icon} ${MODES[ms.mode].name}${TIMED_MODES.includes(ms.mode) ? ` · ${ms.minutes ?? DEFAULT_RUN_MINUTES} dk` : ms.mode === 'horde' ? ` · ${HORDE_WAVES} sürü` : ''} · <span style="color:${hexc(DIFFICULTIES[ms.difficulty].color)}">${DIFFICULTIES[ms.difficulty].name}</span> · Ödül ×${DIFFICULTIES[ms.difficulty].reward}</span></div></div>
       <div class="row"><span>OPERATÖR</span><div><b style="font:700 18px var(--display);color:${hexc(hero.accent)}">${hero.name}</b> <small style="color:var(--dim)">${hero.role} · ${COSTUMES.find((c) => c.id === h.costume)?.name ?? 'Standart'} · ${slotCapacity(p.hero)} slot</small></div></div>
       <div class="row"><span>SİLAHLAR</span><div class="guns" id="rdGuns"></div></div>
-      <div class="row"><span>YETENEKLER</span><div class="abil">${(['q', 'e', 'r'] as const).map((k) => `<div><span class="k">${k.toUpperCase()}</span><i>${ab[k].icon}</i>${ab[k].name} <small style="color:var(--dim)">Sv ${h.abilities[k]}</small></div>`).join('')}</div></div>`;
+      <div class="row"><span>YETENEKLER</span><div class="abil">${(['q', 'e', 'r'] as const).map((k) => `<div><span class="k">${k.toUpperCase()}</span><i>${ab[k].icon}</i>${ab[k].name} <small style="color:var(--dim)">Sv ${h.abilities[k]}</small></div>`).join('')}<div><span class="k">H</span><i>${HERO_SHOUTS[p.hero].icon}</i>${HERO_SHOUTS[p.hero].name}</div></div></div>`;
     panel.append(d);
     const guns = d.querySelector('#rdGuns')!;
     h.slots.forEach((v) => {
@@ -1349,7 +1360,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     $('lbName').textContent = hero.name;
     $('lbName').style.color = hexc(hero.accent);
     const ab = HERO_ABILITIES[p.hero];
-    $('lbRole').textContent = `${hero.role} · Q ${ab.q.name} · E ${ab.e.name} · R ${ab.r.name}`;
+    $('lbRole').textContent = `${hero.role} · Q ${ab.q.name} · E ${ab.e.name} · R ${ab.r.name} · H ${HERO_SHOUTS[p.hero].name}`;
     renderHeroes();
     renderStepper();
     const panel = $('lbPanel');

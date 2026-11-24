@@ -253,7 +253,7 @@ export const WEAPONS: WeaponDef[] = [
 
 
 /**
- * Armory catalogue: 21 variants on top of the 9 base weapons = 30.
+ * Armory catalogue: base weapons + variants + signatures (grows by appending only).
  * `id` is the progression family (cards, mastery, evolutions keep working);
  * `variant` is what the loadout stores.
  */
@@ -320,6 +320,37 @@ WEAPONS.push(
     look: { body: 'bullpup', mag: 'box', stock: 'none', finish: 0xd9a514, trim: 0x22262c, glow: 0x5cc8ff }, fx: { flash: 0xd8ecff, flashScale: 0.5, tracer: 1.1, impact: 'heavy', pierce: 1 } }),
   V({ id: 'shotgun', variant: 'boru_havan', hero: 'havoc', name: 'Boru Havan', sfx: 'shotgun', grip: 'rifle', fireRate: 0.7, damage: 3.4, range: 18, spread: 0.03, pellets: 1, tracerColor: 0xffaa33, recoil: 0.42, auto: true, magSize: 5, reloadTime: 2.3, tier: 1, cost: 0, desc: 'El yapımı boru havan: tek mermi, küçük alan patlaması.',
     look: { body: 'launcher', mag: 'none', stock: 'wood', finish: 0x5a5148, trim: 0x2a1a10 }, fx: { flash: 0xffaa33, flashScale: 1.4, tracer: 3, impact: 'explosive', aoe: 2.2, speed: 0.45 } }),
+  // yeni kahramanların özel silahları
+  V({ id: 'lmg', variant: 'kara_tufek', hero: 'reis', name: 'Kara Tüfek', sfx: 'lmg', grip: 'rifle', fireRate: 0.085, damage: 1.35, range: 30, spread: 0.04, pellets: 1, tracerColor: 0xffb347, recoil: 0.14, auto: true, magSize: 100, reloadTime: 2.9, tier: 1, cost: 0, desc: 'Reis\'in emektar makinelisi: uzun şerit, sert vuruş, ilk hedefi deler.',
+    look: { body: 'lmg', mag: 'box', stock: 'fixed', finish: 0x2f3324, trim: 0x15170f }, fx: { flash: 0xffc070, flashScale: 1.3, tracer: 1.2, impact: 'heavy', pierce: 1 } }),
+  V({ id: 'rifle', variant: 'sahin_karabina', hero: 'sahin', name: 'Şahin Karabina', sfx: 'rifle', grip: 'rifle', fireRate: 0.12, damage: 1.15, range: 30, spread: 0.016, pellets: 1, tracerColor: 0x7cd4ff, recoil: 0.09, auto: true, magSize: 30, reloadTime: 1.4, tier: 1, cost: 0, desc: 'Pilot karabinası: elektrikli mermi yandaki zombiye sıçrar.',
+    look: { body: 'rifle', mag: 'curved', scope: 'holo', stock: 'folding', finish: 0x3c4a58, trim: 0x1a2028, glow: 0x5ee0ff }, fx: { flash: 0xbfe8ff, flashScale: 0.8, tracer: 1.1, impact: 'shock', chain: 1 } }),
+  V({ id: 'shotgun', variant: 'mezbaha', hero: 'kasap', name: 'Mezbaha Pompalı', sfx: 'shotgun', grip: 'rifle', fireRate: 0.62, damage: 1.05, range: 13, spread: 0.13, pellets: 9, tracerColor: 0xff6b6b, recoil: 0.4, auto: true, magSize: 7, reloadTime: 2.1, tier: 1, cost: 0, desc: 'Kasabın pompalısı: dibine girene parça pinçik, saçma iki zombiyi deler.',
+    look: { body: 'shotgun', mag: 'tube', stock: 'wood', finish: 0x4a2a26, trim: 0x2a1a10 }, fx: { flash: 0xffb45e, flashScale: 1.6, tracer: 0.8, impact: 'heavy', pierce: 1 } }),
+  V({ id: 'smg', variant: 'nazar_puskurtucu', hero: 'cadi', name: 'Nazar Püskürtücü', sfx: 'smg', grip: 'smg', fireRate: 0.075, damage: 0.66, range: 17, spread: 0.06, pellets: 1, tracerColor: 0xc084fc, recoil: 0.05, auto: true, magSize: 42, reloadTime: 1.4, tier: 1, cost: 0, desc: 'Lanetli mermiler: zombiyi dondurur, ruhunu çeker.',
+    look: { body: 'smg', mag: 'drum', stock: 'none', finish: 0x3a2a4a, trim: 0x1a1024, glow: 0xb26bff }, fx: { flash: 0xd8b4fe, flashScale: 0.7, tracer: 1, impact: 'cryo', statusChance: 0.3 } }),
+);
+
+// Cephanelik genişlemesi: dükkânda satılan yeni varyantlar (eski indeksler korunur)
+WEAPONS.push(
+  V({ id: 'pistol', variant: 'altin_kartal', name: 'Altın Kartal .50', sfx: 'sniper', grip: 'pistol', fireRate: 0.5, damage: 4.2, range: 24, spread: 0.012, pellets: 1, tracerColor: 0xffd36a, recoil: 0.38, auto: true, magSize: 7, reloadTime: 1.6, tier: 3, cost: 950, desc: 'Altın kaplama dev tabanca: her mermi iki zombiyi deler.',
+    look: { body: 'pistol', finish: 0xd4a72c, trim: 0x2a1a10 }, fx: { flash: 0xffd27a, flashScale: 1.3, tracer: 1.3, impact: 'heavy', pierce: 2 } }),
+  V({ id: 'smg', variant: 'sok_pdw', name: 'Şok PDW', sfx: 'smg', grip: 'smg', fireRate: 0.065, damage: 0.72, range: 19, spread: 0.05, pellets: 1, tracerColor: 0x7cd4ff, recoil: 0.05, auto: true, magSize: 45, reloadTime: 1.3, tier: 3, cost: 820, desc: 'Elektrikli mermi: her vuruş bir zombiye daha sıçrar.',
+    look: { body: 'smg', mag: 'straight', stock: 'folding', finish: 0x2a3440, trim: 0x10161c, glow: 0x5cc8ff }, fx: { flash: 0xbfe8ff, flashScale: 0.7, tracer: 1, impact: 'shock', chain: 1 } }),
+  V({ id: 'rifle', variant: 'buzul_bullpup', name: 'Buzul Bullpup', sfx: 'rifle', grip: 'rifle', fireRate: 0.1, damage: 1.25, range: 28, spread: 0.018, pellets: 1, tracerColor: 0xa5f3fc, recoil: 0.1, auto: true, magSize: 36, reloadTime: 1.5, tier: 3, cost: 880, desc: 'Kriyojenik mermi: yavaşlatır, donan zombi parçalanır.',
+    look: { body: 'bullpup', mag: 'box', scope: 'dot', stock: 'none', finish: 0xdfe8ee, trim: 0x2a3440, glow: 0x7fe0ff }, fx: { flash: 0xdff8ff, flashScale: 0.9, tracer: 1.1, impact: 'cryo', statusChance: 0.22 } }),
+  V({ id: 'rifle', variant: 'g3_avci', name: 'G3 Avcı', sfx: 'sniper', grip: 'rifle', fireRate: 0.2, damage: 2.6, range: 40, spread: 0.008, pellets: 1, tracerColor: 0xfff0c0, recoil: 0.2, auto: true, magSize: 20, reloadTime: 1.8, tier: 2, cost: 520, desc: 'Yarı otomatik muharebe tüfeği: uzun menzil, sert vuruş.',
+    look: { body: 'rifle', length: 1.15, mag: 'box', scope: 'long', stock: 'fixed', finish: 0x2a2c24, trim: 0x3a3a2a }, fx: { flash: 0xffe0a0, flashScale: 1.1, tracer: 1.3, impact: 'heavy', pierce: 1 } }),
+  V({ id: 'shotgun', variant: 'frag12', name: 'Frag-12 Otomatik', sfx: 'shotgun', grip: 'rifle', fireRate: 0.34, damage: 2.2, range: 18, spread: 0.05, pellets: 3, tracerColor: 0xffaa33, recoil: 0.32, auto: true, magSize: 10, reloadTime: 2.4, tier: 4, cost: 1600, desc: 'Patlayıcı saçma: her saçma küçük bir patlama yapar.',
+    look: { body: 'shotgun', mag: 'drum', stock: 'fixed', finish: 0x2a2c2e, trim: 0x5a2a1a }, fx: { flash: 0xffaa33, flashScale: 1.7, tracer: 1.2, impact: 'explosive', aoe: 1.2 } }),
+  V({ id: 'sniper', variant: 'rail_tufegi', name: 'Rail Tüfeği', sfx: 'sniper', grip: 'rifle', fireRate: 1.15, damage: 11, range: 70, spread: 0, pellets: 1, tracerColor: 0x88eeff, recoil: 0.5, auto: true, magSize: 4, reloadTime: 2.6, tier: 4, cost: 1800, desc: 'Manyetik ray: hattaki her şeyi delip geçer, elektrik sıçratır.',
+    look: { body: 'sniper', length: 1.3, mag: 'box', scope: 'long', stock: 'fixed', muzzle: 'brake', finish: 0x20262e, trim: 0x10141a, glow: 0x5ee0ff }, fx: { flash: 0xbfe8ff, flashScale: 1.6, tracer: 2.4, impact: 'shock', pierce: 14, chain: 2 } }),
+  V({ id: 'lmg', variant: 'cehennem_m60', name: 'Cehennem M60', sfx: 'lmg', grip: 'rifle', fireRate: 0.08, damage: 1.25, range: 26, spread: 0.05, pellets: 1, tracerColor: 0xff7a2a, recoil: 0.12, auto: true, magSize: 120, reloadTime: 3, tier: 3, cost: 1100, desc: 'Yanıcı mermili makineli: geçtiği yeri tutuşturur.',
+    look: { body: 'lmg', mag: 'box', stock: 'fixed', finish: 0x3a2a22, trim: 0x15100c, glow: 0xff6a1a }, fx: { flash: 0xffa040, flashScale: 1.3, tracer: 1.2, impact: 'incendiary', statusChance: 0.3 } }),
+  V({ id: 'knife', variant: 'katana', name: 'Katana', sfx: 'melee', grip: 'melee', fireRate: 0.34, damage: 6.4, range: 3, spread: 0, pellets: 1, tracerColor: 0xe0e8f0, recoil: 0.2, auto: true, magSize: 1, reloadTime: 0.01, melee: true, meleeArc: 1.35, tier: 3, cost: 700, desc: 'Hızlı ve geniş kesik: kalabalığı biçer.',
+    look: { body: 'machete', length: 1.35, finish: 0xdfe6ee, trim: 0x1a1016 }, fx: { flash: 0, flashScale: 0, tracer: 0, impact: 'flesh' } }),
+  V({ id: 'knife', variant: 'balyoz', name: 'Balyoz', sfx: 'melee', grip: 'melee', fireRate: 0.8, damage: 14, range: 2.9, spread: 0, pellets: 1, tracerColor: 0xb0b0b0, recoil: 0.5, auto: true, magSize: 1, reloadTime: 0.01, melee: true, meleeArc: 1.5, tier: 3, cost: 760, desc: 'Yavaş ama yere çivi gibi çakar.',
+    look: { body: 'club', length: 1.25, finish: 0x5a5a5a, trim: 0x4a3020 }, fx: { flash: 0, flashScale: 0, tracer: 0, impact: 'heavy' } }),
 );
 
 export function weaponVariantId(w: WeaponDef): string {

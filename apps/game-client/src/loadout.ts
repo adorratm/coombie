@@ -122,7 +122,7 @@ const SIGNATURE_REV = 1;
  * rest open with operator level.
  */
 export const HEAVY_CLASS = 'gunner';
-export const HEAVY_UNLOCK_LEVEL: Record<string, number> = { lmg: 1, thumper_gl: 20, shredder: 40 };
+export const HEAVY_UNLOCK_LEVEL: Record<string, number> = { lmg: 1, kara_tufek: 1, cehennem_m60: 25, thumper_gl: 20, shredder: 40 };
 export const isHeavyWeapon = (variant: string): boolean => weaponByVariant(variant).id === 'lmg';
 export const isMeleeWeapon = (variant: string): boolean => weaponByVariant(variant).grip === 'melee';
 export const isPistolWeapon = (variant: string): boolean => weaponByVariant(variant).grip === 'pistol';

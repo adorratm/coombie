@@ -261,17 +261,17 @@ export function createCombatFx(scene: THREE.Scene): CombatFx {
     if (!geo) {
       // unit-radius shapes in the XY plane with +X as "forward"; scaled by range below
       if (style === 'stab') geo = new THREE.PlaneGeometry(1, 0.1).translate(0.5, 0, 0);
-      else if (style === 'chop') geo = new THREE.RingGeometry(0.72, 1, 20, 1, -0.5, 2.1);
+      else if (style === 'chop' || style === 'smash') geo = new THREE.RingGeometry(0.72, 1, 20, 1, -0.5, 2.1);
       else geo = new THREE.RingGeometry(0.7, 1, 24, 1, -arc, arc * 2);
       slashGeo.set(key, geo);
     }
     const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
     const mesh = new THREE.Mesh(geo, mat);
     // stab and bat swing lie flat, the chop stands upright, the machete cuts on a slant
-    mesh.rotation.x = style === 'chop' ? 0 : style === 'slash' ? -Math.PI / 4 : -Math.PI / 2;
+    mesh.rotation.x = style === 'chop' || style === 'smash' ? 0 : style === 'slash' ? -Math.PI / 4 : -Math.PI / 2;
     const root = new THREE.Group();
     root.add(mesh);
-    root.position.set(origin.x, style === 'chop' ? 0.9 : 1.15, origin.z);
+    root.position.set(origin.x, style === 'chop' || style === 'smash' ? 0.9 : 1.15, origin.z);
     root.rotation.y = Math.atan2(-forward.z, forward.x);
     root.scale.setScalar(range);
     scene.add(root);

@@ -19,6 +19,10 @@ export const OPERATIVES: Operative[] = [
   { name: 'Spark', role: 'Mühendis', weapon: 'Çivi Tabancası: hedefi delip geçer', support: 'Trafo: düşer, patlar, zincirleme çarpar', color: '#5cc8ff' },
   { name: 'Warden', role: 'Makineli', weapon: 'Hafif makineli tüfek', support: 'Taarruz helikopteri', color: '#e8b84a' },
   { name: 'Havoc', role: 'Yıkımcı', weapon: 'Boru Havan: alan patlaması', support: 'Topçu bataryası', color: '#e23b2f' },
+  { name: 'Reis', role: 'Makineli', weapon: 'Kara Tüfek: delip geçen ağır makineli', support: 'F-16 + halı bombardımanı', color: '#ffa040' },
+  { name: 'Şahin', role: 'Mühendis', weapon: 'Şahin Karabina: sıçrayan elektrik', support: 'SİHA + füze sürüsü', color: '#5ee0ff' },
+  { name: 'Kasap', role: 'Yıkımcı', weapon: 'Mezbaha Pompalı', support: 'Dolmuş + kıyma makinesi', color: '#ff3b3b' },
+  { name: 'Cadı', role: 'Simyacı', weapon: 'Nazar Püskürtücü: dondurur', support: 'İlaçlama uçağı + ruh hasadı', color: '#b26bff' },
 ];
 
 export interface Mode {

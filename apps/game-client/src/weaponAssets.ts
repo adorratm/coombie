@@ -100,6 +100,20 @@ export const VARIANT_MODELS: Record<string, GunModelDef> = {
   sirt_pompasi: { file: 'smg_compact_east', tint: 0x9aa63a, glow: 0x9cff2e, gripZ: 0.14 },
   civi_tabancasi: { file: 'smg_full_west', tint: 0xd9a514, scale: 1.08 },
   boru_havan: { file: 'shotgun_pump_west', tint: 0x8a6a52, scale: 1.22 },
+  kara_tufek: { file: 'rifle_battle_east', tint: 0x6a6e52, scale: 1.25 },
+  sahin_karabina: { file: 'rifle_battle_west', tint: 0x6e8aa4, glow: 0x5ee0ff },
+  mezbaha: { file: 'shotgun_pump_east', tint: 0x9a4a40, scale: 1.08 },
+  nazar_puskurtucu: { file: 'smg_full_east', tint: 0x8a6aa8, glow: 0xb26bff },
+  // cephanelik genişlemesi
+  altin_kartal: { file: 'pistol_full_east', tint: 0xe8c050, scale: 1.25 },
+  sok_pdw: { file: 'smg_compact_west', tint: 0x6e7c8c, glow: 0x5cc8ff },
+  buzul_bullpup: { file: 'rifle_battle_east', tint: 0xe4edf2, glow: 0x7fe0ff },
+  g3_avci: { file: 'sniper_rifle_east', tint: 0x7a7a62 },
+  frag12: { file: 'shotgun_auto_west', tint: 0x6a5a50, glow: 0xff7a2a },
+  rail_tufegi: { file: 'sniper_material_west', tint: 0x5a6a7a, glow: 0x5ee0ff, scale: 1.08 },
+  cehennem_m60: { file: 'rifle_assault_east', tint: 0x7a5040, glow: 0xff6a1a, scale: 1.22 },
+  katana: { file: 'melee_machete', tint: 0xeef2f6, scale: 1.3 },
+  balyoz: { file: 'melee_bat', tint: 0x7a7a7a, scale: 1.15 },
 };
 
 const RAW_FILES = ['pistol_full_west', 'pistol_compact_west', 'pistol_full_east', 'pistol_compact_east', 'smg_full_west', 'smg_compact_west', 'smg_full_east', 'smg_compact_east', 'rifle_assault_west', 'rifle_battle_west', 'rifle_assault_east', 'rifle_battle_east', 'shotgun_pump_west', 'shotgun_auto_west', 'shotgun_pump_east', 'shotgun_auto_east', 'sniper_rifle_west', 'sniper_material_west', 'sniper_rifle_east', 'sniper_material_east'];

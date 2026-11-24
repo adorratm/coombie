@@ -4,11 +4,11 @@ import type { CombatFx } from './fx';
 import type { OperativeId } from './roster';
 import type { AbilitySlot } from './loadout';
 import type { SkillFx } from './skillFx';
-import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
+import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs, type HeroSlot } from './heroAbilities';
 import { createRunSkillState, RunSkillRuntime, RUN_SKILLS, type RunSkillId, type EvoBranch } from './runSkills';
 
 /**
- * Co-op: every team mate's Q/E/R casts, radio fire support (H) and passive run skills, replayed on
+ * Co-op: every team mate's Q/E/R casts, H meme skills, radio fire support (B) and passive run skills, replayed on
  * this screen so the whole squad sees turrets, mines, drones, auras and gunships. Purely visual:
  * damage is dealt by the owner (host sim / guest `hit` events), so the mirror never hurts zombies.
  * Heals and team buffs from a mate's ability do land on the local hero, as they would in person.
@@ -42,7 +42,7 @@ interface Mate {
   lastPos: THREE.Vector3;
 }
 
-const SLOTS: readonly AbilitySlot[] = ['q', 'e', 'r'];
+const SLOTS: readonly HeroSlot[] = ['q', 'e', 'r', 'h'];
 const BRANCHES = new Set<string>(['signature', 'power', 'rapid']);
 const clampNum = (v: unknown, lo: number, hi: number, d: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
 const noop = () => undefined;
@@ -109,11 +109,11 @@ export class CoopMirror {
 
   /** a mate pressed Q/E/R */
   cast(id: string, ev: { slot: string; x: number; z: number; lv?: number; pw?: number; ae?: number }, now: number): void {
-    const slot = ev.slot as AbilitySlot;
+    const slot = ev.slot as HeroSlot;
     if (!SLOTS.includes(slot)) return;
     const m = this.mate(id);
     if (!m) return;
-    m.levels[slot] = Math.round(clampNum(ev.lv, 1, 8, 1));
+    m.levels[slot === 'h' ? 'r' : slot] = Math.round(clampNum(ev.lv, 1, 8, 1));
     m.power = clampNum(ev.pw, 0.2, 20, 1);
     m.aoe = clampNum(ev.ae, 0.3, 6, 1);
     m.aim.set(clampNum(ev.x, -2000, 2000, m.op.root.position.x), 0, clampNum(ev.z, -2000, 2000, m.op.root.position.z));
@@ -121,7 +121,7 @@ export class CoopMirror {
     m.abilities.cast(slot, now);
   }
 
-  /** a mate called radio support (H) */
+  /** a mate called radio support (B) */
   support(id: string, x: number, z: number): void {
     const m = this.mate(id);
     if (!m) return;

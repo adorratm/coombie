@@ -97,20 +97,68 @@ export const OPERATIVES: readonly OperativeDef[] = [
     baseStats: { hp: 1050, armor: 45, moveSpeed: 4.4, damage: 52 },
     animationSet: 'anim/havoc',
   },
+  {
+    id: 'reis',
+    codename: 'REİS',
+    displayName: 'Kemal Aydemir',
+    gender: 'male',
+    role: 'gunner',
+    activeAbility: 'Halı Bombardımanı',
+    passive: 'Ekip zırhı',
+    primaryWeapon: 'Kara Tüfek',
+    baseStats: { hp: 1250, armor: 60, moveSpeed: 4.4, damage: 50 },
+    animationSet: 'anim/reis',
+  },
+  {
+    id: 'sahin',
+    codename: 'ŞAHİN',
+    displayName: 'Defne Yıldırım',
+    gender: 'female',
+    role: 'engineer',
+    activeAbility: 'Füze Sürüsü',
+    passive: 'Jet botları',
+    primaryWeapon: 'Şahin Karabina',
+    baseStats: { hp: 880, armor: 30, moveSpeed: 5.3, damage: 46 },
+    animationSet: 'anim/sahin',
+  },
+  {
+    id: 'kasap',
+    codename: 'KASAP',
+    displayName: 'Rıza Demirkol',
+    gender: 'male',
+    role: 'demolisher',
+    activeAbility: 'Kıyma Makinesi',
+    passive: 'Kan hırsı',
+    primaryWeapon: 'Mezbaha Pompalı',
+    baseStats: { hp: 1450, armor: 70, moveSpeed: 4.6, damage: 58 },
+    animationSet: 'anim/kasap',
+  },
+  {
+    id: 'cadi',
+    codename: 'CADI',
+    displayName: 'Nazlı Karaca',
+    gender: 'female',
+    role: 'bio_alchemist',
+    activeAbility: 'Ruh Hasadı',
+    passive: 'Buz mührü',
+    primaryWeapon: 'Nazar Püskürtücü',
+    baseStats: { hp: 900, armor: 32, moveSpeed: 5.0, damage: 44 },
+    animationSet: 'anim/cadi',
+  },
 ] as const;
 
 export const OPERATIVE_BY_ID = Object.fromEntries(
   OPERATIVES.map((o) => [o.id, o]),
 ) as Record<(typeof OPERATIVES)[number]['id'], OperativeDef>;
 
-/** Roster size and gender balance guard — exactly 4 male and 4 female operatives. */
+/** Roster size and gender balance guard — 12 operatives, 6 male and 6 female. */
 export function assertGenderBalance(): void {
-  if (OPERATIVES.length !== 8) {
-    throw new Error(`Expected 8 operatives, got ${OPERATIVES.length}`);
+  if (OPERATIVES.length !== 12) {
+    throw new Error(`Expected 12 operatives, got ${OPERATIVES.length}`);
   }
   const males = OPERATIVES.filter((o) => o.gender === 'male').length;
   const females = OPERATIVES.filter((o) => o.gender === 'female').length;
-  if (males !== 4 || females !== 4) {
-    throw new Error(`Expected exactly 4 male and 4 female operatives, got ${males}M / ${females}F`);
+  if (males !== 6 || females !== 6) {
+    throw new Error(`Expected exactly 6 male and 6 female operatives, got ${males}M / ${females}F`);
   }
 }

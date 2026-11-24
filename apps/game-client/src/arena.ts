@@ -21,8 +21,8 @@ import { PowerUps, POWER_DEFS, type IndicatorSrc } from './powerups';
 import { createHookerModel, tickHooks, clearHooks } from './hooker';
 import { allAvatarUrls } from './roster';
 import { rosterById } from './roster';
-import { currentRunLoadout, weaponGear, type AbilitySlot, type RunLoadout } from './loadout';
-import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs } from './heroAbilities';
+import { currentRunLoadout, weaponGear, type RunLoadout } from './loadout';
+import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs, type HeroSlot } from './heroAbilities';
 import { BOSS_VARIANT_IDS, BOSS_VARIANTS, pickBossVariant, type BossVariant, type BossVariantDef } from './bossVariants';
 import { giantBossCap, giantBossInterval, pickGiantBoss, rollSpawnType, TIER_XP, ZOMBIE_TYPES, zombieTypeIndex, type ZombieTypeDef } from './zombieTypes';
 import { resetTraitQueue, tickTraitQueue, tickZombieTraits, traitDamageMul, typeOf, zombieTraitDeath } from './zombieTraits';
@@ -2604,7 +2604,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     net.send({ k: 'kit', s, pw: Math.round(progress.abilityPowerMult * (1 + tree.skillPower) * 100) / 100 });
   };
 
-  const castHero = (slot: AbilitySlot) => {
+  const castHero = (slot: HeroSlot) => {
     if (!player.alive || progress.pendingPicks > 0 || !heroRt) return;
     if (heroRt.cast(slot, simTime)) {
       shake = Math.max(shake, 0.12);
@@ -2785,14 +2785,17 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     if (input.keys.KeyG && !prevKeys.KeyG) {
       if (beginReload(player)) audio.playReload();
     }
-    // H: radio fire support on the cursor
-    if (input.keys.KeyH && !prevKeys.KeyH && player.alive) {
+    // H: kahramanın ağzı bozuk özel hamlesi
+    if (input.keys.KeyH && !prevKeys.KeyH && player.alive) castHero('h');
+    prevKeys.KeyH = !!input.keys.KeyH;
+    // B: telsizle ateş desteği (imlecin olduğu yere) — destek yeteneği alındıysa
+    if (input.keys.KeyB && !prevKeys.KeyB && player.alive) {
       const r = runSkills.callSupport(mouseAim);
       if (r === 'ok') net?.send({ k: 'sup', x: Math.round(mouseAim.x * 100) / 100, z: Math.round(mouseAim.z * 100) / 100 });
       if (r === 'cooldown') notePickup('Destek hazır değil', 'Telsiz hattı meşgul — süre dolunca tekrar dene');
-      else if (r === 'notarget') notePickup('Hedef yok', 'İmleci zombilerin üstüne getirip H tuşuna bas');
+      else if (r === 'notarget') notePickup('Hedef yok', 'İmleci zombilerin üstüne getirip B tuşuna bas');
     }
-    prevKeys.KeyH = !!input.keys.KeyH;
+    prevKeys.KeyB = !!input.keys.KeyB;
     if (input.keys.KeyT && !prevKeys.KeyT) showSkillTree = !showSkillTree;
     if (input.keys.KeyI && !prevKeys.KeyI) showInventory = !showInventory;
     // Quick-use: Z medkit, X shield, C rage stim
@@ -2915,7 +2918,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       heroId: hero.id,
       runSkills: runSkills.hud(),
       heroAbilities: heroRt
-        ? (['q', 'e', 'r'] as AbilitySlot[]).map((sl) => ({
+        ? (['q', 'e', 'r', 'h'] as HeroSlot[]).map((sl) => ({
             slot: sl.toUpperCase(),
             name: heroRt!.defs[sl].name,
             icon: heroRt!.defs[sl].icon,

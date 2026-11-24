@@ -3,7 +3,7 @@ import type { ClassId } from './progression';
 import type { ZombieAvatarKind } from './zombieKinds';
 import { weaponIndexOfVariant } from './weapons';
 
-/** Stable operative ids — one unique VRM + class each (player + 7 rescues). */
+/** Stable operative ids — one unique avatar each (player + 11 rescues). */
 export type OperativeId =
   | 'ironclad'
   | 'valkyrie'
@@ -12,7 +12,11 @@ export type OperativeId =
   | 'tox'
   | 'spark'
   | 'warden'
-  | 'havoc';
+  | 'havoc'
+  | 'reis'
+  | 'sahin'
+  | 'kasap'
+  | 'cadi';
 
 export type { ZombieAvatarKind };
 
@@ -155,6 +159,66 @@ export const OPERATIVE_ROSTER: OperativeRosterDef[] = [
     role: 'Demolisher',
     specialLabel: 'Salkım Bombardıman',
   },
+  {
+    id: 'reis',
+    name: 'REİS',
+    classId: 'gunner',
+    avatarUrl: '/avatars/rb/op_reis.glb',
+    accent: 0xffa040,
+    scale: 1.06,
+    speed: 5.4,
+    hp: 135,
+    weaponIndex: weaponIndexOfVariant('kara_tufek'),
+    gender: 'male',
+    icon: 'RS',
+    role: 'Gunner',
+    specialLabel: 'Halı Bombardımanı',
+  },
+  {
+    id: 'sahin',
+    name: 'ŞAHİN',
+    classId: 'engineer',
+    avatarUrl: '/avatars/rb/op_sahin.glb',
+    accent: 0x5ee0ff,
+    scale: 1,
+    speed: 6.3,
+    hp: 95,
+    weaponIndex: weaponIndexOfVariant('sahin_karabina'),
+    gender: 'female',
+    icon: 'ŞH',
+    role: 'Engineer',
+    specialLabel: 'Füze Sürüsü',
+  },
+  {
+    id: 'kasap',
+    name: 'KASAP',
+    classId: 'demolisher',
+    avatarUrl: '/avatars/rb/op_kasap.glb',
+    accent: 0xff3b3b,
+    scale: 1.1,
+    speed: 5.7,
+    hp: 150,
+    weaponIndex: weaponIndexOfVariant('mezbaha'),
+    gender: 'male',
+    icon: 'KS',
+    role: 'Demolisher',
+    specialLabel: 'Kıyma Makinesi',
+  },
+  {
+    id: 'cadi',
+    name: 'CADI',
+    classId: 'alchemist',
+    avatarUrl: '/avatars/rb/op_cadi.glb',
+    accent: 0xb26bff,
+    scale: 0.98,
+    speed: 6,
+    hp: 100,
+    weaponIndex: weaponIndexOfVariant('nazar_puskurtucu'),
+    gender: 'female',
+    icon: 'CD',
+    role: 'Alchemist',
+    specialLabel: 'Ruh Hasadı',
+  },
 ];
 
 export const ZOMBIE_AVATAR_URLS: Record<ZombieAvatarKind, string> = {
@@ -171,7 +235,7 @@ export function rosterByName(name: string): OperativeRosterDef | undefined {
   return OPERATIVE_ROSTER.find((o) => o.name === name);
 }
 
-/** Player always starts as Ironclad; rescues use the remaining 7. */
+/** Player always starts as Ironclad; rescues use the remaining 11. */
 export function rescueRoster(): OperativeRosterDef[] {
   return OPERATIVE_ROSTER.filter((o) => o.id !== 'ironclad');
 }

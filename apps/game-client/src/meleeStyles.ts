@@ -2,7 +2,7 @@
  * How each melee weapon is swung: which mocap segment plays, how the
  * procedural fallback pose moves, and what the swing trail looks like.
  */
-export type MeleeStyle = 'stab' | 'swing' | 'chop' | 'slash';
+export type MeleeStyle = 'stab' | 'swing' | 'chop' | 'slash' | 'iaido' | 'smash';
 
 export interface MeleeStyleDef {
   id: MeleeStyle;
@@ -25,9 +25,13 @@ export const MELEE_STYLES: Record<MeleeStyle, MeleeStyleDef> = {
   chop: { id: 'chop', clip: { id: 'castMelee', from: 0.15, to: 1.9, dur: 0.66 }, pose: { raise: 1.5, sweep: 0.2, thrust: 0.5, twist: 0.5 }, shake: 0.16, tempo: 0.92 },
   // machete: fast diagonal cut
   slash: { id: 'slash', clip: { id: 'castThrow', from: 0.95, to: 1.9, dur: 0.38 }, pose: { raise: 1.0, sweep: 0.9, thrust: 0.4, twist: 0.8 }, shake: 0.07, tempo: 0.85 },
+  // katana: very fast, very wide horizontal draw-cut
+  iaido: { id: 'iaido', clip: { id: 'castMelee', from: 0.45, to: 1.45, dur: 0.32 }, pose: { raise: 0.5, sweep: 1.5, thrust: 0.6, twist: 1.4 }, shake: 0.06, tempo: 0.8 },
+  // sledgehammer: big wind-up, ground slam
+  smash: { id: 'smash', clip: { id: 'castMelee', from: 0.05, to: 2.0, dur: 0.78 }, pose: { raise: 1.5, sweep: 0.1, thrust: 0.8, twist: 0.3 }, shake: 0.24, tempo: 0.95 },
 };
 
-const BY_VARIANT: Record<string, MeleeStyle> = { knife: 'stab', bat: 'swing', axe: 'chop', machete: 'slash' };
+const BY_VARIANT: Record<string, MeleeStyle> = { knife: 'stab', bat: 'swing', axe: 'chop', machete: 'slash', katana: 'iaido', balyoz: 'smash' };
 
 /** Style for a weapon variant; unknown melee weapons swing like a bat. */
 export function meleeStyleOf(variant: string): MeleeStyle {

@@ -1,6 +1,7 @@
-/** Dev-only: all 30 weapons side by side. Red = grip origin (hand), green = muzzle. */
+/** Dev-only: every weapon side by side. Red = grip origin (hand), green = muzzle. ?att=1 fits every attachment. */
 import * as THREE from 'three';
 import { WEAPONS, attachWeaponMesh } from '../weapons';
+import { attachmentsFor, decorateGun, type AttachmentId } from '../attachments';
 import { ensureWeaponEnvironment, instantiateRawGun, preloadWeaponModels } from '../weaponAssets';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -17,7 +18,8 @@ const sun = new THREE.DirectionalLight(0xffffff, 2.4);
 sun.position.set(2, 4, 3);
 scene.add(sun);
 const raw0 = new URLSearchParams(location.search).get("raw") === "1";
-const cols = raw0 ? 4 : 6;
+const onlyQ = new URLSearchParams(location.search).get('only');
+const cols = Number(new URLSearchParams(location.search).get('cols') ?? (raw0 ? 4 : 6));
 const cam = new THREE.OrthographicCamera(-0.1, cols * 1.05, 0.6, -5 * 0.62, 0.1, 50);
 cam.position.set(0, 0, 10);
 const view = new URLSearchParams(location.search).get('view') ?? 'side';
@@ -25,11 +27,29 @@ await preloadWeaponModels();
 const labels = document.getElementById('l')!;
 const marker = (c: number) => new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: c, depthTest: false }));
 const raw = new URLSearchParams(location.search).get('raw') === '1';
+const att = new URLSearchParams(location.search).get('att') === '1';
 const FILES = ['pistol_full_west','pistol_compact_west','pistol_full_east','pistol_compact_east','smg_full_west','smg_compact_west','smg_full_east','smg_compact_east','rifle_assault_west','rifle_battle_west','rifle_assault_east','rifle_battle_east','shotgun_pump_west','shotgun_auto_west','shotgun_pump_east','shotgun_auto_east','sniper_rifle_west','sniper_material_west','sniper_rifle_east','sniper_material_east'];
 const items: Array<{ name: string; build: (g: THREE.Group) => THREE.Object3D }> = raw
   ? FILES.map((f) => ({ name: f, build: (g) => { const r = instantiateRawGun(f); g.add(r.group); return r.tip; } }))
-  : WEAPONS.map((w) => ({ name: w.name, build: (g) => attachWeaponMesh(g, w, 0x00ff87, 1) }));
-items.forEach((w, i) => {
+  : WEAPONS.filter((w) => !att || !w.melee).map((w, i) => ({
+      name: w.name,
+      build: (g) => {
+        const tip = attachWeaponMesh(g, w, 0x00ff87, 1);
+        if (att) {
+          // one per slot, alternating so both muzzle and both optic options get seen
+          const pick = (a: AttachmentId, b: AttachmentId): AttachmentId[] => (i % 2 ? [b, a] : [a, b]);
+          const want = [...pick('suppressor', 'brake'), ...pick('reddot', 'scope'), ...pick('foregrip', 'laser'), 'laser', 'extmag', 'stock'] as AttachmentId[];
+          const avail = attachmentsFor(w);
+          const slotOf: Record<AttachmentId, string> = { suppressor: 'm', brake: 'm', reddot: 'o', scope: 'o', foregrip: 'u', laser: 'r', extmag: 'g', stock: 's' };
+          const used = new Set<string>();
+          const list = want.filter((id) => avail.includes(id) && !used.has(slotOf[id]) && (used.add(slotOf[id]), true)).map((id) => ({ id, level: 3 }));
+          decorateGun(tip, list, w.id);
+        }
+        return tip;
+      },
+    }));
+const shown = onlyQ ? onlyQ.split(',').map((n) => items[Number(n) - 1]!).filter(Boolean) : items;
+shown.forEach((w, i) => {
   const g = new THREE.Group();
   const tip = w.build(g);
   g.add(marker(0xff3030));

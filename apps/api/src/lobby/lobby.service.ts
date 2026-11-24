@@ -84,9 +84,10 @@ export class LobbyService {
     const taken = new Set(
       [...room.players.values()].map((p) => p.operativeId),
     );
-    const fallback = (
-      ['ironclad', 'valkyrie', 'breaker', 'tox', 'ghost', 'spark', 'warden', 'havoc'] as OperativeId[]
-    ).find((id) => !taken.has(id))!;
+    const fallback =
+      (
+        ['ironclad', 'valkyrie', 'breaker', 'tox', 'ghost', 'spark', 'warden', 'havoc', 'reis', 'sahin', 'kasap', 'cadi'] as OperativeId[]
+      ).find((id) => !taken.has(id)) ?? 'ironclad';
 
     room.players.set(
       playerId,

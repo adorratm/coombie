@@ -104,6 +104,50 @@ export const HERO_ABILITIES: Record<OperativeId, Record<AbilitySlot, HeroAbility
     e: A({ id: 'arc_chain', slot: 'e', name: 'Ark Zinciri', desc: '6 zombiye sıçrayan yıldırım.', icon: '⚡', color: 0x9be7ff, cooldown: 9, anim: 'cast', effect: { type: 'chain', targets: 6, damage: 6, range: 11 } }),
     r: A({ id: 'thunderstorm', slot: 'r', name: 'Yıldırım Fırtınası', desc: '8 sn başının üstünde fırtına: çevredeki zombilere sürekli yıldırım düşer.', icon: '⛈', color: 0x5cc8ff, cooldown: 27, anim: 'shout', effect: { type: 'storm', dur: 8, radius: 10, rate: 5, damage: 10 } }),
   },
+  // ——— yeni kahramanlar ———
+  reis: {
+    q: A({ id: 'shrapnel_rain', slot: 'q', name: 'Şarapnel Yağmuru', desc: 'Nişana dörde bölünen misket bombası.', icon: '✸', color: 0xff9a3c, cooldown: 8, anim: 'throw', effect: { type: 'grenade', radius: 2.4, damage: 6, cluster: 4, mesh: 'frag' } }),
+    e: A({ id: 'take_cover', slot: 'e', name: 'Siper Al!', desc: 'Ekip 6 sn: %35 az hasar, ateş hızı ×1.25.', icon: '⛉', color: 0xd8a24a, cooldown: 16, anim: 'shout', effect: { type: 'buff', dur: 6, armor: 0.35, fireRate: 1.25, squad: true } }),
+    r: A({ id: 'carpet_bomb', slot: 'r', name: 'Halı Bombardımanı', desc: 'Nişan hattına 10 bomba: yanan şerit bırakır.', icon: '✈', color: 0xff6a2a, cooldown: 27, anim: 'shout', effect: { type: 'strike', count: 10, radius: 3, damage: 24, delay: 1.2, spacing: 2.1, status: 'burn', zone: { kind: 'fire', radius: 2.2, dps: 4, dur: 4 } } }),
+  },
+  sahin: {
+    q: A({ id: 'recon_drone', slot: 'q', name: 'Keşif Dronu', desc: '11 sn: iki hedefe sıçrayan atış yapan dron kulesi.', icon: '⌬', color: 0x5ee0ff, cooldown: 14, anim: 'cast', effect: { type: 'turret', dur: 11, damage: 1.8, rate: 0.22, range: 14, chain: 2 } }),
+    e: A({ id: 'jet_boots', slot: 'e', name: 'Jet Botları', desc: 'Uzun atılış, yoldakileri savurur, kısa dokunulmazlık.', icon: '🚀', color: 0x9be7ff, cooldown: 7, anim: 'dash', effect: { type: 'dash', dist: 10, damage: 6, invuln: 0.55 } }),
+    r: A({ id: 'missile_swarm', slot: 'r', name: 'Füze Sürüsü', desc: 'Nişana 7 güdümlü füze: tek tek patlar, ardından balistik vuruş.', icon: '⇶', color: 0x7cd4ff, cooldown: 26, anim: 'cast', effect: { type: 'strike', count: 7, radius: 3.2, damage: 28, delay: 0.7, spacing: 1.6 } }),
+  },
+  kasap: {
+    q: A({ id: 'cleaver_slam', slot: 'q', name: 'Satır Darbesi', desc: 'Yere satır vurur: çevredekileri iter ve kanatır.', icon: '🔪', color: 0xd23b3b, cooldown: 6, anim: 'cast', effect: { type: 'nova', radius: 3.4, damage: 12, knock: 2.2, status: 'burn', statusPower: 1.5 } }),
+    e: A({ id: 'blood_lust', slot: 'e', name: 'Kan Hırsı', desc: '7 sn: hasar ×1.5, hız ×1.25, %25 az hasar.', icon: '🩸', color: 0xb91c1c, cooldown: 15, anim: 'shout', effect: { type: 'buff', dur: 7, damage: 1.5, move: 1.25, armor: 0.25 } }),
+    r: A({ id: 'meat_grinder', slot: 'r', name: 'Kıyma Makinesi', desc: '6 art arda hücum: her biri yoldakileri doğrar; hücumda dokunulmaz.', icon: '⚙', color: 0xff3b3b, cooldown: 24, anim: 'dash', effect: { type: 'rampage', dashes: 6, dist: 5.5, damage: 15, gap: 0.26 } }),
+  },
+  cadi: {
+    q: A({ id: 'cursed_brew', slot: 'q', name: 'Lanetli İksir', desc: 'Kaynayan zehir: patlar ve 5 sn zehirli gölet bırakır.', icon: '🧪', color: 0xb26bff, cooldown: 8, anim: 'throw', effect: { type: 'grenade', radius: 2.8, damage: 4, status: 'toxin', statusPower: 2.2, zone: { kind: 'toxin', radius: 3, dps: 4, dur: 5 }, mesh: 'flask' } }),
+    e: A({ id: 'frost_sigil', slot: 'e', name: 'Buz Mührü', desc: 'Seni takip eden buz halkası: zombileri dondurur.', icon: '❄', color: 0xa5b4fc, cooldown: 14, anim: 'cast', effect: { type: 'zone', at: 'self', follow: true, zone: { kind: 'cryo', radius: 4.2, dps: 2, dur: 6 } } }),
+    r: A({ id: 'soul_harvest', slot: 'r', name: 'Ruh Hasadı', desc: 'Ruhunu salar: 14 zombi arasında sıçrayıp canlarını biçer.', icon: '☠', color: 0xc084fc, cooldown: 24, anim: 'dash', effect: { type: 'reaper', hits: 14, damage: 19, range: 14, gap: 0.09 } }),
+  },
+};
+
+/**
+ * H — kahramanın "ağzı bozuk" özel hamlesi: her kahramanda farklı bir mekanik + kafasının
+ * üstünde rastgele bir Türkçe laf. Gücü R seviyesinden gelir.
+ */
+export interface HeroShoutDef extends HeroAbilityDef {
+  shouts: string[];
+}
+const H = (d: Omit<HeroShoutDef, 'slot'>): HeroShoutDef => ({ ...d, slot: 'r' });
+export const HERO_SHOUTS: Record<OperativeId, HeroShoutDef> = {
+  ironclad: H({ id: 'h_ironclad', name: 'Hassiktir Ordan!', desc: 'Öyle bir bağırır ki etraftaki herkes uçar.', icon: '🗯', color: 0xffd36a, cooldown: 32, anim: 'shout', effect: { type: 'nova', radius: 7, damage: 10, knock: 6 }, shouts: ['HASSİKTİR ORDAN!', 'Defolun lan!', 'Kim çağırdı sizi amk?!'] }),
+  valkyrie: H({ id: 'h_valkyrie', name: 'Kalk Lan Ayağa!', desc: 'Düşenleri kaldırır, ekibi %50 iyileştirir.', icon: '🩹', color: 0x7cffb2, cooldown: 40, anim: 'shout', effect: { type: 'heal', radius: 11, amount: 0.5, revive: true }, shouts: ['KALK LAN AYAĞA!', 'Ölmek yok, mesai var!', 'Ananızın ak sütü gibi helal olsun bu iğne!'] }),
+  breaker: H({ id: 'h_breaker', name: 'Çekil Önümden!', desc: 'Kör gibi dalar: uzun hücum, büyük hasar.', icon: '🐂', color: 0xffb02e, cooldown: 30, anim: 'dash', effect: { type: 'rampage', dashes: 3, dist: 9, damage: 22, gap: 0.3 }, shouts: ['ÇEKİL ÖNÜMDEN!', 'Kapı mapı tanımam lan!', 'Geliyorum amk!'] }),
+  ghost: H({ id: 'h_ghost', name: 'Görmedin Beni', desc: '6 sn: kritik +%60, hız ×1.4, kısa dokunulmazlık.', icon: '🫥', color: 0xc4b5fd, cooldown: 34, anim: 'shout', effect: { type: 'buff', dur: 6, crit: 0.6, move: 1.4, damage: 1.2 }, shouts: ['Görmedin beni, tamam mı?', 'Pışşt... arkandayım lan.', 'Ninja değilim, sadece sessizim amk.'] }),
+  tox: H({ id: 'h_tox', name: 'Kokunu Sevsinler', desc: 'Etrafına leş gibi zehir bulutu yayar (seni takip eder).', icon: '💨', color: 0x9cff2e, cooldown: 32, anim: 'shout', effect: { type: 'zone', at: 'self', follow: true, zone: { kind: 'toxin', radius: 6, dps: 6, dur: 7 } }, shouts: ['KOKUNU SEVSİNLER!', 'Pardon, fasulye yemiştim.', 'Burnunuzun direği kırılsın lan!'] }),
+  spark: H({ id: 'h_spark', name: 'Elektrik Faturası', desc: '12 zombiye sıçrayan dev yıldırım.', icon: '🧾', color: 0x7cd4ff, cooldown: 30, anim: 'cast', effect: { type: 'chain', targets: 12, damage: 14, range: 14, status: 'chill' }, shouts: ['FATURAYI SİZ ÖDEYİN!', 'Kaçak elektrik bu, kimseye söylemeyin.', 'Çarpılın lan hepiniz!'] }),
+  warden: H({ id: 'h_warden', name: 'Burası Benim Mahallem', desc: 'Kubbe: 6 sn içeride %70 az hasar, girenler yanar.', icon: '🏚', color: 0x7cc4ff, cooldown: 38, anim: 'cast', effect: { type: 'bastion', dur: 6, radius: 4.5, armor: 0.7, dps: 7 }, shouts: ['BURASI BENİM MAHALLEM!', 'Bu taraftan geçiş yok lan!', 'Kimlik kontrolü amk, dağılın!'] }),
+  havoc: H({ id: 'h_havoc', name: 'Yak Lan Hepsini!', desc: 'Nişana dev alev şeridi.', icon: '🔥', color: 0xff5a1f, cooldown: 32, anim: 'shout', effect: { type: 'strike', count: 5, radius: 2.8, damage: 14, delay: 0.5, spacing: 2.2, status: 'burn', zone: { kind: 'fire', radius: 2.6, dps: 6, dur: 5 } }, shouts: ['YAK LAN HEPSİNİ!', 'Mangal yaktık, buyrun!', 'Kızarmış zombi isteyen?!'] }),
+  reis: H({ id: 'h_reis', name: 'Ananı Da Al Git!', desc: 'Topçu desteği: nişana 3 dev mermi.', icon: '💥', color: 0xffa040, cooldown: 34, anim: 'shout', effect: { type: 'strike', count: 3, radius: 4.2, damage: 40, delay: 1.1, spacing: 3 }, shouts: ['ANANI DA AL GİT!', 'Topçu, ver ateşi amk!', 'Reis konuştu, susun lan!'] }),
+  sahin: H({ id: 'h_sahin', name: 'Hadi Lan Oradan!', desc: 'Alçak uçuş: nişana kısa süreli füze yağmuru.', icon: '🛩', color: 0x5ee0ff, cooldown: 32, anim: 'cast', effect: { type: 'strike', count: 6, radius: 2.6, damage: 18, delay: 0.4, spacing: 1.4 }, shouts: ['HADİ LAN ORADAN!', 'Kule, alçak geçiş istiyorum amk!', 'Kanatlarımın altında ölün!'] }),
+  kasap: H({ id: 'h_kasap', name: 'Gel Buraya Gel!', desc: 'Etraftaki zombileri kendine çeker ve sıkıştırır.', icon: '🪝', color: 0xff3b3b, cooldown: 30, anim: 'shout', effect: { type: 'vortex', radius: 7, dur: 2.6, dps: 8, pull: 7 }, shouts: ['GEL BURAYA GEL!', 'Kıyma olacaksınız lan!', 'Kasaba gelen eli boş dönmez amk!'] }),
+  cadi: H({ id: 'h_cadi', name: 'Nazar Değmesin!', desc: 'Lanetli yağmur: ekip iyileşir, zombiler yavaşlar.', icon: '🧿', color: 0xb26bff, cooldown: 36, anim: 'cast', effect: { type: 'heal', radius: 10, amount: 0.3, zone: { kind: 'cryo', radius: 6, dps: 2.5, dur: 6 } }, shouts: ['NAZAR DEĞMESİN!', 'Maşallah deyin lan!', 'Kurşun dökerim size!'] }),
 };
 
 export function heroAbility(hero: OperativeId, slot: AbilitySlot): HeroAbilityDef {
@@ -211,16 +255,19 @@ interface Expanding {
 const ZONE_COLOR: Record<ZoneKind, number> = { fire: 0xff5a1f, toxin: 0x84cc16, cryo: 0x9be7ff, heal: 0x5ad46a };
 const ZONE_STATUS: Partial<Record<ZoneKind, StatusId>> = { fire: 'burn', toxin: 'toxin', cryo: 'chill' };
 
+/** Q/E/R + H (kahramanın ağzı bozuk özel hamlesi) */
+export type HeroSlot = AbilitySlot | 'h';
+
 export interface HeroAbilityRuntime {
   levels: Record<AbilitySlot, number>;
-  bonus: Record<AbilitySlot, number>;
-  cooldowns: Record<AbilitySlot, number>;
-  defs: Record<AbilitySlot, HeroAbilityDef>;
-  cast: (slot: AbilitySlot, now: number) => boolean;
+  bonus: Record<HeroSlot, number>;
+  cooldowns: Record<HeroSlot, number>;
+  defs: Record<HeroSlot, HeroAbilityDef>;
+  cast: (slot: HeroSlot, now: number) => boolean;
   update: (dt: number, now: number) => void;
   buffsFor: (op: OperativeVisual, now: number) => HeroBuffs;
-  maxCooldown: (slot: AbilitySlot) => number;
-  level: (slot: AbilitySlot) => number;
+  maxCooldown: (slot: HeroSlot) => number;
+  level: (slot: HeroSlot) => number;
   dispose: () => void;
 }
 
@@ -230,9 +277,9 @@ export function createHeroAbilityRuntime(
   ctx: HeroAbilityContext,
 ): HeroAbilityRuntime {
   const { scene, fx } = ctx;
-  const defs = HERO_ABILITIES[hero] ?? HERO_ABILITIES.ironclad;
-  const bonus: Record<AbilitySlot, number> = { q: 0, e: 0, r: 0 };
-  const cooldowns: Record<AbilitySlot, number> = { q: 0, e: 0, r: 0 };
+  const defs: Record<HeroSlot, HeroAbilityDef> = { ...(HERO_ABILITIES[hero] ?? HERO_ABILITIES.ironclad), h: HERO_SHOUTS[hero] ?? HERO_SHOUTS.ironclad };
+  const bonus: Record<HeroSlot, number> = { q: 0, e: 0, r: 0, h: 0 };
+  const cooldowns: Record<HeroSlot, number> = { q: 0, e: 0, r: 0, h: 0 };
   const buffs: Buff[] = [];
   const zones: Zone[] = [];
   const thrown: Thrown[] = [];
@@ -265,8 +312,52 @@ export function createHeroAbilityRuntime(
   const owned: THREE.Material[] = [];
   const keep = <T extends THREE.Material>(m: T) => (owned.push(m), m);
 
-  const lvl = (slot: AbilitySlot) => Math.min(8, levels[slot] + bonus[slot]);
-  const maxCooldown = (slot: AbilitySlot) => defs[slot].cooldown * levelCd(lvl(slot)) * ctx.cdrMult();
+  // H, R'nin seviyesini kullanır (ayrı satın alma yok)
+  const lvl = (slot: HeroSlot) => (slot === 'h' ? Math.min(8, levels.r + bonus.r) : Math.min(8, levels[slot] + bonus[slot]));
+  const maxCooldown = (slot: HeroSlot) => defs[slot].cooldown * levelCd(lvl(slot)) * ctx.cdrMult();
+
+  // H lafı: kahramanın kafasının üstünde yükselip kaybolan konuşma balonu
+  const bubbles: { sprite: THREE.Sprite; op: OperativeVisual; life: number; max: number; tex: THREE.Texture }[] = [];
+  const sayBubble = (op: OperativeVisual, text: string, color: number) => {
+    if (typeof document === 'undefined') return;
+    const cv = document.createElement('canvas');
+    const W = 768;
+    const Hh = 160;
+    cv.width = W;
+    cv.height = Hh;
+    const c = cv.getContext('2d');
+    if (!c) return;
+    c.font = '800 64px Rajdhani, Barlow, system-ui, sans-serif';
+    const tw = Math.min(W - 40, c.measureText(text).width + 64);
+    const x0 = (W - tw) / 2;
+    c.fillStyle = 'rgba(10,12,16,0.86)';
+    c.strokeStyle = `#${color.toString(16).padStart(6, '0')}`;
+    c.lineWidth = 6;
+    const r = 34;
+    c.beginPath();
+    c.moveTo(x0 + r, 12);
+    c.arcTo(x0 + tw, 12, x0 + tw, 12 + 110, r);
+    c.arcTo(x0 + tw, 122, x0, 122, r);
+    c.lineTo(W / 2 + 18, 122);
+    c.lineTo(W / 2, 150);
+    c.lineTo(W / 2 - 18, 122);
+    c.arcTo(x0, 122, x0, 12, r);
+    c.arcTo(x0, 12, x0 + tw, 12, r);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.fillStyle = '#ffffff';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(text, W / 2, 68, tw - 40);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+    sprite.renderOrder = 999;
+    sprite.scale.set(4.8, 1, 1);
+    scene.add(sprite);
+    bubbles.push({ sprite, op, life: 2.6, max: 2.6, tex });
+  };
 
   const forEachZombieIn = (at: THREE.Vector3, r: number, fn: (z: ZombieVisual, d: number) => void) => {
     const r2 = r * r;
@@ -877,9 +968,9 @@ export function createHeroAbilityRuntime(
     ctx.sfx('buff');
   };
 
-  let comboSlots: AbilitySlot[] = [];
+  let comboSlots: HeroSlot[] = [];
   let comboAt = -99;
-  const cast = (slot: AbilitySlot, now: number): boolean => {
+  const cast = (slot: HeroSlot, now: number): boolean => {
     const p = ctx.player;
     if (!p.alive || cooldowns[slot] > 0) return false;
     const def = defs[slot];
@@ -895,6 +986,11 @@ export function createHeroAbilityRuntime(
     const size = levelSize(L);
     const eff = def.effect;
     cooldowns[slot] = maxCooldown(slot);
+    if (slot === 'h') {
+      const lines = (def as HeroShoutDef).shouts ?? [def.name];
+      sayBubble(p, lines[Math.floor(Math.random() * lines.length)]!, def.color);
+      ctx.shake(0.18);
+    }
 
     const e = def.effect.type;
     const act: OperativeActionKind | null =
@@ -909,6 +1005,14 @@ export function createHeroAbilityRuntime(
           if (eff.zone) addZone(at, eff.zone, power, size, null);
           if (eff.mesh === 'flash') {
             ctx.vfx?.flashLight(at, 0xffffff, 40, 0.15);
+          }
+          // misket: iniş noktasının çevresine sırayla küçük bombalar
+          for (let i = 0; i < (eff.cluster ?? 0); i++) {
+            const a = (i / (eff.cluster ?? 1)) * Math.PI * 2 + Math.random() * 0.6;
+            const d = eff.radius * size * (0.9 + Math.random() * 0.6);
+            const sub = at.clone().add(new THREE.Vector3(Math.cos(a) * d, 0, Math.sin(a) * d));
+            fx.spawnWarnRing(sub, eff.radius * 0.7 * size, def.color, 0.35 + i * 0.12);
+            pending.push({ at: clock + 0.35 + i * 0.12, run: () => explode(sub, eff.radius * 0.7 * size * ctx.aoeMult(), eff.damage * 0.7 * power, def.color, eff.status, 2, 0.8) });
           }
         };
         throwTo(target, eff.mesh ?? 'frag', def.color, land);
@@ -1062,7 +1166,20 @@ export function createHeroAbilityRuntime(
 
   const update = (dt: number, now: number) => {
     clock += dt;
-    for (const s of ['q', 'e', 'r'] as AbilitySlot[]) cooldowns[s] = Math.max(0, cooldowns[s] - dt);
+    for (const s of ['q', 'e', 'r', 'h'] as HeroSlot[]) cooldowns[s] = Math.max(0, cooldowns[s] - dt);
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]!;
+      b.life -= dt;
+      const t = 1 - b.life / b.max;
+      b.sprite.position.set(b.op.root.position.x, 3.2 + t * 0.9, b.op.root.position.z);
+      (b.sprite.material as THREE.SpriteMaterial).opacity = b.life < 0.5 ? Math.max(0, b.life / 0.5) : Math.min(1, t * 8);
+      if (b.life <= 0) {
+        scene.remove(b.sprite);
+        b.tex.dispose();
+        (b.sprite.material as THREE.Material).dispose();
+        bubbles.splice(i, 1);
+      }
+    }
 
     tickUltimates(dt);
     for (let i = pending.length - 1; i >= 0; i--) {
@@ -1275,6 +1392,10 @@ export function createHeroAbilityRuntime(
       for (const d of drones) scene.remove(d.mesh);
       for (const v of vortexes) scene.remove(v.mesh);
       for (const st of storms) scene.remove(st.cloud);
+      for (const b of bubbles) {
+        scene.remove(b.sprite);
+        b.tex.dispose();
+      }
       owned.forEach((m) => m.dispose());
       [cylGeo, domeGeo, droneBodyGeo, droneArmGeo, droneRotorGeo, missileGeo, noseGeo].forEach((g) => g.dispose());
       [discGeo, ringGeo, sphereGeo, fragGeo, bottleGeo, flaskGeo].forEach((g) => g.dispose());

@@ -100,7 +100,7 @@ const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 const renderHeroSkills = (hud: ArenaHudState) => {
   const sup = hud.support;
   const list = sup
-    ? [...hud.heroAbilities, { slot: 'H', name: `${sup.name} (imlecin olduğu yere)`, icon: sup.icon, color: 0xc8a868, level: 0, cooldown: sup.cd, maxCooldown: sup.max }]
+    ? [...hud.heroAbilities, { slot: 'B', name: `${sup.name} (imlecin olduğu yere)`, icon: sup.icon, color: 0xc8a868, level: 0, cooldown: sup.cd, maxCooldown: sup.max }]
     : hud.heroAbilities;
   if (el.heroSkills.childElementCount !== list.length) {
     el.heroSkills.replaceChildren(
@@ -114,7 +114,8 @@ const renderHeroSkills = (hud: ArenaHudState) => {
   }
   list.forEach((a, i) => {
     const d = el.heroSkills.children[i] as HTMLElement;
-    d.classList.toggle('radio', a.slot === 'H');
+    d.classList.toggle('radio', a.slot === 'B');
+    d.classList.toggle('meme', a.slot === 'H');
     d.dataset.slot = a.slot;
     const ready = a.cooldown <= 0.01;
     d.classList.toggle('ready', ready);
@@ -122,7 +123,7 @@ const renderHeroSkills = (hud: ArenaHudState) => {
     d.title = `${a.slot} · ${a.name} (Sv ${a.level})`;
     (d.querySelector('.ico') as HTMLElement).textContent = a.icon;
     (d.querySelector('.key') as HTMLElement).textContent = a.slot;
-    (d.querySelector('.lv') as HTMLElement).textContent = a.slot === 'H' ? '📻' : `Sv${a.level}`;
+    (d.querySelector('.lv') as HTMLElement).textContent = a.slot === 'B' ? '📻' : a.slot === 'H' ? '🤬' : `Sv${a.level}`;
     (d.querySelector('.cd') as HTMLElement).style.height = ready ? '0%' : `${Math.min(100, (a.cooldown / Math.max(0.01, a.maxCooldown)) * 100)}%`;
     (d.querySelector('.cdt') as HTMLElement).textContent = ready ? '' : a.cooldown >= 1 ? String(Math.ceil(a.cooldown)) : a.cooldown.toFixed(1);
   });

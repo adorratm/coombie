@@ -19,7 +19,11 @@ export type OperativeId =
   | 'ghost'
   | 'spark'
   | 'warden'
-  | 'havoc';
+  | 'havoc'
+  | 'reis'
+  | 'sahin'
+  | 'kasap'
+  | 'cadi';
 
 /** Canon playable kinds + `screamer` reserved for a later slice. */
 export type ZombieArchetype =

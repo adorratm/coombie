@@ -137,7 +137,7 @@ export default function LobbyPage() {
         <p className="label-caps" style={{ color: 'var(--on-surface-variant)' }}>
           {mode === 'solo'
             ? `Solo fireteam: ${selected.length}/8 — kurtarma ile 8 tüfeğe kadar genişler`
-            : 'Co-op: en fazla 8 operatör; EXP ve power-up bireysel'}
+            : 'Co-op: en fazla 12 operatör; EXP ve power-up bireysel'}
         </p>
 
         <div

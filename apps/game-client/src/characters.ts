@@ -372,7 +372,7 @@ export function setOperativeWeapon(op: OperativeVisual, index: number): void {
   const scale = op.root.scale.x || 1;
   const oldLight = op.muzzleLight;
   op.muzzlePoint = attachWeaponMesh(op.gun, op.weapon, op.color, scale);
-  if (gear?.attachments.length) decorateGun(op.muzzlePoint, gear.attachments);
+  if (gear?.attachments.length) decorateGun(op.muzzlePoint, gear.attachments, op.weapon.id);
   if (op.isPlayer) op.muzzlePoint.add(oldLight);
   op.muzzleLight = oldLight;
   op.fireCooldown = 0.15;
