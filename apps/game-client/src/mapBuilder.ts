@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { spotHash, type InteractSpot } from './interactables';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -485,6 +486,8 @@ export class MapBuilder {
   /** keep-out discs (objectives, roads) for scatter() */
   private readonly keepOut: Array<{ x: number; z: number; r: number }> = [];
   lights: THREE.PointLight[] = [];
+  /** shootable things (explosive barrels / gas tanks, barricades) — drawn and simulated by the arena */
+  readonly interact: InteractSpot[] = [];
   private readonly winGlass: THREE.Matrix4[] = [];
   private readonly winLit: THREE.Matrix4[] = [];
   private readonly trees: Array<{ x: number; z: number; h: number; rot: number; snow: boolean }> = [];
@@ -973,6 +976,11 @@ export class MapBuilder {
 
   // ---------------------------------------------------------------- props
   prop(id: PropId, x: number, z: number, o: { rot?: number; scale?: number; y?: number; tint?: number; collide?: boolean; tilt?: number } = {}): void {
+    // about half the free-standing fuel barrels / gas tanks can be shot (same pick on every co-op client)
+    if ((id === 'barrel' || id === 'propane' || id === 'lpg') && o.collide !== false && !o.y && (o.scale ?? 1) < 1.6 && spotHash(x, z) < 0.55) {
+      this.interact.push({ x, z, rot: o.rot ?? 0, kind: id === 'barrel' ? 'barrel' : 'gas' });
+      return;
+    }
     const list = this.placements.get(id) ?? [];
     list.push({ x, y: o.y ?? 0, z, rot: o.rot ?? this.r(0, Math.PI * 2), scale: (o.scale ?? 1) * this.r(0.92, 1.08), tint: o.tint, tilt: o.tilt });
     this.placements.set(id, list);

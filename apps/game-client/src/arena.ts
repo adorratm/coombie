@@ -172,11 +172,18 @@ import { SeeThrough, type SeeTarget } from './seeThrough';
 import { NavField } from './navField';
 import { applyTypeDeco, updateTypeDeco } from './zombieDeco';
 import { createPostFx } from './postFx';
+import { Interactables } from './interactables';
+import { Atmosphere } from './atmosphere';
+import { Gibs } from './gibs';
+import { emptyRunStats, mvpCards, packStats, unpackStats, type MvpCard, type PlayerRunStats } from './mvp';
 import type { OperativeId } from './roster';
 import { queueZombieAnim, setOperativeDead, spawnZombieCorpse, tickZombieCorpses, type ZombieCorpse } from './avatars';
 
 export interface ArenaHudState {
   heroId: string;
+  /** end of run: one card per player (co-op: what team mates reported) */
+  mvp?: MvpCard[];
+  meId?: string;
   /** recent loot pickups (newest last) — name + what it does */
   pickups?: Array<{ name: string; desc: string; age: number }>;
   /** off-screen / on-screen markers for important things */
@@ -438,8 +445,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   renderer.domElement.focus();
 
   // Dramatic apocalyptic lighting: Cool ambient fill, warm harsh directional key light, and rim kick
-  scene.add(new THREE.AmbientLight(LT.ambient[0], LT.ambient[1] * 1.6));
-  scene.add(new THREE.HemisphereLight(LT.hemi[0], LT.hemi[1], LT.hemi[2] * 1.5));
+  const ambientLight = new THREE.AmbientLight(LT.ambient[0], LT.ambient[1] * 1.6);
+  const hemiLight = new THREE.HemisphereLight(LT.hemi[0], LT.hemi[1], LT.hemi[2] * 1.5);
+  scene.add(ambientLight, hemiLight);
 
   const sun = new THREE.DirectionalLight(LT.sun[0], LT.sun[1] * 1.25);
   const sunOff = new THREE.Vector3(...LT.sunDir);
@@ -472,6 +480,19 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   }
   postFx.setTier(quality);
   const map = buildGameMap(scene, mission.map, renderer);
+  const atmosphere = new Atmosphere({
+    scene,
+    renderer,
+    ambient: ambientLight,
+    hemi: hemiLight,
+    sun,
+    rim: rimLight,
+    base: LT,
+    weather: map.def.weather,
+    mul: { ambient: 1.6, hemi: 1.5, sun: 1.25 },
+    onFlash: (a) => postFx.flash(a),
+    onThunder: (delay, big) => setTimeout(() => audio.playThunder(big), delay * 1000),
+  });
   const ARENA_BOUND = map.bound;
   const colliders = map.colliders;
   const audio = createGameAudio();
@@ -904,6 +925,59 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const acidSpits: AcidSpit[] = [];
   const hazards = new ZombieHazards(scene);
   hazards.vfx = skillFx;
+  // gore: heads / limbs / dropped gear on heavy kills
+  const gibs = new Gibs(scene, (x, z, sc) => spawnBloodDecal(x, z, sc));
+  let lastKillHit: { crit: boolean; dir: THREE.Vector3; blast: boolean } | null = null;
+  const goreKill = (z: ZombieVisual) => {
+    const big = z.kind === 'boss' || z.kind === 'hooker' || typeOf(z)?.tier === 'boss';
+    const hit = lastKillHit;
+    lastKillHit = null;
+    const dir = hit?.dir ?? new THREE.Vector3();
+    // riot shields always fall
+    const shield = z.root.userData.shield as THREE.Object3D | undefined;
+    if (shield) {
+      gibs.drop(shield, z.root.position, dir);
+      delete z.root.userData.shield;
+    }
+    const chance = big ? 1 : hit?.blast ? 0.85 : hit?.crit ? 0.6 : 0.2;
+    if (Math.random() > chance) return;
+    const head = !big && Math.random() < (hit?.crit ? 0.75 : 0.45);
+    if (head) z.root.userData.headless = true;
+    const skin = z.kind === 'acid' ? 0x6a8a3a : z.kind === 'boss' || z.kind === 'tank' ? 0x7a4a3a : z.kind === 'volt' ? 0x5a6a80 : 0x6a705a;
+    gibs.burst(z.root.position, dir, z.root.scale.x, skin, head, big ? 2 : hit?.blast ? 1.5 : 1);
+  };
+  // shootable explosives / barricades from the map
+  const interact = new Interactables(scene, map.interact, colliders, {
+    explode: (at, r, kind, local) => {
+      skillFx.explosion(at.clone(), r * 0.75, kind === 'gas' ? 0xffd080 : 0xff7a30);
+      spawnFlash(at.clone().setY(1), 0xffa050, r * 1.6);
+      audio.playSlam(kind === 'gas');
+      audio.playGunshot('shotgun', Math.max(-1, Math.min(1, (at.x - player.root.position.x) / 24)));
+      shake = Math.max(shake, Math.max(0, 0.55 - player.root.position.distanceTo(at) * 0.02));
+      postFx.flash(Math.max(0, 0.35 - player.root.position.distanceTo(at) * 0.01));
+      hazards.fire(at.x, at.z, r * 0.45, 4, 3);
+      // my own hero always reacts to a blast it stands in (whoever set it off)
+      const pd = player.root.position.distanceTo(at);
+      if (player.alive && pd < r) damageOperative(player, (kind === 'gas' ? 22 : 15) * (1 - pd / r), at);
+      if (!local) return;
+      zombieHash.query(at.x, at.z, r, zombieQuery);
+      for (const o of [...zombieQuery]) {
+        if (o.hp <= 0) continue;
+        const d = Math.hypot(o.root.position.x - at.x, o.root.position.z - at.z);
+        if (d > r) continue;
+        const big = o.kind === 'boss' || o.kind === 'hooker' || typeOf(o)?.tier === 'boss';
+        const amount = Math.max(18, o.maxHp * (big ? 0.07 : kind === 'gas' ? 0.8 : 0.6)) * (1 - (d / r) * 0.5);
+        const kd = o.root.position.clone().sub(at).setY(0).normalize();
+        damageZombie(o, amount, o.root.position.clone().setY(1.1), kd, { fromPlayer: true, forward: true, raw: true });
+        if (!isGuest) o.root.position.addScaledVector(kd, big ? 0.3 : 1.4);
+      }
+    },
+    splinter: (at) => {
+      skillFx.debris(at.clone(), 16, 1.6);
+      audio.playHit('melee');
+    },
+    announce: (i) => net?.send({ k: 'boom', i }),
+  });
   const corpses: ZombieCorpse[] = [];
   let nowSec = performance.now() / 1000;
   const zombieCtx: ZombieCombatCtx = {
@@ -926,8 +1000,16 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       shake = Math.max(shake, v);
     },
     playSfx: (z, ev) => audio.playZombie(z.kind, ev),
+    announce: (text) => {
+      missionRuntime.banner = text;
+      missionRuntime.bannerUntil = simTime + 3.5;
+    },
   };
 
+  // ---- per-player numbers for the MVP cards (mine + what team mates report) ----
+  const myStats: PlayerRunStats = emptyRunStats(net?.playerId ?? 'me', net?.roster?.players.find((p) => p.playerId === net?.playerId)?.displayName || 'Sen', hero.name);
+  const teamStats = new Map<string, PlayerRunStats>();
+  let statsSendT = 0;
   // ---- game mode / objectives -------------------------------------------
   const runStats: RunStats = {
     map: mission.map,
@@ -1230,6 +1312,46 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     return { damageMult, fireRateMult, critChance: mods.critChance + (mastery?.crit ?? 0), mods };
   };
 
+  // ---- game feel: hit-stop, slow motion, streak sounds (time warps are solo only) ----
+  const feel = { slowUntil: 0, slowScale: 1, stopUntil: 0 };
+  const recentKills: number[] = [];
+  const warp = (scale: number, wallSec: number) => {
+    if (netPlay) return;
+    const now = performance.now() / 1000;
+    if (scale < feel.slowScale || feel.slowUntil < now) feel.slowScale = scale;
+    feel.slowUntil = Math.max(feel.slowUntil, now + wallSec);
+  };
+  const feelScale = (): number => {
+    const now = performance.now() / 1000;
+    if (feel.stopUntil > now) return 0.04;
+    if (feel.slowUntil > now) {
+      // ease back to full speed over the last third
+      const left = feel.slowUntil - now;
+      return left < 0.15 ? feel.slowScale + (1 - feel.slowScale) * (1 - left / 0.15) : feel.slowScale;
+    }
+    return 1;
+  };
+  const killFeel = (z: ZombieVisual) => {
+    const now = performance.now() / 1000;
+    recentKills.push(now);
+    while (recentKills.length && now - recentKills[0]! > 0.45) recentKills.shift();
+    audio.playStreak(combo);
+    const tier = typeOf(z)?.tier;
+    if (z.kind === 'boss' || z.kind === 'hooker' || tier === 'boss') {
+      warp(0.22, 1.1);
+      audio.playSlam(true);
+      shake = Math.max(shake, 0.8);
+      postFx.flash(0.9);
+    } else if (tier === 'elite' || z.kind === 'tank') {
+      if (!netPlay) feel.stopUntil = Math.max(feel.stopUntil, now + 0.07);
+      audio.playSlam(false);
+      postFx.flash(0.25);
+    } else if (recentKills.length >= 6) {
+      recentKills.length = 0;
+      warp(0.45, 0.4);
+      postFx.flash(0.2);
+    }
+  };
   const killZombie = (z: ZombieVisual, replica = false) => {
     const pos = z.root.position;
     if (replica) {
@@ -1237,6 +1359,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       fx.spawnBloodBurst(pos, deathBurstScale(z.kind));
       spawnBloodDecal(pos.x, pos.z, deathDecalScale(z.kind));
       audio.playZombie(z.kind, 'death');
+      goreKill(z);
       const bi = healthBars.indexOf(z.healthBar);
       if (bi >= 0) healthBars.splice(bi, 1);
       z.healthBar.dispose();
@@ -1286,6 +1409,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     zombieDeathEffects(z, zombieCtx);
     zombieTraitDeath(z, zombieCtx);
     if (typeOf(z)?.tier === 'boss') shake = Math.max(shake, 0.7);
+    killFeel(z);
+    goreKill(z);
     z.hurtFlash = 0.001;
     updateZombieHurtFlash(z, 1);
     if (!spawnZombieCorpse(z, scene, corpses)) disposeZombieVrm(z);
@@ -1339,6 +1464,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
           }
         }
         final *= traitDamageMul(z, zombieCtx.nowSec, knockDir, 'static');
+      }
+      if (final > 0 && z.hp > 0) {
+        myStats.dmg += Math.min(final, z.hp);
+        if (final >= z.hp) {
+          myStats.kills += 1;
+          if (z.kind === 'boss' || z.kind === 'hooker') myStats.bossKills += 1;
+        }
       }
       const id = z.root.userData.netId as number | undefined;
       if (id && final > 0) {
@@ -1394,7 +1526,15 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       dmg *= tm;
       if (Math.random() < 0.3) skillFx.sparks(hitPos, 3, tm === 0 ? 0xe8e8ff : 0xfff0c0, 3);
     }
+    const hpBefore = z.hp;
     z.hp -= dmg;
+    if (fromPlayer && hpBefore > 0) {
+      myStats.dmg += Math.min(dmg, hpBefore);
+      if (z.hp <= 0) {
+        myStats.kills += 1;
+        if (z.kind === 'boss' || z.kind === 'hooker') myStats.bossKills += 1;
+      }
+    }
     z.healthBar.setRatio(z.hp / z.maxHp);
     z.healthBar.setVisible(true);
     flashZombieHurt(z);
@@ -1433,7 +1573,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     }
 
-    if (z.hp <= 0) killZombie(z);
+    if (z.hp <= 0) {
+      lastKillHit = { crit, dir: knockDir.clone(), blast: !!opts?.raw };
+      killZombie(z);
+    }
   };
 
   const damageOperative = (op: OperativeVisual, amount: number, from: THREE.Vector3, dot = false): boolean => {
@@ -1462,6 +1605,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     }
     op.hp -= reduced;
+    if (op.isPlayer) myStats.taken += reduced;
     if (dot) {
       op.healthBar.setRatio(Math.max(0, op.hp) / Math.max(1, op.maxHp));
       op.healthBar.setVisible(true);
@@ -1697,6 +1841,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         spawnFlash(at.clone().setY(0.8), 0xffb060, r * 1.2);
         audio.playGunshot('shotgun', 0);
         shake = Math.max(shake, 0.18 + r * 0.03);
+        if (!cosmetic) interact.blast(at, r, simTime);
         zombieHash.query(at.x, at.z, r, zombieQuery);
         for (let i = 0; i < zombieQuery.length; i++) {
           const o = zombieQuery[i]!;
@@ -2353,6 +2498,12 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       const banner = missionRuntime.bannerUntil > simTime ? missionRuntime.banner : '';
       if (banner && banner !== netBannerSent) net.send({ k: 'banner', text: banner.slice(0, 120), dur: Math.min(8, missionRuntime.bannerUntil - simTime) });
       netBannerSent = banner;
+      statsSendT += 0.1;
+      if (statsSendT >= 4 || (runOver && statsSendT >= 0.5)) {
+        statsSendT = 0;
+        myStats.downs = runStats.downs;
+        net.send({ k: 'st', d: packStats(myStats) });
+      }
       if (runOver && !netEndSent) {
         netEndSent = true;
         net.send({ k: 'end', won: runOver.won, title: runOver.title, subtitle: runOver.subtitle });
@@ -2363,6 +2514,23 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   if (net) {
     net.handlers = {
       onEvent: (ev, from) => {
+        if (ev.k === 'boom') {
+          // a team mate set off a barrel / broke a barricade: draw it here (they dealt the damage)
+          const by = isHost ? from : String(ev.by ?? from);
+          if (isHost) net.send({ ...ev, by });
+          if (by !== net.playerId) interact.remote(Math.floor(Number(ev.i)), simTime);
+          return;
+        }
+        if (ev.k === 'st') {
+          // a team mate's MVP numbers: guests send to the host, the host relays with `by`
+          const by = isHost ? from : String(ev.by ?? from);
+          if (isHost) net.send({ ...ev, by });
+          if (by === net.playerId) return;
+          const info = net.roster?.players.find((p) => p.playerId === by);
+          const st = unpackStats(by, coopNameOf(by), rosterById((info?.operativeId ?? 'ironclad') as Parameters<typeof rosterById>[0]).name, ev.d);
+          if (st) teamStats.set(by, st);
+          return;
+        }
         if (ev.k === 'cast' || ev.k === 'sup' || ev.k === 'kit') {
           // a team mate's ability: guests send it to the host, the host passes it on to everyone
           const by = isHost ? from : String(ev.by ?? from);
@@ -2465,6 +2633,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
 
   const reviveByAbility = (op: OperativeVisual) => {
+    if (!op.alive && op !== player) myStats.revives += 1;
     op.alive = true;
     op.hp = op.maxHp * 0.5;
     setOperativeDead(op, false);
@@ -2618,6 +2787,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const castHero = (slot: HeroSlot) => {
     if (!player.alive || progress.pendingPicks > 0 || !heroRt) return;
     if (heroRt.cast(slot, simTime)) {
+      myStats.casts += 1;
       shake = Math.max(shake, 0.12);
       net?.send({
         k: 'cast',
@@ -3027,6 +3197,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       runOver,
       revivesLeft: modeRt.revivesLeft,
       runStats: snapshotRunStats(),
+      mvp: runOver ? mvpCards([{ ...myStats, downs: runStats.downs }, ...teamStats.values()]) : undefined,
+      meId: myStats.id,
       maxSquad: MAX_SQUAD_SIZE,
       rerolls: progress.rerolls,
       lockdowns: progress.lockdowns,
@@ -3256,7 +3428,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       netPause.resumeAt = 0;
     }
     const frozen = (!netPlay && (upgrading || userPaused)) || (netPlay && netPause.on) || !!runOver;
-    const dt = frozen ? 0 : rawDt;
+    const dt = frozen ? 0 : rawDt * feelScale();
     if (!frozen) simTime += dt;
     const t = simTime;
 
@@ -3562,7 +3734,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         else {
           const near = player.alive && ally.root.position.distanceTo(player.root.position) < PICKUP_RADIUS;
           const cur = reviveProgress.get(remote) ?? 0;
-          reviveProgress.set(remote, near ? Math.min(PICKUP_SECONDS, cur + dt) : Math.max(0, cur - dt * 0.5));
+          const next = near ? Math.min(PICKUP_SECONDS, cur + dt) : Math.max(0, cur - dt * 0.5);
+          // I stood there long enough to pick them up
+          if (near && cur < PICKUP_SECONDS && next >= PICKUP_SECONDS) myStats.revives += 1;
+          reviveProgress.set(remote, next);
         }
         continue;
       }
@@ -3754,7 +3929,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
         }
       }
 
+      const propHit = !hitZ && (b.owner.isPlayer || (!isGuest && !ownsHits(b.owner))) && interact.hitBullet(b.mesh.position, b.damage, simTime);
       const blocked =
+        propHit ||
         b.pierce <= 0 &&
         nearbyBoxes(b.mesh.position.x, b.mesh.position.z, 0.5, colliders).some((box) => {
           const p = b.mesh.position;
@@ -3784,6 +3961,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     }
 
+    interact.update(simTime);
+    gibs.update(dt);
+    atmosphere.update(dt, simTime);
     abilityRuntime.update(dt, zombies, damageZombie);
     heroRt?.update(dt, simTime);
     coopMirror?.update(dt, simTime);

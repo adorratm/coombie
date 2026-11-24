@@ -4,6 +4,7 @@ import { MAPS, type MapDef, type MapId } from './mapDefs';
 import type { MapBuildResult } from './map';
 import { WeatherFx } from './weather';
 import { collectSpinners } from './mapLunapark';
+import type { InteractSpot } from './interactables';
 
 export interface GameMap extends MapBuildResult {
   def: MapDef;
@@ -11,6 +12,8 @@ export interface GameMap extends MapBuildResult {
   anchors: MapAnchors;
   /** resolves when every prop model is placed (colliders complete) */
   ready: Promise<void>;
+  /** shootable explosives and barricades (the arena builds them) */
+  interact: InteractSpot[];
   /** everything the map put in the scene */
   root: THREE.Group;
   /** beacon over the evac point (shown by modes) */
@@ -99,6 +102,31 @@ export function buildGameMap(scene: THREE.Scene, id: MapId, renderer?: THREE.Web
   evacMarker.visible = false;
   b.root.add(evacMarker);
 
+  // shootable set dressing: explosive drums near cover + barricades in the camp's gaps.
+  // Own seeded stream, so the map's own layout (and co-op parity) stays as it was.
+  {
+    let seed = (def.seed * 7919 + 77) >>> 0;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    let placed = 0;
+    for (let tries = 0; tries < 400 && placed < 16; tries++) {
+      const x = (rnd() * 2 - 1) * def.half * 0.92;
+      const z = (rnd() * 2 - 1) * def.half * 0.92;
+      if (!b.isClear(x, z, 1.4) || Math.hypot(x - c.x, z - c.z) < 14) continue;
+      const kind = rnd() < 0.7 ? 'barrel' : 'gas';
+      b.interact.push({ x, z, rot: rnd() * 6.28, kind });
+      // usually a small cluster: chain reactions
+      if (rnd() < 0.5 && b.isClear(x + 1.1, z + 0.4, 0.6)) b.interact.push({ x: x + 1.1, z: z + 0.4, rot: rnd() * 6.28, kind: 'barrel' });
+      b.clear(x, z, 2);
+      placed++;
+    }
+    for (const k of [0, 2]) {
+      // the sandbag arcs leave gaps (two get a plank wall, short enough to walk round) at a0 + 0.95 … a0 + 1.57: plug them with planks
+      const a = (k / 4) * Math.PI * 2 + 0.3 + 1.26;
+      const r = 7.5;
+      b.interact.push({ x: c.x + Math.cos(a) * r, z: c.z + Math.sin(a) * r, rot: -a + Math.PI / 2, kind: 'barricade' });
+    }
+  }
+
   const weather = new WeatherFx(scene, def.weather, typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
   const ready = b.finishProps();
   const flick = b.lights.filter((l) => l.userData.flicker);
@@ -108,6 +136,7 @@ export function buildGameMap(scene: THREE.Scene, id: MapId, renderer?: THREE.Web
     def,
     bound: def.half,
     anchors: b.anchors,
+    interact: b.interact,
     ready,
     root: b.root,
     colliders: b.colliders,

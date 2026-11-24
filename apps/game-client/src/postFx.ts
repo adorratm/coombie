@@ -26,6 +26,7 @@ const GradeShader = {
     uContrast: { value: 1.07 },
     uCA: { value: 1.2 },
     uTint: { value: new THREE.Color(1, 1, 1) },
+    uFlash: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -36,6 +37,7 @@ const GradeShader = {
     uniform float uTime, uVignette, uGrain, uSat, uContrast, uCA;
     uniform vec2 uRes;
     uniform vec3 uTint;
+    uniform float uFlash;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
@@ -51,6 +53,8 @@ const GradeShader = {
       c = (c - 0.5) * uContrast + 0.5;
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = mix(vec3(l), c, uSat) * uTint;
+      // impact flash: lift toward white, strongest in the centre
+      c = mix(c, vec3(1.0, 0.97, 0.9), uFlash * (1.0 - r2 * 1.4));
       // vignette (smooth, never pitch black)
       c *= 1.0 - uVignette * smoothstep(0.12, 0.62, r2 * 1.6);
       // film grain (luma-weighted so blacks stay clean)
@@ -69,6 +73,8 @@ export interface PostFx {
   setTier: (q: number) => void;
   /** per-map look: bloom strength and colour tint */
   setLook: (o: { bloom?: number; threshold?: number; tint?: number; vignette?: number }) => void;
+  /** brief white impact flash (0..1), fades by itself */
+  flash: (amount: number) => void;
   readonly enabled: boolean;
   dispose: () => void;
 }
@@ -80,6 +86,7 @@ export function createPostFx(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
   let enabled = false;
   let tier = 1;
   let t = 0;
+  let flashAmt = 0;
   let baseBloom = 0.6;
   const look = { threshold: 0.9, tint: 0xffffff, vignette: 0.38 };
   const size = new THREE.Vector2();
@@ -133,7 +140,9 @@ export function createPostFx(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
         renderer.render(scene, camera);
         return;
       }
+      flashAmt = Math.max(0, flashAmt - dt * 3.2);
       if (grade) {
+        grade.uniforms.uFlash!.value = flashAmt * 0.45;
         grade.uniforms.uTime!.value = t;
         renderer.getDrawingBufferSize(size);
         (grade.uniforms.uRes!.value as THREE.Vector2).copy(size);
@@ -144,6 +153,9 @@ export function createPostFx(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
       if (!composer) return;
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(w, h);
+    },
+    flash: (a) => {
+      flashAmt = Math.max(flashAmt, Math.min(1, a));
     },
     setTier: (q) => {
       tier = q;

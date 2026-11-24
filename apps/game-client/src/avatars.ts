@@ -1412,7 +1412,14 @@ export function spawnZombieCorpse(z: ZombieVisual, scene: THREE.Scene, corpses: 
   const dur = avatar.zombieAnim.die();
   delete (z as ZombieVisual & { vrm?: VrmAvatarHandle }).vrm;
   liveZombieVrm = Math.max(0, liveZombieVrm - 1);
-  corpses.push({ holder, avatar, t: 0, hold: Math.max(1.2, dur) + 2.2 });
+  // decapitated: hide the head on the corpse (restored before the avatar goes back to the pool)
+  let headBone: THREE.Object3D | null = null;
+  if (z.root.userData.headless) {
+    const hum = (avatar.vrm as unknown as { humanoid?: { getRawBoneNode?: (n: string) => THREE.Object3D | null } }).humanoid;
+    headBone = hum?.getRawBoneNode?.('head') ?? null;
+    headBone?.scale.setScalar(0.001);
+  }
+  corpses.push({ holder, avatar, t: 0, hold: Math.max(1.2, dur) + 2.2, headBone });
   return true;
 }
 
@@ -1421,6 +1428,7 @@ export interface ZombieCorpse {
   avatar: VrmAvatarHandle;
   t: number;
   hold: number;
+  headBone?: THREE.Object3D | null;
 }
 
 export function tickZombieCorpses(corpses: ZombieCorpse[], dt: number): void {
@@ -1433,6 +1441,7 @@ export function tickZombieCorpses(corpses: ZombieCorpse[], dt: number): void {
       continue;
     }
     c.holder.removeFromParent();
+    c.headBone?.scale.setScalar(1);
     poolZombieAvatar((c.avatar.root.userData.poolKind as string | undefined) ?? 'grunt', c.avatar);
     corpses.splice(i, 1);
   }

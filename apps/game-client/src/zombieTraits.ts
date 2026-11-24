@@ -26,6 +26,8 @@ interface TraitState {
   /** shield bubble hp left (0 = popped) */
   bubble?: number;
   bubbleMesh?: THREE.Mesh;
+  /** giant bosses: 1 → 2 → 3 as their health falls */
+  phase?: number;
 }
 
 interface Pending {
@@ -309,6 +311,7 @@ export function tickZombieTraits(z: ZombieVisual, dt: number, ctx: ZombieCombatC
 
   tickNewTraits(z, def, st, target, dist, dt, ctx);
   tickRoundThree(z, def, st, target, dist, ctx);
+  if (def.tier === 'boss') tickBossPhases(z, def, st, target, ctx);
 
   if (t.meteor && target && dist < 24 && due(st, 'meteor', t.meteor.every, now)) {
     const alive = ctx.squad.filter((o) => o.alive && o.root.position.distanceTo(p) < 24);
@@ -620,6 +623,73 @@ function tickRoundThree(z: ZombieVisual, def: ZombieTypeDef, st: TraitState, tar
         });
       };
       poll(now + 0.2);
+    }
+  }
+}
+
+/**
+ * Giant bosses fight in three phases. At 66 % and 33 % health they roar (a telegraphed
+ * shock ring that stuns), shrug off damage for a moment, call adds and get faster;
+ * phase 3 adds a desperation move: fire rocks rained around the heroes on a timer.
+ */
+function tickBossPhases(z: ZombieVisual, def: ZombieTypeDef, st: TraitState, target: OperativeVisual | null, ctx: ZombieCombatCtx): void {
+  const now = ctx.nowSec;
+  const p = z.root.position;
+  const ratio = z.hp / z.maxHp;
+  const want = ratio < 0.33 ? 3 : ratio < 0.66 ? 2 : 1;
+  st.phase ??= 1;
+  if (want > st.phase) {
+    st.phase = want;
+    const r = 7 + want;
+    ctx.announce?.(want === 2 ? `☠ ${def.name.toLocaleUpperCase('tr')} ÖFKELENDİ — halkadan çık!` : `☠ ${def.name.toLocaleUpperCase('tr')} SON NEFESİNDE — her yer ateş!`);
+    ctx.fx.spawnWarnRing(p.clone(), r, def.color, 1.2);
+    queueZombieAnim(z, { kind: 'act', seg: SEG.mRoar, dur: 1.2, priority: 3 });
+    ctx.playSfx(z, 'attack');
+    ctx.shake(0.35);
+    // brief damage immunity while it roars
+    st.phaseUntil = Math.max(st.phaseUntil, now + 1.2);
+    z.speed *= 1.15;
+    z.baseSpeed *= 1.15;
+    z.attackDamage = Math.ceil(z.attackDamage * 1.12);
+    queue.push({
+      at: now + 1.2,
+      run: () => {
+        if (z.hp <= 0) return;
+        const c = z.root.position.clone();
+        ctx.vfx?.dustRing(c, r, 0x3a2a2a);
+        ctx.vfx?.sparks(c.clone().setY(1.5), 30, def.color, 10);
+        ctx.shake(0.5);
+        for (const op of ctx.squad) {
+          if (!op.alive || op.root.position.distanceTo(c) > r) continue;
+          ctx.damageOperative(op, z.attackDamage * 0.8, c);
+          knock(op, c, 2.6, ctx);
+          stun(op, ctx.nowSec + 0.6);
+        }
+        const n = want === 2 ? 3 : 5;
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2 + Math.random();
+          ctx.spawnZombieAt(want === 2 ? 'runner' : 'grunt', c.x + Math.cos(a) * 4, c.z + Math.sin(a) * 4);
+        }
+      },
+    });
+  }
+  // phase 3 desperation: fire rocks around every hero in reach
+  if (st.phase === 3 && target && due(st, 'phase3', 6, now)) {
+    for (const op of ctx.squad) {
+      if (!op.alive || op.root.position.distanceTo(p) > 30) continue;
+      for (let i = 0; i < 3; i++) {
+        const at = op.root.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8)).setY(0);
+        const lead = 1.1 + i * 0.25;
+        ctx.fx.spawnWarnRing(at, 2.4, 0xff4a1a, lead);
+        queue.push({
+          at: now + lead,
+          run: () => {
+            ctx.vfx?.explosion(at.clone(), 1.8, 0xff7a30);
+            ctx.hazards.fire(at.x, at.z, 1.6, 4, 3);
+            for (const o of ctx.squad) if (o.alive && o.root.position.distanceTo(at) <= 2.4) ctx.damageOperative(o, z.attackDamage * 0.9, at);
+          },
+        });
+      }
     }
   }
 }

@@ -533,6 +533,8 @@ export interface ZombieCombatCtx {
   shake: (amount: number) => void;
   playSfx: (z: ZombieVisual, ev: 'attack' | 'death') => void;
   vfx?: SkillFx | null;
+  /** big centre-screen line (boss phase changes) */
+  announce?: (text: string) => void;
 }
 
 const _v = new THREE.Vector3();

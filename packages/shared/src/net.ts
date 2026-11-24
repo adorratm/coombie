@@ -156,6 +156,10 @@ export type NetEvent =
    * weapon hits here too; `s` = statuses those hits applied, flat [zombieId, statusIndex, power, …]
    */
   | { k: 'hit'; h: number[]; s?: number[] }
+  /** a hero's run numbers for the result screen's MVP cards: [dmg, kills, bossKills, taken, revives, casts, downs] — same routing as `cast` */
+  | { k: 'st'; d: number[]; by?: string }
+  /** a shootable map object (explosive barrel / barricade) was set off, by index in the map's list — same routing as `cast` */
+  | { k: 'boom'; i: number; by?: string }
   /** guest → host: melee / point-blank hit request is NOT trusted; the host fires for every hero */
   | { k: 'end'; won: boolean; title: string; subtitle: string };
 

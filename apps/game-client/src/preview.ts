@@ -1,3 +1,4 @@
+import { mvpHtml } from './mvp';
 import { preferLandscape, wantsTouchControls } from './touchControls';
 import { thumbImg, weaponThumb } from './thumbs';
 import { createArena, type ArenaHandle, type ArenaHudState } from './arena';
@@ -66,6 +67,7 @@ const el = {
   resultsTitle: document.getElementById('resultsTitle')!,
   resultsSub: document.getElementById('resultsSub')!,
   resultsStats: document.getElementById('resultsStats')!,
+  resultsMvp: document.getElementById('resultsMvp')!,
   resultsCredits: document.getElementById('resultsCredits')!,
   metaShop: document.getElementById('metaShop')!,
   pause: document.getElementById('pause')!,
@@ -784,12 +786,14 @@ const achToast = (a: AchievementDef) => {
   next();
 };
 
+const escHtml = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const renderResults = (hud: ArenaHudState) => {
   const commit = lastCommit;
   const credits = commit?.creditsEarned ?? 0;
   const badges: string[] = [];
   if (commit?.isNewBestWave) badges.push('Yeni dalga rekoru');
   if (commit?.isNewBestKills) badges.push('Yeni kill rekoru');
+  el.resultsMvp.innerHTML = hud.mvp ? mvpHtml(hud.mvp, hud.meId ?? '', escHtml) : '';
   el.resultsStats.innerHTML = [
     ['Kills', String(hud.kills)],
     ['Dalga', String(hud.wave)],

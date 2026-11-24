@@ -33,6 +33,12 @@ export interface GameAudio {
   playGunshot: (kind: WeaponSfxKind, pan?: number) => void;
   playHit: (kind?: 'flesh' | 'crit' | 'melee') => void;
   playKill: () => void;
+  /** kill-streak tick: pitch climbs with the streak */
+  playStreak: (n: number) => void;
+  /** deep impact for boss / elite kills */
+  playSlam: (big: boolean) => void;
+  /** rolling thunder (noise through a falling low-pass) */
+  playThunder: (big: boolean) => void;
   playPlayerHurt: () => void;
   playZombie: (kind: ZombieKind | ZombieSfxKind, event: 'idle' | 'hurt' | 'attack' | 'death', pan?: number) => void;
   playLevelUp: () => void;
@@ -485,9 +491,79 @@ export function createGameAudio(): GameAudio {
     playOrSoft(key, 'zombie', { gain, pan, rate, rateJitter: 0.08 }, { freq: 90, dur: 0.12, gain: 0.08 });
   };
 
+  /** short synthesized tone (game-feel cues that need exact pitch, no sample) */
+  const tone = (freq: number, dur: number, gain: number, type: OscillatorType, slideTo: number, bus: Exclude<AudioBusId, 'master'>, delay = 0) => {
+    const c = ensure();
+    const dest = busNode(bus);
+    if (!c || !dest) return;
+    const t0 = c.currentTime + delay;
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g);
+    g.connect(dest);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.03);
+  };
+  let streakGate = 0;
+
   return {
     resume,
     playGunshot,
+    playStreak: (n: number) => {
+      const now = performance.now();
+      if (now - streakGate < 55) return;
+      streakGate = now;
+      resume();
+      // pentatonic climb, wraps an octave up every 10 kills
+      const steps = [0, 2, 4, 7, 9];
+      const k = Math.min(n, 40);
+      const semi = steps[k % 5]! + Math.floor(k / 5) * 12 * 0.5;
+      const f = 520 * Math.pow(2, semi / 12);
+      tone(f, 0.09, 0.05, 'triangle', f * 1.02, 'combat');
+    },
+    playThunder: (big: boolean) => {
+      resume();
+      const c = ensure();
+      const dest = busNode('combat');
+      if (!c || !dest) return;
+      const dur = big ? 3.4 : 2.2;
+      const buf = c.createBuffer(1, Math.floor(c.sampleRate * dur), c.sampleRate);
+      const data = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < data.length; i++) {
+        // brown-ish noise with a few cracks near the start
+        last = (last + (Math.random() * 2 - 1) * 0.08) * 0.985;
+        const crack = i < c.sampleRate * 0.25 && Math.random() < 0.002 ? (Math.random() * 2 - 1) : 0;
+        data[i] = last * 3 + crack;
+      }
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      const lp = c.createBiquadFilter();
+      lp.type = 'lowpass';
+      const t0 = c.currentTime;
+      lp.frequency.setValueAtTime(big ? 900 : 600, t0);
+      lp.frequency.exponentialRampToValueAtTime(90, t0 + dur);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(big ? 0.55 : 0.32, t0 + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(lp);
+      lp.connect(g);
+      g.connect(dest);
+      src.start(t0);
+    },
+    playSlam: (big: boolean) => {
+      resume();
+      tone(big ? 70 : 110, big ? 0.9 : 0.35, big ? 0.5 : 0.28, 'sine', big ? 28 : 45, 'combat');
+      tone(big ? 220 : 330, 0.18, 0.12, 'square', 60, 'combat');
+      if (big) tone(880, 0.6, 0.05, 'triangle', 1320, 'combat', 0.12);
+    },
     playHit,
     playKill: () => {
       resume();
