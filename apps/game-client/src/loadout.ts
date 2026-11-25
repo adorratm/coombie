@@ -1,3 +1,4 @@
+import { WEAPON_SKINS, type SkinId } from './weaponSkins';
 import { loadMetaSave, writeMetaSave } from './metaSave';
 import { OPERATIVE_ROSTER, type OperativeId } from './roster';
 import { WEAPONS, weaponVariantId, weaponByVariant } from './weapons';
@@ -44,6 +45,13 @@ export const COSTUMES: CostumeDef[] = [
   { id: 'crimson', name: 'Kızıl Birlik', cost: 450, primary: 0x7a1414, secondary: 0x3a0e0e, accent: 0x9a2a1a, dark: 0x160808, strength: 0.9, pattern: 'woodland' },
   { id: 'neon_ops', name: 'Neon Ops', cost: 650, primary: 0x101418, secondary: 0x1e2a30, strength: 0.9, glow: 0x00ff87 },
   { id: 'gold_elite', name: 'Altın Elit', cost: 1200, primary: 0xc9a23a, secondary: 0x2a2418, strength: 0.85 },
+  { id: 'navy_digital', name: 'Deniz Dijital', cost: 450, primary: 0x2e3e5a, secondary: 0x1c2638, accent: 0x4a5e80, dark: 0x0e1420, strength: 0.92, pattern: 'digital' },
+  { id: 'jandarma', name: 'Jandarma', cost: 450, primary: 0x4a5a62, secondary: 0x2e383e, accent: 0x6a7a80, dark: 0x161c20, strength: 0.92, pattern: 'urban' },
+  { id: 'sand_tiger', name: 'Kum Kaplanı', cost: 500, primary: 0xb89a62, secondary: 0x6a5434, accent: 0xb89a62, dark: 0x2a2014, strength: 0.92, pattern: 'tiger' },
+  { id: 'toxic_ops', name: 'Zehirli Birlik', cost: 750, primary: 0x1a2014, secondary: 0x2a3a1a, strength: 0.9, glow: 0x9cff2e },
+  { id: 'blood_moon', name: 'Kanlı Ay', cost: 850, primary: 0x1a0c0c, secondary: 0x3a1010, strength: 0.9, glow: 0xff2a3a },
+  { id: 'shadow', name: 'Gölge', cost: 950, primary: 0x0c0c10, secondary: 0x1a1824, strength: 0.94, glow: 0xb26bff },
+  { id: 'frost_ops', name: 'Buz Birliği', cost: 950, primary: 0xd8e4ec, secondary: 0x8aa0b0, accent: 0xb8c8d4, dark: 0x3a4a56, strength: 0.9, pattern: 'arctic', glow: 0x6ad8ff },
 ];
 
 export type AccessoryId = 'belt' | 'holster' | 'chest_rig' | 'kneepads' | 'headlamp' | 'helmet_mil' | 'helmet_swat' | 'helmet_fire' | 'vest_swat';
@@ -101,6 +109,8 @@ export interface Profile {
   mission?: MissionSelection;
   /** armory gear per weapon variant: power level + attachments */
   gear?: Record<string, WeaponGear>;
+  /** weapon finish per variant (cosmetic) */
+  skins?: Record<string, string>;
 }
 
 const KEY = 'protocol-z-profile-v1';
@@ -111,6 +121,7 @@ export const itemKey = {
   costume: (id: string) => `c:${id}`,
   accessory: (id: AccessoryId) => `a:${id}`,
   backpack: (tier: number) => `bp:${tier}`,
+  skin: (id: string) => `s:${id}`,
 };
 
 /** Bumped when operatives get new signature weapons, so old saves pick them up once. */
@@ -357,6 +368,27 @@ export function currentRunLoadout(): RunLoadout {
 // ---------------------------------------------------------------------------
 // Armory gear (weapon power + attachments)
 // ---------------------------------------------------------------------------
+
+/** Weapon finish picked for a variant ('standart' when none / not owned). */
+export function weaponSkin(variant: string): SkinId {
+  const p = loadProfile();
+  const id = p.skins?.[variant];
+  return id && id in WEAPON_SKINS && (id === 'standart' || p.owned.includes(itemKey.skin(id))) ? (id as SkinId) : 'standart';
+}
+
+/** Buy a finish (once, usable on every weapon). */
+export function buySkin(id: SkinId): boolean {
+  if (id === 'standart') return true;
+  return purchase(itemKey.skin(id), WEAPON_SKINS[id].cost);
+}
+
+export function setWeaponSkin(variant: string, id: SkinId): boolean {
+  const p = loadProfile();
+  if (id !== 'standart' && !p.owned.includes(itemKey.skin(id))) return false;
+  p.skins = { ...(p.skins ?? {}), [variant]: id };
+  saveProfile(p);
+  return true;
+}
 
 export function weaponGear(variant: string): WeaponGear {
   const g = loadProfile().gear?.[variant];

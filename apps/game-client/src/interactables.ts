@@ -121,9 +121,9 @@ export class Interactables {
   private readonly things: Thing[] = [];
   private readonly group = new THREE.Group();
   constructor(
-    private readonly scene: THREE.Scene,
+    scene: THREE.Scene,
     spots: readonly InteractSpot[],
-    private readonly colliders: Aabb[],
+    colliders: Aabb[],
     private readonly hooks: InteractHooks,
   ) {
     this.group.name = 'interactables';

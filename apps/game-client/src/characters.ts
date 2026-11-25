@@ -1,3 +1,4 @@
+import { applyWeaponSkin } from './weaponSkins';
 import * as THREE from 'three';
 import { decorateGun, type AttachmentId } from './attachments';
 import type { AvatarGender } from './avatars';
@@ -23,7 +24,7 @@ export type { ZombieKind };
 
 export interface OperativeVisual {
   /** armory gear hook (player only): the geared weapon copy and its attachment models */
-  gear?: (w: WeaponDef) => { weapon: WeaponDef; attachments: { id: AttachmentId; level: number }[] };
+  gear?: (w: WeaponDef) => { weapon: WeaponDef; attachments: { id: AttachmentId; level: number }[]; skin?: string };
   root: THREE.Group;
   /** Procedural body — hidden when VRM attaches */
   proxy: THREE.Group;
@@ -373,6 +374,7 @@ export function setOperativeWeapon(op: OperativeVisual, index: number): void {
   const oldLight = op.muzzleLight;
   op.muzzlePoint = attachWeaponMesh(op.gun, op.weapon, op.color, scale);
   if (gear?.attachments.length) decorateGun(op.muzzlePoint, gear.attachments, op.weapon.id);
+  if (gear?.skin && gear.skin !== 'standart') applyWeaponSkin(op.gun, gear.skin);
   if (op.isPlayer) op.muzzlePoint.add(oldLight);
   op.muzzleLight = oldLight;
   op.fireCooldown = 0.15;

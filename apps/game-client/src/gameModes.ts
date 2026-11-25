@@ -85,6 +85,10 @@ export interface MissionSelection {
   difficulty: DifficultyId;
   /** run length for timed modes (survival / defense) */
   minutes?: RunMinutes;
+  /** günlük görev: the day key this run counts for */
+  daily?: string;
+  /** günlük görev twists (see daily.ts) */
+  mods?: string[];
 }
 
 export type RunMinutes = 20 | 30 | 40 | 60;

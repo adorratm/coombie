@@ -4,6 +4,7 @@
  * Falls back to soft procedural tones only if a buffer fails to load.
  */
 
+import { Soundscape, type ScapeOpts } from './soundscape';
 import { toZombieSfxKind, type ZombieKind, type ZombieSfxKind } from './zombieKinds';
 
 export type WeaponSfxKind =
@@ -15,7 +16,7 @@ export type WeaponSfxKind =
   | 'pistol'
   | 'melee';
 
-export type AudioBusId = 'master' | 'weapons' | 'combat' | 'zombie' | 'player' | 'ui';
+export type AudioBusId = 'master' | 'weapons' | 'combat' | 'zombie' | 'player' | 'ui' | 'music' | 'ambience';
 
 export type { ZombieSfxKind };
 
@@ -26,6 +27,8 @@ export interface AudioBusLevels {
   zombie: number;
   player: number;
   ui: number;
+  music: number;
+  ambience: number;
 }
 
 export interface GameAudio {
@@ -52,6 +55,10 @@ export interface GameAudio {
   playSample: (key: string, opts?: { gain?: number; pan?: number; rate?: number; bus?: Exclude<AudioBusId, 'master'> }) => void;
   getBusLevels: () => AudioBusLevels;
   setBusLevel: (bus: AudioBusId, value: number) => void;
+  /** procedural music + map ambience */
+  startScape: (o: ScapeOpts) => void;
+  /** 0 calm … 1 boss fight */
+  setThreat: (x: number) => void;
   dispose: () => void;
 }
 
@@ -123,6 +130,8 @@ const DEFAULT_BUS: AudioBusLevels = {
   zombie: 0.72,
   player: 1,
   ui: 0.82,
+  music: 0.5,
+  ambience: 0.6,
 };
 
 const STORAGE_KEY = 'protocol-z-audio-bus-v1';
@@ -258,6 +267,7 @@ export function createGameAudio(): GameAudio {
   let stepGate = 0;
   let zombieIdleGate = 0;
   let duckUntil = 0;
+  let scape: Soundscape | null = null;
 
   const ensure = (): AudioContext | null => {
     if (typeof window === 'undefined') return null;
@@ -274,7 +284,7 @@ export function createGameAudio(): GameAudio {
       // glide so speech ducking doesn't click
       liveMasters.add(() => m.gain.setTargetAtTime(clamp01(levels.master) * voiceMul, c.currentTime, voiceMul < 0.5 ? 0.08 : 0.4));
 
-      (['weapons', 'combat', 'zombie', 'player', 'ui'] as const).forEach((id) => {
+      (['weapons', 'combat', 'zombie', 'player', 'ui', 'music', 'ambience'] as const).forEach((id) => {
         const g = ctx!.createGain();
         g.gain.value = clamp01(levels[id]);
         g.connect(master!);
@@ -635,7 +645,18 @@ export function createGameAudio(): GameAudio {
       applyLevels();
       persistBus(levels);
     },
+    startScape: (o: ScapeOpts) => {
+      const c = ensure();
+      const mb = busNode('music');
+      const ab = busNode('ambience');
+      if (!c || !mb || !ab) return;
+      scape ??= new Soundscape(c, mb, ab);
+      scape.start(o);
+    },
+    setThreat: (x: number) => scape?.setIntensity(x),
     dispose: () => {
+      scape?.stop();
+      scape = null;
       void ctx?.close();
       ctx = null;
       master = null;

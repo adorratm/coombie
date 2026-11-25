@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { WEAPONS, attachWeaponMesh } from '../weapons';
 import { attachmentsFor, decorateGun, type AttachmentId } from '../attachments';
+import { applyWeaponSkin, SKIN_ORDER } from '../weaponSkins';
 import { ensureWeaponEnvironment, instantiateRawGun, preloadWeaponModels } from '../weaponAssets';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -45,6 +46,8 @@ const items: Array<{ name: string; build: (g: THREE.Group) => THREE.Object3D }> 
           const list = want.filter((id) => avail.includes(id) && !used.has(slotOf[id]) && (used.add(slotOf[id]), true)).map((id) => ({ id, level: 3 }));
           decorateGun(tip, list, w.id);
         }
+        const sk = new URLSearchParams(location.search).get('skin');
+        if (sk) applyWeaponSkin(g, sk === 'all' ? SKIN_ORDER[i % SKIN_ORDER.length] : sk);
         return tip;
       },
     }));

@@ -1,3 +1,5 @@
+import { applyWeaponSkin, SKIN_ORDER, WEAPON_SKINS } from './weaponSkins';
+import { DAILY_MODS, dailyChallenge, fetchDaily, fetchWeekly } from './daily';
 import * as THREE from 'three';
 import { isStandaloneApp, toggleFullscreen } from './fullscreen';
 import { ensureWeaponEnvironment } from './weaponAssets';
@@ -35,6 +37,9 @@ import {
   setMission,
   type AbilitySlot,
   type HeroLoadout,
+  weaponSkin,
+  buySkin,
+  setWeaponSkin,
 } from './loadout';
 import { OPERATIVE_ROSTER, rosterById, type OperativeId } from './roster';
 import { WEAPONS, attachWeaponMesh, weaponByVariant, weaponVariantId, type WeaponDef, type WeaponId } from './weapons';
@@ -189,6 +194,32 @@ const CSS = /* css */ `
 #lobby .start { padding: 14px 46px; font: 700 22px var(--display); letter-spacing: .16em; background: #00ff87; color: #04110a; border: 0; cursor: pointer; }
 #lobby .start:hover { filter: brightness(1.08); }
 #lobby .maps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 8px; }
+#lobby .daily { position: relative; display: grid; grid-template-columns: 120px 1fr; gap: 12px; margin: 0 0 12px; padding: 10px; border: 1px solid rgba(212,175,55,.35); background: linear-gradient(135deg, rgba(212,175,55,.12), rgba(0,0,0,.2)); }
+#lobby .daily.on { border-color: #00ff87; box-shadow: 0 0 0 1px rgba(0,255,135,.25) inset; }
+#lobby .daily .dimg { background: center/cover no-repeat; min-height: 90px; border: 1px solid rgba(255,255,255,.1); }
+#lobby .daily .dk { display: block; font: 700 11px var(--display); letter-spacing: .14em; color: #d4af37; }
+#lobby .daily b { display: block; font: 700 15px var(--display); margin: 2px 0 6px; }
+#lobby .daily .dmods { display: flex; flex-wrap: wrap; gap: 6px; }
+#lobby .daily .dmods span { padding: 3px 7px; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.25); font-size: 12px; }
+#lobby .daily .dmods small { display: block; color: var(--dim); font-size: 11px; }
+#lobby .daily .dbtns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+#lobby .daily .dboard { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+#lobby .daily .dboard[hidden] { display: none; }
+#lobby .gskins { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 4px 0 10px; }
+#lobby .gsk { display: grid; grid-template-columns: 22px 1fr; column-gap: 6px; align-items: center; padding: 6px; border: 1px solid var(--line, rgba(255,255,255,.12)); background: rgba(0,0,0,.2); color: inherit; text-align: left; cursor: pointer; font: inherit; }
+#lobby .gsk i { grid-row: 1 / span 2; width: 22px; height: 22px; border: 1px solid rgba(255,255,255,.25); }
+#lobby .gsk b { font: 700 12px var(--display); }
+#lobby .gsk small { color: var(--dim); font-size: 11px; }
+#lobby .gsk.on { border-color: #00ff87; }
+#lobby .gsk:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 640px) { #lobby .gskins { grid-template-columns: repeat(2, 1fr); } }
+#lobby .daily .dboard h4 { margin: 0 0 4px; font: 700 12px var(--display); letter-spacing: .08em; color: #d4af37; }
+#lobby .daily .dboard ol { margin: 0; padding-left: 18px; font-size: 12px; }
+#lobby .daily .dboard li { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; }
+#lobby .daily .dboard li small { grid-row: 2; color: var(--dim); }
+#lobby .daily .dboard li span { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-variant-numeric: tabular-nums; }
+#lobby .daily .dboard p { margin: 0; font-size: 12px; color: var(--dim); }
+@media (max-width: 640px) { #lobby .daily { grid-template-columns: 1fr; } #lobby .daily .dimg { min-height: 70px; } #lobby .daily .dboard { grid-template-columns: 1fr; } }
 #lobby .mapc { text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--ac); background: rgba(14,18,22,0.85);
   color: var(--text); cursor: pointer; display: grid; gap: 2px; }
 #lobby .mapc b { font: 700 15px var(--display); }
@@ -557,6 +588,7 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     gun = new THREE.Group();
     const tip = attachWeaponMesh(gun, def, hero.accent, 1);
     decorateGun(tip, equippedAttachments(weaponGear(variant), def), def.id);
+    applyWeaponSkin(gun, weaponSkin(variant));
     const hand = avatar.rightHand;
     hand.add(gun);
     avatar.root.updateMatrixWorld(true);
@@ -867,6 +899,31 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
     };
     pw.append(pb);
     box.append(pw);
+    // finishes (cosmetic): buy once, pick per weapon
+    if (!w.melee) {
+      box.append(Object.assign(document.createElement('div'), { className: 'gh', textContent: 'KAPLAMA · bir kez al, her silahta kullan' }));
+      const row = document.createElement('div');
+      row.className = 'gskins';
+      const cur = weaponSkin(variant);
+      for (const id of SKIN_ORDER) {
+        const d = WEAPON_SKINS[id];
+        const own = id === 'standart' || owns(itemKey.skin(id));
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `gsk${cur === id ? ' on' : ''}${own ? ' own' : ''}`;
+        b.innerHTML = `<i style="background:${d.swatch}"></i><b>${d.name}</b><small>${own ? (cur === id ? 'takılı' : 'tak') : cr(d.cost)}</small>`;
+        b.disabled = !own && credits() < d.cost;
+        b.onclick = () => {
+          if (!own && !buySkin(id)) return;
+          if (!own) toast(`${d.name} kaplaması alındı`, true);
+          setWeaponSkin(variant, id);
+          equipPreviewGun(variant);
+          renderAll();
+        };
+        row.append(b);
+      }
+      box.append(row);
+    }
     const list = attachmentsFor(w);
     if (list.length) {
       box.append(Object.assign(document.createElement('div'), { className: 'gh', textContent: 'EKLENTİLER · aynı yuvada bir tane takılı olur' }));
@@ -1191,8 +1248,13 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
   };
 
   const renderMission = (panel: HTMLElement) => {
-    const ms = currentMission();
+    const saved = currentMission();
+    // any manual pick leaves the daily challenge
+    const { daily: _d, mods: _m, ...ms } = saved;
+    void _d;
+    void _m;
     const sec = (t: string) => Object.assign(document.createElement('h3'), { textContent: t });
+    renderDailyCard(panel, saved);
     panel.append(sec('Harita'));
     const maps = Object.assign(document.createElement('div'), { className: 'maps' });
     for (const id of MAP_ORDER) {
@@ -1251,6 +1313,38 @@ export function createLobby(host: HTMLElement, onStart: () => void): Lobby {
       diffs.append(b);
     }
     panel.append(diffs);
+  };
+
+  /** Günlük görev card (today's seeded mission + twists) with the daily / weekly boards. */
+  const renderDailyCard = (panel: HTMLElement, saved: ReturnType<typeof currentMission>) => {
+    const ch = dailyChallenge();
+    const on = saved.daily === ch.key;
+    const m = ch.mission;
+    const card = document.createElement('div');
+    card.className = `daily${on ? ' on' : ''}`;
+    card.innerHTML = `<div class="dimg" style="background-image:url(/ui/maps/${m.map}.jpg)"></div>
+      <div class="dtx"><span class="dk">GÜNLÜK GÖREV · ${ch.key.split('-').reverse().join('.')}</span>
+      <b>${MAPS[m.map].name} · ${MODES[m.mode].icon} ${MODES[m.mode].name} · ${DIFFICULTIES[m.difficulty].name}</b>
+      <div class="dmods">${ch.mods.map((id) => `<span title="${DAILY_MODS[id].desc}">${DAILY_MODS[id].icon} ${DAILY_MODS[id].name}<small>${DAILY_MODS[id].desc}</small></span>`).join('')}</div>
+      <div class="dbtns"><button type="button" class="btn go" id="dlyPick">${on ? '✓ SEÇİLDİ' : 'GÜNLÜK GÖREVİ SEÇ'}</button><button type="button" class="btn" id="dlyBoard">🏆 SIRALAMA</button></div>
+      <div class="dboard" id="dlyBoardBox" hidden></div></div>`;
+    panel.append(card);
+    (card.querySelector('#dlyPick') as HTMLButtonElement).onclick = () => {
+      setMission(m);
+      renderAll();
+    };
+    const box = card.querySelector('#dlyBoardBox') as HTMLElement;
+    (card.querySelector('#dlyBoard') as HTMLButtonElement).onclick = async () => {
+      box.hidden = !box.hidden;
+      if (box.hidden) return;
+      box.textContent = 'Yükleniyor…';
+      const [d, w] = await Promise.all([fetchDaily(), fetchWeekly()]);
+      const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+      const list = (rows: Array<{ name: string; hero: string; score: number }> | undefined, empty: string) =>
+        rows?.length ? `<ol>${rows.map((r) => `<li><b>${esc(r.name)}</b><small>${esc(r.hero)}</small><span>${r.score.toLocaleString('tr-TR')}</span></li>`).join('')}</ol>` : `<p>${empty}</p>`;
+      box.innerHTML = `<div><h4>Bugün${d ? ` · ${d.total} oyuncu` : ''}</h4>${d ? list(d.top, 'Henüz kimse oynamadı — ilk sen ol.') : '<p>Sunucuya ulaşılamadı.</p>'}</div>
+        <div><h4>Bu hafta${w ? ` · ${w.total} oyuncu` : ''}</h4>${w ? list(w.top, 'Henüz skor yok.') : '<p>Sunucuya ulaşılamadı.</p>'}</div>`;
+    };
   };
 
   const renderAchievements = (panel: HTMLElement) => {

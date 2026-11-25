@@ -5,3 +5,4 @@ export * from './zombies';
 export * from './powerups';
 export * from './socket';
 export * from './net';
+export * from './daily';

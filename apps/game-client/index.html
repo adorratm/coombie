@@ -492,6 +492,18 @@
         color: var(--text);
       }
       #resultsStats span { color: rgba(230,230,230,0.55); }
+      #coach { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); z-index: 30; width: min(460px, 86vw); padding: 10px 14px 10px; background: rgba(8,10,12,.86); border: 1px solid rgba(0,255,135,.45); box-shadow: 0 8px 30px rgba(0,0,0,.5); color: #e8e8e8; font-size: 14px; pointer-events: auto; }
+      #coach[hidden] { display: none; }
+      #coach.pop { animation: coachIn .35s ease-out; }
+      @keyframes coachIn { from { opacity: 0; transform: translate(-50%, 10px); } }
+      #coach .ch { display: flex; gap: 10px; align-items: baseline; }
+      #coach .ch span { font: 700 10px var(--display); letter-spacing: .16em; color: #00ff87; }
+      #coach .ch b { font: 700 16px var(--display); letter-spacing: .04em; }
+      #coach p { margin: 4px 0 0; line-height: 1.4; padding-right: 48px; }
+      #coach kbd { display: inline-block; min-width: 18px; padding: 0 5px; margin: 0 1px; border: 1px solid rgba(255,255,255,.35); border-bottom-width: 2px; font: 700 12px var(--display); text-align: center; background: rgba(255,255,255,.06); }
+      #coach button { position: absolute; right: 10px; top: 10px; background: none; border: 1px solid rgba(255,255,255,.25); color: #bbb; font: 600 11px var(--display); padding: 2px 8px; cursor: pointer; }
+      body.touch-device #coach { bottom: auto; top: 64px; font-size: 13px; }
+      #resultsMvp .dailyRes { margin: 0 0 10px; padding: 8px 10px; border: 1px solid rgba(212,175,55,.4); background: rgba(212,175,55,.1); font: 700 13px var(--display); letter-spacing: .04em; color: var(--gold); }
       #resultsMvp .mvpRow { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; padding-bottom: 2px; }
       #resultsMvp .mvpCard { position: relative; flex: 0 0 132px; padding: 10px 10px 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); font-size: 12px; }
       #resultsMvp .mvpCard.me { border-color: rgba(0,255,135,0.45); }

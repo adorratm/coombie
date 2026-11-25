@@ -21,7 +21,7 @@ import { PowerUps, POWER_DEFS, type IndicatorSrc } from './powerups';
 import { createHookerModel, tickHooks, clearHooks } from './hooker';
 import { allAvatarUrls } from './roster';
 import { rosterById } from './roster';
-import { currentRunLoadout, weaponGear, type RunLoadout } from './loadout';
+import { currentRunLoadout, weaponGear, weaponSkin, type RunLoadout } from './loadout';
 import { createHeroAbilityRuntime, type HeroAbilityRuntime, type HeroBuffs, type HeroSlot } from './heroAbilities';
 import { BOSS_VARIANT_IDS, BOSS_VARIANTS, pickBossVariant, type BossVariant, type BossVariantDef } from './bossVariants';
 import { giantBossCap, giantBossInterval, pickGiantBoss, rollSpawnType, TIER_XP, ZOMBIE_TYPES, zombieTypeIndex, type ZombieTypeDef } from './zombieTypes';
@@ -175,6 +175,8 @@ import { createPostFx } from './postFx';
 import { Interactables } from './interactables';
 import { Atmosphere } from './atmosphere';
 import { Gibs } from './gibs';
+import { buzz, GyroAim } from './mobileFeel';
+import { dailyEffects } from './daily';
 import { emptyRunStats, mvpCards, packStats, unpackStats, type MvpCard, type PlayerRunStats } from './mvp';
 import type { OperativeId } from './roster';
 import { queueZombieAnim, setOperativeDead, spawnZombieCorpse, tickZombieCorpses, type ZombieCorpse } from './avatars';
@@ -377,6 +379,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const mission: MissionSelection = loadout.mission ?? { map: 'city', mode: 'survival', difficulty: 'normal' };
   const mapDef = MAPS[mission.map] ?? MAPS.city;
   const diff = DIFFICULTIES[mission.difficulty] ?? DIFFICULTIES.normal;
+  /** günlük görev twists (all 1 / off outside the daily) */
+  const dmod = dailyEffects(mission.mods);
   /**
    * Co-op is harder than solo: every extra player adds zombie health, numbers and a
    * little bite, so a squad still has to work for it (and one strong build can't carry).
@@ -496,6 +500,8 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const ARENA_BOUND = map.bound;
   const colliders = map.colliders;
   const audio = createGameAudio();
+  audio.startScape({ map: mission.map, weather: map.def.weather, night: new THREE.Color(LT.bg).getHSL({ h: 0, s: 0, l: 0 }).l < 0.045 });
+  let threatT = 0;
   const fx = createCombatFx(scene);
   const skillFx = new SkillFx(scene);
   const powerUps = new PowerUps(scene, skillFx);
@@ -515,7 +521,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     moveSpeed: hero.speed,
     weaponIndex: hero.weaponIndex,
     name: hero.name,
-    maxHp: hero.hp,
+    maxHp: Math.round(hero.hp * dmod.pHp),
     gender: hero.gender,
     avatarUrl: hero.avatarUrl,
     rosterId: hero.id,
@@ -587,7 +593,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   // armory gear: base power + attachments (stats and the models on the gun)
   player.gear = (w) => {
     const g = weaponGear(weaponVariantId(w));
-    return { weapon: applyGear(w, g), attachments: equippedAttachments(g, w) };
+    return { weapon: applyGear(w, g), attachments: equippedAttachments(g, w), skin: weaponSkin(weaponVariantId(w)) };
   };
   setOperativeWeapon(player, weaponIndexOfVariant(weaponSlots[0]!));
   setActiveClassForWeapon(progress, player.weapon.id);
@@ -643,7 +649,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
 
   const MAX_ZOMBIES_SOLO = Math.round((coarse ? MAX_ZOMBIES_BASE : MAX_ZOMBIES_DESKTOP) * Math.min(1.35, diff.count));
   /** büyük takımda (12'ye kadar) daha kalabalık sürü: kişi başı +%5, en fazla +%55 */
-  const maxZombies = () => Math.round(MAX_ZOMBIES_SOLO * coopCapMul);
+  const maxZombies = () => Math.round(MAX_ZOMBIES_SOLO * coopCapMul * dmod.capMul);
   // walkable area connected to the player: spawns never land outside the map or in sealed pockets
   const MIN_FIELD_CELLS = 60;
   let spawnField = buildSpawnField(ARENA_BOUND, colliders, player.root.position.x, player.root.position.z, ZOMBIE_RADIUS, 1.5);
@@ -808,17 +814,18 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     const runMin = simTime / 60;
     // ordinary director spawns may roll a special / elite type (later in the run)
     let def = typeDef ?? null;
-    if (typeDef === undefined && !at && kind !== 'boss' && kind !== 'hooker') def = rollSpawnType(runMin);
+    if (typeDef === undefined && !at && kind !== 'boss' && kind !== 'hooker') def = rollSpawnType(runMin + dmod.typeBoost);
     if (def) kind = def.base;
     if (zombies.length >= maxZombies() && kind !== 'boss' && def?.tier !== 'boss') return null;
     const z = createZombie(kind);
     z.root.userData.netId = ++netZombieSeq;
     z.proxy.visible = true;
     const waveMul = zombieHpMul(wave) * lateHpMul(runMin) * pressure.hpMul;
-    z.maxHp = Math.ceil(z.maxHp * waveMul * diff.hp * coopScale().hp);
+    z.maxHp = Math.ceil(z.maxHp * waveMul * diff.hp * coopScale().hp * dmod.zHp);
     z.hp = z.maxHp;
     z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * (1 + (wave - 1) * 0.06) * diff.dmg * earlyDamageMul(simTime) * lateDamageMul(runMin) * pressure.dmgMul * coopScale().dmg));
-    z.speed *= diff.speed * lateSpeedMul(runMin);
+    z.speed *= diff.speed * lateSpeedMul(runMin) * dmod.zSpeed;
+    z.attackDamage = Math.max(1, Math.ceil(z.attackDamage * dmod.zDmg));
     if (def) applyZombieType(z, def);
     else if (kind === 'boss') applyBossVariant(z);
     if (hordeActive && kind !== 'boss' && !at) z.speed *= hordeSpeedMul(wave);
@@ -958,6 +965,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       hazards.fire(at.x, at.z, r * 0.45, 4, 3);
       // my own hero always reacts to a blast it stands in (whoever set it off)
       const pd = player.root.position.distanceTo(at);
+      if (pd < 18) buzz(pd < 8 ? [60, 30, 30] : 25, 0);
       if (player.alive && pd < r) damageOperative(player, (kind === 'gas' ? 22 : 15) * (1 - pd / r), at);
       if (!local) return;
       zombieHash.query(at.x, at.z, r, zombieQuery);
@@ -1085,6 +1093,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   modeHooks.spawned = (z) => modeRt.onZombieSpawned(z);
   if (isGuest) modeRt.goRemote();
   if (Number.isFinite(modeRt.revivesLeft)) modeRt.revivesLeft += tree.revives;
+  if (dmod.noRevives) modeRt.revivesLeft = 0;
   let runOver: RunOutcome | null = null;
   const snapshotRunStats = (): RunStats => {
     runStats.kills = kills;
@@ -1257,7 +1266,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   const refreshPlayerMaxHp = () => {
     const ratio = player.hp / Math.max(1, player.maxHp);
     const base = 130;
-    player.maxHp = Math.round(base * runtimeMods().maxHpMult);
+    player.maxHp = Math.round(base * runtimeMods().maxHpMult * dmod.pHp);
     player.hp = Math.min(player.maxHp, Math.max(1, player.maxHp * ratio));
     player.healthBar.setRatio(player.hp / player.maxHp);
   };
@@ -1338,11 +1347,13 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     audio.playStreak(combo);
     const tier = typeOf(z)?.tier;
     if (z.kind === 'boss' || z.kind === 'hooker' || tier === 'boss') {
+      buzz([80, 40, 120], 0);
       warp(0.22, 1.1);
       audio.playSlam(true);
       shake = Math.max(shake, 0.8);
       postFx.flash(0.9);
     } else if (tier === 'elite' || z.kind === 'tank') {
+      buzz(35);
       if (!netPlay) feel.stopUntil = Math.max(feel.stopUntil, now + 0.07);
       audio.playSlam(false);
       postFx.flash(0.25);
@@ -1453,7 +1464,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       const stats = getCombatStats(weaponId);
       const hb = heroBuffs(player);
       const crit = !opts?.raw && Math.random() < stats.critChance + hb.crit;
-      let final = opts?.raw ? rawDamage : rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
+      let final = opts?.raw ? rawDamage : rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04) * dmod.pDmg;
       if (guestOwnsHits()) {
         // armour I can see from here; the host only adds what it alone knows (aegis, phasing)
         if (z.kind === 'riot' && z.root.userData.shield && knockDir.lengthSq() > 0.01) {
@@ -1484,7 +1495,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       audio.playHit(opts?.weaponId && ['knife', 'bat', 'axe'].includes(opts.weaponId) ? 'melee' : crit ? 'crit' : 'flesh');
       if (crit) shake = Math.max(shake, 0.22);
       if (guestOwnsHits()) {
-        const ls = stats.mods.lifesteal;
+        const ls = stats.mods.lifesteal + dmod.lifesteal;
         if (ls > 0 && player.alive) {
           player.hp = Math.min(player.maxHp, player.hp + final * ls);
           player.healthBar.setRatio(player.hp / player.maxHp);
@@ -1510,7 +1521,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     const stats = getCombatStats(weaponId);
     const hb = fromPlayer ? heroBuffs(player) : NO_BUFF;
     const crit = !opts?.raw && Math.random() < stats.critChance + hb.crit;
-    let dmg = opts?.raw ? rawDamage : rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04);
+    let dmg = opts?.raw ? rawDamage : rawDamage * stats.damageMult * hb.damage * (crit ? 2.1 : 1) * (1 + Math.min(2, combo) * 0.04) * (fromPlayer ? dmod.pDmg : 1);
     // riot shield: hits from the front are mostly stopped
     if (!opts?.mitigated && z.kind === 'riot' && z.root.userData.shield && knockDir.lengthSq() > 0.01) {
       const fy = z.root.rotation.y;
@@ -1553,7 +1564,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     audio.playZombie(z.kind, 'hurt', Math.max(-1, Math.min(1, (z.root.position.x - player.root.position.x) / 24)));
     if (crit) shake = Math.max(shake, 0.22);
 
-    const ls = stats.mods.lifesteal;
+    const ls = stats.mods.lifesteal + dmod.lifesteal;
     if (fromPlayer && ls > 0 && player.alive) {
       player.hp = Math.min(player.maxHp, player.hp + dmg * ls);
       player.healthBar.setRatio(player.hp / player.maxHp);
@@ -1605,7 +1616,10 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       }
     }
     op.hp -= reduced;
-    if (op.isPlayer) myStats.taken += reduced;
+    if (op.isPlayer) {
+      myStats.taken += reduced;
+      buzz(reduced > 20 ? [40, 30, 40] : 30, 140);
+    }
     if (dot) {
       op.healthBar.setRatio(Math.max(0, op.hp) / Math.max(1, op.maxHp));
       op.healthBar.setVisible(true);
@@ -2860,9 +2874,39 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
   };
 
   /** No cursor on a phone: abilities and H support go to the nearest threat, else ahead of the player. */
+  const gyro = new GyroAim();
+  let gyroInit = false;
   const updateAimFromTouch = () => {
     const ax = input.moveAxis();
     if (Math.hypot(ax.x, ax.z) > 0.2) lastMoveDir.set(ax.x, 0, ax.z).normalize();
+    gyro.start();
+    if (gyro.active) {
+      // steering-wheel aim: phone rotation turns the aim; auto-aim only snaps near where it points
+      if (!gyroInit) {
+        gyroInit = true;
+        gyro.yaw = player.root.rotation.y;
+      }
+      gyro.update(1 / 60);
+      const dx = Math.sin(gyro.yaw);
+      const dz = Math.cos(gyro.yaw);
+      let best: ZombieVisual | null = null;
+      let bestA = 0.28;
+      for (const z of zombies) {
+        if (z.hp <= 0) continue;
+        const vx = z.root.position.x - player.root.position.x;
+        const vz = z.root.position.z - player.root.position.z;
+        const d = Math.hypot(vx, vz);
+        if (d > 20 || d < 0.01) continue;
+        const a = Math.acos(Math.max(-1, Math.min(1, (vx * dx + vz * dz) / d)));
+        if (a < bestA) {
+          bestA = a;
+          best = z;
+        }
+      }
+      if (best) mouseAim.copy(best.root.position).setY(0);
+      else mouseAim.set(player.root.position.x + dx * 8, 0, player.root.position.z + dz * 8);
+      return;
+    }
     const near = findNearestZombie(player.root.position, 18);
     if (near) mouseAim.copy(near.root.position).setY(0);
     else mouseAim.copy(player.root.position).addScaledVector(lastMoveDir, 6).setY(0);
@@ -3962,6 +4006,25 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     }
 
     interact.update(simTime);
+    // dev-only handle for headless smoke tests (stripped from production builds)
+    if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) (window as unknown as Record<string, unknown>).__arena = { zombies, damageZombie, interact, player, spawnZombie, simTime };
+    threatT -= rawDt;
+    if (threatT <= 0) {
+      threatT = 0.4;
+      // music intensity: zombies close to me, bosses, low health
+      let near = 0;
+      let boss = 0;
+      const px = player.root.position.x;
+      const pz = player.root.position.z;
+      for (const z of zombies) {
+        if (z.hp <= 0) continue;
+        const d2 = (z.root.position.x - px) ** 2 + (z.root.position.z - pz) ** 2;
+        if (d2 < 16 * 16) near++;
+        if ((z.kind === 'boss' || z.kind === 'hooker' || typeOf(z)?.tier === 'boss') && d2 < 45 * 45) boss = 1;
+      }
+      const low = player.alive && player.hp / Math.max(1, player.maxHp) < 0.35 ? 0.2 : 0;
+      audio.setThreat(runOver ? 0 : Math.min(1, near / 28 + boss * 0.55 + low + (hordeActive ? 0.15 : 0)));
+    }
     gibs.update(dt);
     atmosphere.update(dt, simTime);
     abilityRuntime.update(dt, zombies, damageZombie);
@@ -4223,6 +4286,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       resetTraitQueue();
       unmountTouch?.();
       input.dispose();
+      gyro.stop();
       audio.dispose();
       fx.dispose();
       abilityRuntime.dispose();

@@ -1,3 +1,7 @@
+import { gyroOn, gyroSupported, hapticsOn, hapticsSupported, setGyro, setHaptics } from './mobileFeel';
+import { Tutorial } from './tutorial';
+import { submitDaily } from './daily';
+import { rosterById, type OperativeId } from './roster';
 import { mvpHtml } from './mvp';
 import { preferLandscape, wantsTouchControls } from './touchControls';
 import { thumbImg, weaponThumb } from './thumbs';
@@ -27,6 +31,8 @@ const BUS_LABELS: Array<{ id: AudioBusId; label: string }> = [
   { id: 'zombie', label: 'ZOMBİ' },
   { id: 'player', label: 'OYUNCU' },
   { id: 'ui', label: 'ARAYÜZ' },
+  { id: 'music', label: 'MÜZİK' },
+  { id: 'ambience', label: 'ORTAM' },
 ];
 
 const root = document.getElementById('app');
@@ -509,6 +515,33 @@ const ensurePauseBuses = () => {
     row.append(name, sel);
     el.pauseBuses.appendChild(row);
   }
+  // telefon: titreşim + jiroskopla nişan
+  if (wantsTouchControls()) {
+    const toggle = (label: string, get: () => boolean, set: (v: boolean) => Promise<boolean> | void, note: string) => {
+      const row = document.createElement('label');
+      row.className = 'busRow';
+      const name = document.createElement('span');
+      name.textContent = label;
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = get();
+      cb.style.cssText = 'width:22px;height:22px;accent-color:#00ff87';
+      const hint = document.createElement('span');
+      hint.className = 'pct';
+      hint.textContent = note;
+      cb.addEventListener('change', async () => {
+        const ok = await set(cb.checked);
+        if (ok === false) {
+          cb.checked = false;
+          hint.textContent = 'İzin verilmedi';
+        }
+      });
+      row.append(name, cb, hint);
+      el.pauseBuses.appendChild(row);
+    };
+    if (hapticsSupported()) toggle('Titreşim', hapticsOn, (v) => setHaptics(v), '');
+    if (gyroSupported()) toggle('Jiroskop', gyroOn, (v) => setGyro(v), 'telefonu direksiyon gibi çevir');
+  }
 };
 
 let lastHp = -1;
@@ -525,7 +558,14 @@ const renderVitals = (hud: ArenaHudState) => {
   el.lowHp.classList.toggle('on', hud.alive && hp / max < 0.3);
 };
 
+let coach: Tutorial | null = null;
+let coachT = performance.now();
 const renderHud = (hud: ArenaHudState) => {
+  {
+    const now = performance.now();
+    coach?.update(hud, Math.min(0.25, (now - coachT) / 1000), !coop);
+    coachT = now;
+  }
   renderHeroSkills(hud);
   renderRunSkills(hud);
   renderSlots(hud);
@@ -617,6 +657,19 @@ const renderHud = (hud: ArenaHudState) => {
         lastCommit = { ...lastCommit, creditsEarned: lastCommit.creditsEarned + bonus };
       }
       runAchievements = hud.runStats ? commitRun(hud.runStats, lastCommit.creditsEarned) : [];
+      // günlük görev: send the run to the board once
+      if (runDaily && hud.runStats) {
+        let name = 'Oyuncu';
+        try {
+          name = localStorage.getItem('coombie:coop-name') || name;
+        } catch {
+          /* ignore */
+        }
+        dailyResult = 'Sıralamaya gönderiliyor…';
+        void submitDaily({ day: runDaily, name, hero: rosterById(hud.heroId as OperativeId).name, kills: hud.kills, timeSec: hud.runTimeSec, level: hud.level, won: over.won }).then((r) => {
+          dailyResult = 'error' in r ? (r.error === 'OFFLINE' ? 'Sıralama sunucusuna ulaşılamadı.' : `Skor kabul edilmedi (${r.error}).`) : `GÜNLÜK SIRALAMA: ${r.rank}. sıra · skor ${r.score.toLocaleString('tr-TR')}${r.best > r.score ? ` (bugünkü en iyin ${r.best.toLocaleString('tr-TR')})` : ''}`;
+        });
+      }
       meta = loadMetaSave();
       lastCommit = { ...lastCommit, meta };
     }
@@ -762,6 +815,9 @@ const renderMetaShop = () => {
 };
 
 let runAchievements: AchievementDef[] = [];
+/** günlük görev of the current run (day key) and what the board said */
+let runDaily: string | null = null;
+let dailyResult: string | null = null;
 let lastAchCheck = 0;
 const achQueue: AchievementDef[] = [];
 let achBusy = false;
@@ -793,7 +849,7 @@ const renderResults = (hud: ArenaHudState) => {
   const badges: string[] = [];
   if (commit?.isNewBestWave) badges.push('Yeni dalga rekoru');
   if (commit?.isNewBestKills) badges.push('Yeni kill rekoru');
-  el.resultsMvp.innerHTML = hud.mvp ? mvpHtml(hud.mvp, hud.meId ?? '', escHtml) : '';
+  el.resultsMvp.innerHTML = (dailyResult ? `<div class="dailyRes">🏆 ${escHtml(dailyResult)}</div>` : '') + (hud.mvp ? mvpHtml(hud.mvp, hud.meId ?? '', escHtml) : '');
   el.resultsStats.innerHTML = [
     ['Kills', String(hud.kills)],
     ['Dalga', String(hud.wave)],
@@ -830,6 +886,10 @@ const restartRun = (start: CoopStart | null = null) => {
   const loadout = currentRunLoadout();
   // co-op: everyone plays the host's mission
   if (start?.mission) loadout.mission = start.mission as MissionSelection;
+  runDaily = loadout.mission?.daily ?? null;
+  coach?.dispose();
+  coach = new Tutorial(root, wantsTouchControls());
+  dailyResult = null;
   arena = createArena(root, { loadout, net: start?.session ?? null, resume: start ? { key: start.resumeKey, rejoin: start.rejoin } : null });
   (window as unknown as { __pzArena?: ArenaHandle }).__pzArena = arena;
   running = true;
@@ -877,6 +937,8 @@ el.btnPauseRestart.addEventListener('click', () => {
 });
 
 const toMenu = () => {
+  coach?.dispose();
+  coach = null;
   if (running) arena.dispose();
   endCoop();
   running = false;
