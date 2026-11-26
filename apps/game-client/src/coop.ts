@@ -89,6 +89,28 @@ const ERR: Record<string, string> = {
 };
 
 /** extra Dracord origins allowed to host the game (self-hosted / staging), comma separated */
+/** Dracord launch token while the game runs inside Dracord (null outside) */
+let dracordToken: string | null = null;
+export const getDracordToken = (): string | null => dracordToken;
+
+/**
+ * A finished run inside Dracord → our server forwards it to Dracord (the game secret never
+ * leaves the server): profile game stats, and a result line in the voice channel's chat.
+ */
+export async function reportDracordResult(r: { runId: string; won: boolean; stats: Record<string, number | string | boolean>; share: boolean; summary: string }): Promise<boolean> {
+  if (!dracordToken) return false;
+  try {
+    const res = await fetch(`${coopServerUrl()}/dracord/result`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...r, token: dracordToken }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 function dracordHostOrigins(): string[] {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_DRACORD_HOST_ORIGINS ?? '';
   return env.split(',').map((s) => s.trim()).filter(Boolean);
@@ -155,6 +177,13 @@ export function createCoopPanel(onStart: (start: CoopStart) => void, onSolo?: ()
    */
   const dracord = DracordEmbed.isEmbedded() ? new DracordEmbed({ allowedHostOrigins: dracordHostOrigins() }) : null;
   if (dracord) {
+    // the launch token, for reporting match results to Dracord (via our own server)
+    void dracord.ready().then((ctx) => {
+      dracordToken = dracord.context?.token ?? ctx.token;
+    }).catch(() => undefined);
+    dracord.onTokenRefresh(({ token }) => {
+      dracordToken = token;
+    });
     // voice chat stays on top: the game is a bit quieter in Dracord and ducks while people talk
     setVoicePriority({ embedded: true, talking: false });
     dracord.onAudio(({ duck }) => setVoicePriority({ embedded: true, talking: duck }));

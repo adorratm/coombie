@@ -1,3 +1,7 @@
+import { getDracordToken, reportDracordResult } from './coop';
+import { dailyScore } from './daily';
+import { MAPS, type MapId, type ModeId } from './mapDefs';
+import { MODES } from './gameModes';
 import { gyroOn, gyroSupported, hapticsOn, hapticsSupported, setGyro, setHaptics } from './mobileFeel';
 import { Tutorial } from './tutorial';
 import { submitDaily } from './daily';
@@ -657,6 +661,23 @@ const renderHud = (hud: ArenaHudState) => {
         lastCommit = { ...lastCommit, creditsEarned: lastCommit.creditsEarned + bonus };
       }
       runAchievements = hud.runStats ? commitRun(hud.runStats, lastCommit.creditsEarned) : [];
+      // inside Dracord: profile stats + (MVP / solo) a result line in the voice channel chat
+      if (getDracordToken() && hud.runStats) {
+        const meCard = hud.mvp?.find((c) => c.stats.id === hud.meId);
+        const mvp = !!meCard?.mvp && (hud.mvp?.length ?? 0) > 1;
+        const solo = (hud.mvp?.length ?? 1) <= 1;
+        const mapName = runMission ? MAPS[runMission.map]?.name ?? runMission.map : '';
+        const modeName = runMission ? MODES[runMission.mode]?.name ?? runMission.mode : '';
+        const t = `${Math.floor(hud.runTimeSec / 60)}:${String(Math.floor(hud.runTimeSec % 60)).padStart(2, '0')}`;
+        const score = dailyScore({ kills: hud.kills, timeSec: hud.runTimeSec, level: hud.level, won: over.won });
+        void reportDracordResult({
+          runId: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
+          won: over.won,
+          stats: { score, kills: hud.kills, timeSec: Math.round(hud.runTimeSec), level: hud.level, map: runMission?.map ?? '', mode: runMission?.mode ?? '', mvp },
+          share: solo || mvp,
+          summary: `${over.won ? 'görevi tamamladı' : 'düştü'} — ${mapName} · ${modeName} · ${t} · ${hud.kills} leş · Sv ${hud.level} · ${score.toLocaleString('tr-TR')} puan${mvp ? ' · 👑 MVP' : ''}`,
+        });
+      }
       // günlük görev: send the run to the board once
       if (runDaily && hud.runStats) {
         let name = 'Oyuncu';
@@ -817,6 +838,7 @@ const renderMetaShop = () => {
 let runAchievements: AchievementDef[] = [];
 /** günlük görev of the current run (day key) and what the board said */
 let runDaily: string | null = null;
+let runMission: { map: MapId; mode: ModeId } | null = null;
 let dailyResult: string | null = null;
 let lastAchCheck = 0;
 const achQueue: AchievementDef[] = [];
@@ -887,6 +909,7 @@ const restartRun = (start: CoopStart | null = null) => {
   // co-op: everyone plays the host's mission
   if (start?.mission) loadout.mission = start.mission as MissionSelection;
   runDaily = loadout.mission?.daily ?? null;
+  runMission = loadout.mission ?? null;
   coach?.dispose();
   coach = new Tutorial(root, wantsTouchControls());
   dailyResult = null;
