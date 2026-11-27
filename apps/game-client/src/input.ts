@@ -1,7 +1,20 @@
+import { firstPad, readPad, type PadContext } from './gamepad';
+
 export type KeyState = Record<string, boolean>;
 
 export function createInput(target: Window | HTMLElement = window) {
+  /** merged view the game reads: keyboard/touch OR gamepad */
   const keys: KeyState = {};
+  const kb: KeyState = {};
+  let padKeys = new Set<string>();
+  let padHeld = new Set<number>();
+  const padMove = { x: 0, z: 0 };
+  let padAim: { x: number; z: number } | null = null;
+  let padLastActive = 0;
+  const setKb = (code: string, v: boolean) => {
+    kb[code] = v;
+    keys[code] = v || padKeys.has(code);
+  };
   const mouse = { x: 0, y: 0, down: false };
   let zoomDelta = 0;
   let weaponWheel = 0;
@@ -11,7 +24,7 @@ export function createInput(target: Window | HTMLElement = window) {
   let touchUsed = false;
 
   const onKeyDown = (e: KeyboardEvent) => {
-    keys[e.code] = true;
+    setKb(e.code, true);
     // F11 → real (API) fullscreen so Keyboard Lock can catch Ctrl+W
     if (e.code === 'F11') {
       e.preventDefault();
@@ -30,13 +43,14 @@ export function createInput(target: Window | HTMLElement = window) {
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {
-    keys[e.code] = false;
+    setKb(e.code, false);
   };
   // Touches belong to the on-screen controls; they must not move the aim cursor or "click".
   const onPointerMove = (e: PointerEvent) => {
     if (e.pointerType === 'touch') return;
     mouse.x = e.clientX;
     mouse.y = e.clientY;
+    padLastActive = 0; // fare oynadı: nişan yeniden fareye geçer
   };
   const onPointerDown = (e: PointerEvent) => {
     if (e.pointerType === 'touch') return;
@@ -76,6 +90,7 @@ export function createInput(target: Window | HTMLElement = window) {
       const k = Math.min(1, tl) / tl;
       return { x: touchMove.x * k, z: touchMove.z * k };
     }
+    if (padMove.x !== 0 || padMove.z !== 0) return { x: padMove.x, z: padMove.z };
     let x = 0;
     let z = 0;
     if (keys.KeyW || keys.ArrowUp) z -= 1;
@@ -119,7 +134,7 @@ export function createInput(target: Window | HTMLElement = window) {
       touchUsed = true;
     },
     press(code: string, down: boolean) {
-      keys[code] = down;
+      setKb(code, down);
       touchUsed = true;
     },
     wheel(step: number) {
@@ -131,5 +146,32 @@ export function createInput(target: Window | HTMLElement = window) {
     },
   };
 
-  return { keys, mouse, moveAxis, consumeZoomDelta, consumeWeaponWheel, dispose, touch };
+  /** Read the gamepad once per frame. `ctx` = which button layout (play / upgrade screen). */
+  const pollPad = (ctx: PadContext) => {
+    const { state, held } = readPad(firstPad(), ctx, padHeld);
+    padHeld = held;
+    padMove.x = state.move.x;
+    padMove.z = state.move.z;
+    padAim = state.aim;
+    if (state.active) padLastActive = performance.now();
+    // pad keys: release what the pad let go of (unless the keyboard still holds it)
+    for (const code of padKeys) if (!state.keys.has(code)) keys[code] = !!kb[code];
+    for (const code of state.keys) keys[code] = true;
+    padKeys = state.keys;
+    if (state.cycle) weaponWheel += state.cycle;
+    if (state.pause) window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape' }));
+  };
+
+  const pad = {
+    /** right stick direction in screen space (x right, z down), null when centred */
+    get aim() {
+      return padAim;
+    },
+    /** the pad was used in the last few seconds: aim follows the stick, not the mouse */
+    get active() {
+      return performance.now() - padLastActive < 4000;
+    },
+  };
+
+  return { keys, mouse, moveAxis, consumeZoomDelta, consumeWeaponWheel, dispose, touch, pollPad, pad };
 }

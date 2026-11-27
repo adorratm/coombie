@@ -3,6 +3,7 @@
  * run. Each step waits for the player to actually do the thing (or times out), then
  * moves on. Shown once; "Geç" skips it for good.
  */
+import { firstPad } from './gamepad';
 import type { ArenaHudState } from './arena';
 
 const DONE_KEY = 'coombie:tutorial-done';
@@ -11,6 +12,8 @@ interface Step {
   title: string;
   desk: string;
   touch: string;
+  /** gamepad bağlıyken */
+  pad?: string;
   /** done when this returns true (or after `max` seconds on the step) */
   done: (h: ArenaHudState, s: TutorialState) => boolean;
   max: number;
@@ -25,13 +28,15 @@ interface TutorialState {
 const cd = (h: ArenaHudState, slot: string) => (h.heroAbilities ?? []).find((a) => a.slot === slot)?.cooldown ?? 0;
 
 const STEPS: Step[] = [
-  { title: 'Hareket', desk: '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ile hareket et, <kbd>Boşluk</kbd> ile atıl.', touch: 'Sol alttaki çubukla hareket et.', done: (h, s) => h.runTimeSec - s.t0 > 6, max: 8 },
-  { title: 'Ateş', desk: 'Fareyle nişan al, <b>sol tık</b> ile ateş et. 5 zombi indir.', touch: 'Sağ taraftaki çubukla nişan al: çekince ateş eder. 5 zombi indir.', done: (h, s) => h.kills - s.kills0 >= 5, max: 40 },
-  { title: 'Kahraman yetenekleri', desk: '<kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> kahramanının yetenekleri. Birini kullan.', touch: 'Sağdaki Q / E / R kartlarına dokunarak yetenek kullan.', done: (h, s) => ['Q', 'E', 'R'].some((k) => s.casts.has(k)), max: 25 },
-  { title: 'Ağzı bozuk hamle', desk: '<kbd>H</kbd>: her kahramanın kendine özel, küfürlü süper hamlesi. Kalabalığa sakla.', touch: 'H kartı: kahramanının küfürlü süper hamlesi. Kalabalığa sakla.', done: (_h, s) => s.casts.has('H'), max: 14 },
-  { title: 'Seviye atla', desk: 'Yere düşen yeşil kristalleri topla. Seviye atlayınca bir güçlendirme seç.', touch: 'Yeşil kristalleri topla. Seviye atlayınca bir güçlendirme seç.', done: (h) => h.level >= 2, max: 45 },
-  { title: 'Telsiz ve eşyalar', desk: 'Telsiz kartı alırsan <kbd>B</kbd> ile hava desteği çağırırsın. Sandıklar, mermi ve can paketleri haritada. <b>Patlayıcı varilleri vur!</b>', touch: 'Telsiz kartı alırsan B kartıyla hava desteği çağırırsın. Kırmızı varilleri vur, patlarlar!', done: () => false, max: 9 },
+  { title: 'Hareket', pad: 'Sol çubukla yürü, sağ çubukla nişan al.', desk: '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ile hareket et, <kbd>Boşluk</kbd> ile atıl.', touch: 'Sol alttaki çubukla hareket et.', done: (h, s) => h.runTimeSec - s.t0 > 6, max: 8 },
+  { title: 'Ateş', pad: 'Sağ çubukla zombilere doğru nişan al; silah kendiliğinden ateş eder. 5 zombi indir.', desk: 'Fareyle nişan al, <b>sol tık</b> ile ateş et. 5 zombi indir.', touch: 'Sağ taraftaki çubukla nişan al: çekince ateş eder. 5 zombi indir.', done: (h, s) => h.kills - s.kills0 >= 5, max: 40 },
+  { title: 'Kahraman yetenekleri', pad: '<b>A</b> <b>B</b> <b>Y</b> kahramanının yetenekleri. Birini kullan.', desk: '<kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> kahramanının yetenekleri. Birini kullan.', touch: 'Sağdaki Q / E / R kartlarına dokunarak yetenek kullan.', done: (h, s) => ['Q', 'E', 'R'].some((k) => s.casts.has(k)), max: 25 },
+  { title: 'Ağzı bozuk hamle', pad: '<b>LT</b>: kahramanının küfürlü süper hamlesi. Kalabalığa sakla.', desk: '<kbd>H</kbd>: her kahramanın kendine özel, küfürlü süper hamlesi. Kalabalığa sakla.', touch: 'H kartı: kahramanının küfürlü süper hamlesi. Kalabalığa sakla.', done: (_h, s) => s.casts.has('H'), max: 14 },
+  { title: 'Seviye atla', pad: 'Yeşil kristalleri topla. Seviye atlayınca <b>A/B/X/Y</b> ile bir güçlendirme seç.', desk: 'Yere düşen yeşil kristalleri topla. Seviye atlayınca bir güçlendirme seç.', touch: 'Yeşil kristalleri topla. Seviye atlayınca bir güçlendirme seç.', done: (h) => h.level >= 2, max: 45 },
+  { title: 'Telsiz ve eşyalar', pad: 'Telsiz kartı alırsan <b>yön ↓</b> ile hava desteği çağırırsın. <b>LB/RB</b> silah, <b>X</b> şarjör. Kırmızı varilleri vur!', desk: 'Telsiz kartı alırsan <kbd>B</kbd> ile hava desteği çağırırsın. Sandıklar, mermi ve can paketleri haritada. <b>Patlayıcı varilleri vur!</b>', touch: 'Telsiz kartı alırsan B kartıyla hava desteği çağırırsın. Kırmızı varilleri vur, patlarlar!', done: () => false, max: 9 },
 ];
+
+const padConnected = (): boolean => firstPad() !== null;
 
 export class Tutorial {
   private i = -1;
@@ -78,7 +83,7 @@ export class Tutorial {
 
   private show(): void {
     const s = STEPS[this.i]!;
-    this.box.innerHTML = `<div class="ch"><span>EĞİTİM ${this.i + 1}/${STEPS.length}</span><b>${s.title}</b></div><p>${this.touch ? s.touch : s.desk}</p><button type="button">Geç</button>`;
+    this.box.innerHTML = `<div class="ch"><span>EĞİTİM ${this.i + 1}/${STEPS.length}</span><b>${s.title}</b></div><p>${this.touch ? s.touch : padConnected() && s.pad ? s.pad : s.desk}</p><button type="button">Geç</button>`;
     (this.box.querySelector('button') as HTMLButtonElement).onclick = () => this.finish();
     this.box.hidden = false;
     this.box.classList.remove('pop');

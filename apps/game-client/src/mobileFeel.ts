@@ -8,6 +8,8 @@
  * Both are opt-in settings kept in localStorage.
  */
 
+import { rumble } from './gamepad';
+
 const HAPTIC_KEY = 'coombie:haptics';
 const GYRO_KEY = 'coombie:gyro';
 
@@ -34,10 +36,15 @@ export const setHaptics = (on: boolean) => write(HAPTIC_KEY, on);
 let lastBuzz = 0;
 /** Vibrate (rate-limited so a fire fight doesn't buzz nonstop). */
 export function buzz(pattern: number | number[], minGapMs = 90): void {
-  if (!hapticsOn()) return;
   const now = performance.now();
   if (now - lastBuzz < minGapMs) return;
   lastBuzz = now;
+  // gamepad titreşimi de aynı ayarı izler (telefonda olmasa da)
+  if (read(HAPTIC_KEY, true)) {
+    const ms = Array.isArray(pattern) ? pattern.filter((_, i) => i % 2 === 0).reduce((a, b) => a + b, 0) : pattern;
+    rumble(Math.min(1, 0.35 + ms / 200), Math.min(400, ms));
+  }
+  if (!hapticsOn()) return;
   try {
     navigator.vibrate(pattern);
   } catch {

@@ -2912,6 +2912,42 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
     else mouseAim.copy(player.root.position).addScaledVector(lastMoveDir, 6).setY(0);
   };
 
+  /** Gamepad: right stick points the aim; auto-aim snaps only near where it points (like gyro). */
+  const updateAimFromPad = () => {
+    const ax = input.moveAxis();
+    if (Math.hypot(ax.x, ax.z) > 0.2) lastMoveDir.set(ax.x, 0, ax.z).normalize();
+    const r = input.pad.aim;
+    if (!r) {
+      const near = findNearestZombie(player.root.position, 18);
+      if (near) mouseAim.copy(near.root.position).setY(0);
+      else mouseAim.copy(player.root.position).addScaledVector(lastMoveDir, 6).setY(0);
+      return;
+    }
+    const len = Math.hypot(r.x, r.z) || 1;
+    const dx = r.x / len;
+    const dz = r.z / len;
+    let best: ZombieVisual | null = null;
+    let bestA = 0.3;
+    for (const z of zombies) {
+      if (z.hp <= 0) continue;
+      const vx = z.root.position.x - player.root.position.x;
+      const vz = z.root.position.z - player.root.position.z;
+      const d = Math.hypot(vx, vz);
+      if (d > 22 || d < 0.01) continue;
+      const a = Math.acos(Math.max(-1, Math.min(1, (vx * dx + vz * dz) / d)));
+      if (a < bestA) {
+        bestA = a;
+        best = z;
+      }
+    }
+    if (best) mouseAim.copy(best.root.position).setY(0);
+    else mouseAim.set(player.root.position.x + dx * 9, 0, player.root.position.z + dz * 9);
+  };
+
+  const onPadConnected = () =>
+    notePickup('Oyun kumandası bağlandı', 'Sol çubuk yürü · sağ çubuk nişan · A/B/Y yetenek · X şarjör · LB/RB silah · RT öfke · Start duraklat');
+  window.addEventListener('gamepadconnected', onPadConnected);
+
   let userPaused = false;
   /** co-op pause is shared: everyone freezes, resuming counts 3-2-1 for everyone */
   const netPause = { on: false, by: '', resumeAt: 0 };
@@ -3481,7 +3517,9 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       audioUnlocked = true;
     }
 
+    input.pollPad(progress.pendingPicks > 0 && progress.choices.length > 0 ? 'upgrade' : 'play');
     if (input.touch.active) updateAimFromTouch();
+    else if (input.pad.active) updateAimFromPad();
     else updateAimFromMouse();
     handleHotkeys();
 
@@ -4286,6 +4324,7 @@ export function createArena(container: HTMLElement, opts: { loadout?: RunLoadout
       resetTraitQueue();
       unmountTouch?.();
       input.dispose();
+      window.removeEventListener('gamepadconnected', onPadConnected);
       gyro.stop();
       audio.dispose();
       fx.dispose();
