@@ -14,6 +14,31 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
+/**
+ * HDR guard before bloom. A light right on a surface (muzzle flash, blast) can push a
+ * pixel past the half-float range → Inf; bloom smears it over most of the screen and
+ * tone mapping turns Inf/Inf into NaN = a black flash over the whole view. Drop NaN,
+ * cap the rest at a bright-but-finite value.
+ */
+export const SANITIZE_MAX = 48;
+const SanitizeShader = {
+  name: 'CoombieSanitize',
+  uniforms: { tDiffuse: { value: null as THREE.Texture | null } },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    varying vec2 vUv;
+    void main() {
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      c = mix(c, vec3(0.0), vec3(isnan(c)));
+      gl_FragColor = vec4(clamp(c, 0.0, ${SANITIZE_MAX.toFixed(1)}), 1.0);
+    }
+  `,
+};
+
 const GradeShader = {
   name: 'CoombieGrade',
   uniforms: {
@@ -102,6 +127,7 @@ export function createPostFx(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
       });
       composer = new EffectComposer(renderer, rt);
       composer.addPass(new RenderPass(scene, camera));
+      composer.addPass(new ShaderPass(SanitizeShader));
       bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), baseBloom, 0.42, 0.82);
       composer.addPass(bloom);
       composer.addPass(new OutputPass());
